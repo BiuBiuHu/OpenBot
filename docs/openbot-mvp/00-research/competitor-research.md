@@ -5,11 +5,12 @@
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-09-20 | 初始调研 | opc-skills 编码前必须先查成熟方案 | 锁定 SSH 绑定 + 宿主机 HTTP worker，拒绝托管 Firecracker 伪装 |
+| v0.2 | 2026-09-20 | 补 Worker ≠ Agent ≠ computer-use | 远端演进为常驻 Agent | 调研结论不改 SSH；改产品进程名与循环位置 |
 
 ## 1. 当前决策
 
-- 当前采用：用户自有 Linux 主机 + 系统 `ssh`/`scp` 绑定 + 远端 stdlib Python worker（仅监听 127.0.0.1）+ 笔记本控制面通过 SSH 隧道访问 worker。
-- 被拒绝：默认 Docker/Firecracker 沙箱、像素级 computer-use、把 OpenHands 编码控制台做成产品主隐喻。
+- 当前采用：用户自有 Linux 主机 + 系统 `ssh`/`scp` 绑定 + 远端单进程 **`openbot-agent`**（任务队列 + BYOK 循环 + 工具 + 审批，仅 `127.0.0.1`）+ 本机瘦客户端经可选 SSH 隧道访问。PR#1 的 HTTP worker 是执行原语来源，不是终态产品名。
+- 被拒绝：远端只当哑 Worker、默认 Docker/Firecracker 沙箱、像素级 computer-use 冒充 Agent、把 OpenHands 编码控制台做成产品主隐喻。
 - 调研日期：2026-09-20。
 
 ## 2. 产品隐喻对比
@@ -33,14 +34,16 @@ OpenHands 可以挂远程机器，但产品语言是“这次编码任务跑在�
 | systemd --user / tmux / nohup | Linux 发行版 | 笔记本合盖后进程仍在 | **采纳**，按可用性降级。 |
 | Fastify / Express | npm | 本地控制面 | **拒绝**。Node 22 内置 `http` + `fetch` 足够，零 runtime 依赖。 |
 | OpenAI 官方 SDK | npm | BYOK chat | **拒绝引入 SDK**。只用 OpenAI-compatible `POST /chat/completions`，便于 Groq/vLLM/Ollama。 |
-| Playwright 浏览器自动化 | Microsoft | 像素 computer-use | **v0 拒绝**。目标是无头 2C4G，不伪造 Grok 桌面。 |
+| Playwright 浏览器自动化 | Microsoft | 像素 computer-use | **v0 拒绝、Phase 3 才作 plugin**。目标是无头 2C4G，不伪造 Grok 桌面，也**不把浏览工具叫成 Agent**。 |
 
 ## 4. 风险与诚实边界
 
 - 不得声称 Firecracker 隔离或 Grok Bot 像素对等。
-- Worker 以 SSH 用户身份运行，**不是沙箱**。危险命令靠控制面审批门，不是内核隔离。
-- Worker 只绑 `127.0.0.1`，外网不可直连；隧道断开不影响已启动 job。
+- Agent（及今日的 Worker）以 SSH 用户身份运行，**不是沙箱**。危险命令靠审批门，不是内核隔离。
+- 只绑 `127.0.0.1`，外网不可直连；隧道断开不影响已在跑的任务，也不应杀死模型循环。
+- Worker = 只执行；Agent = 思考+执行；computer-use = 工具。三者不得在对外文案里互换。
 
 ## 5. 未解决问题
 
 - 多主机切换、团队 ACL、技能市场：明确不在本 feature。
+- Agent 群组房间：产品要做，但不挡单进程 Agent 内核（v0.5）。

@@ -5,12 +5,13 @@
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-09-20 | 记录已有脚手架并补齐文档/测试 | 先保存再改；implementation-loop | 保存点 8fea153 |
+| v0.2 | 2026-09-20 | 锁定远端 Agent 三阶段 + 对话节奏 | 架构决策已确认；本 PR 只改文档 | Phase 1 循环 → Phase 2 瘦客户端/1:1 → Phase 3 浏览 plugin；群组 v0.5 |
 
 ## 1. 当前决策
 
-- 当前实施策略：保留已提交控制面/worker，补 opc-skills 文档、测试、README 安装路径，再跑最小验证。
-- 当前阶段划分：保存点 → 文档 → 测试与安装打通 → Code PR（中文）。
-- 当前依赖关系：文档与代码同一 feature 目录 `docs/openbot-mvp/`。
+- 当前实施策略：PR#1 垂直切片（本机循环 + 远端 Worker）保持可运行；**本 PR 只锁目标架构文档**。下一支代码 PR 再搬模型循环。
+- 当前阶段划分：文档锁定 → Phase 1 远端 Agent 循环 → Phase 2 瘦客户端 + **1:1 聊天** → Phase 3 无头浏览 plugin。群组房间 = **v0.5**，不作为 Phase 1 门禁。
+- 当前依赖关系：文档在 `docs/openbot-mvp/`；实现仍基于 PR#1 的 SSH bind 与执行原语。
 
 ## 2. 项目发现
 
@@ -21,7 +22,7 @@
 - lint/typecheck 命令：`npx tsc --noEmit`（无独立 eslint）。
 - dev server 和端口：控制面 `3847`，worker `3848`。
 - 环境变量样例：`.env.example` → `~/.openbot/.env`
-- 当前分支：`cursor/openbot-mvp-a7b3`（由已同步的 `origin/main` @ `a377505` 创建）。
+- 当前分支：架构文档从 `cursor/openbot-mvp-a7b3`（PR#1）拉出；`main` 当时尚无 `docs/openbot-mvp/`。
 - 未提交改动：以各提交时 `git status` 为准。
 
 ## 3. 保存点
@@ -43,13 +44,18 @@
 
 ## 5. 执行顺序
 
+PR#1 已完成：脚手架 → 00–06 文档 → 测试与 localhost SSH bind → 中文 Code PR。
+
+**下一支实现（不在本文档 PR 写代码）**：
+
 | 阶段 | 任务 | 退出条件 | 失败处理 |
 |------|------|----------|----------|
-| 0 | 提交脚手架保存点 | commit 存在 | 停止改代码 |
-| 1 | 写 00–06 文档 | 模板章节填实 | 先补文档 |
-| 2 | 补测试与 README | `npm test` 与 `tsc` 通过 | 读失败再修 |
-| 3 | 尝试本机 SSH bind | 有则写入报告；无则 worker 直连 + 说明 | 不伪造 VPS |
-| 4 | 中文 Code PR | PR 链接 | 不宣布生产发布 |
+| 1 | **远端 Agent 循环**：单进程常驻、`/v1/tasks`、BYOK、shell/文件、`awaiting_approval`、事件落盘 | 拔掉隧道后任务仍能到终态或停在审批 | 保留 PR#1 jobs 协议作 tool step；不拆微服务 |
+| 2 | **瘦客户端 + v0 1:1 聊天**：本机只创建任务、订阅事件、批准；具名 Agent 线程 | UI/CLI 合盖后再订阅能看到同一线程 | 本机不再调模型；无 key 时 exec 仍可用 |
+| 3 | **无头浏览 plugin** | 工具表可开关；2C4G 可关 | 禁止宣称桌面对等；plugin ≠ Agent |
+| v0.5 | **群组房间**：participants、mention/本机编排、按 Agent 扇出任务 | 房间消息能变成多条 `/v1/tasks` | 不做跨机文件同步；不挡 Phase 1 |
+
+本 PR（文档）退出条件：架构写清 Agent、状态机、1:1/群组分层，并开中文 PR 待审。不合并。
 
 ## 6. 自动执行循环
 
@@ -67,5 +73,7 @@
 
 ## 8. 风险与未解决问题
 
-- 云 Agent 环境不一定能装 sshd：预备 worker 直连证明协议，SSH 作为产品路径保留。
+- 云 Agent 环境不一定能装 sshd：预备直连证明协议，SSH 作为产品路径保留。
 - 无真实 BYOK key：聊天 happy path 用契约测试或跳过并记录。
+- Phase 1 若一次改名 worker→agent，bootstrap 与用户机上旧单元会漂。实现时先兼容 `openbot-worker` 单元名。
+- 群组若提前做，容易把单进程内核拖成编排平台。文档已列为 v0.5。

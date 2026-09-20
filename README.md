@@ -67,7 +67,7 @@ MVP truth: *bind SSH → leave a job running → lid down → reopen and see res
 
 ## Install (vertical slice)
 
-Requires **Node 20+** on the laptop, and **Python 3 + bash** on the Linux host. The worker has **zero pip deps**.
+Requires **Node 20+** on the laptop, and **Python 3 + bash** on the Linux host. The current worker (and the future agent) has **zero pip deps**.
 
 ```bash
 git clone https://github.com/BiuBiuHu/OpenBot.git
@@ -82,7 +82,7 @@ npx openbot run 'uname -a'
 npx openbot serve          # http://127.0.0.1:3847
 ```
 
-`uname -a` is executed by the **remote worker**, not the browser and not as a fake local stub.
+`uname -a` is executed on the **remote host**, not the browser and not as a fake local stub.
 
 Secrets live in `~/.openbot` (mode `0600`). Never commit them. See `.env.example`.
 
@@ -96,7 +96,7 @@ Secrets live in `~/.openbot` (mode `0600`). Never commit them. See `.env.example
 2. **tmux** session `openbot-worker`
 3. **nohup** + `~/.openbot-worker/worker.pid`
 
-Jobs and logs stay under `~/.openbot-worker/jobs` on the host. Closing the UI only drops the SSH tunnel.
+Jobs and logs stay under `~/.openbot-worker/jobs` on the host. Closing the UI only drops the SSH tunnel. Target architecture moves the **model loop** into a resident `openbot-agent` and keeps task state on that disk (see architecture docs).
 
 ```bash
 npx openbot status
@@ -118,16 +118,20 @@ Destructive or privileged commands (`rm -rf`, `sudo`, reboot, pipe-to-shell, …
 ## Shape
 
 ```text
-[ Phone / Desktop ]  --chat / approve-->  [ Control plane on your laptop ]
-                                               |
-                                          SSH tunnel
-                                               |
-                                        [ Your machine ]
-                                   worker · files · jobs · shell
-                                 (no desktop in v0)
+[ Chat UI: 1:1 agent, later group rooms ]
+        create task / events / approve
+                    |
+            optional SSH tunnel
+                    |
+        [ openbot-agent on your machine ]
+         queue · BYOK loop · tools · approvals
+         tasks live on remote disk
+         (no desktop in v0; browser = later plugin)
 ```
 
-Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`docs/openbot-mvp/03-architecture/architecture.md`](docs/openbot-mvp/03-architecture/architecture.md).
+SSH is for **bind / bootstrap** and an optional tunnel — not the command channel.
+
+Today's runnable slice (PR#1) still uses a remote **worker** plus a laptop-side model loop. The agreed target is the remote agent above. Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`docs/openbot-mvp/03-architecture/architecture.md`](docs/openbot-mvp/03-architecture/architecture.md), [`docs/openbot-mvp/03-architecture/remote-agent.md`](docs/openbot-mvp/03-architecture/remote-agent.md).
 
 ---
 
