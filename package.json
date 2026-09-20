@@ -1,0 +1,29 @@
+{
+  "name": "openbot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SSH your own machine. The agent gets a computer — you keep the keys.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "openbot": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js serve",
+    "dev": "tsx src/cli.ts serve",
+    "openbot": "tsx src/cli.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "smoke": "tsx --test tests/worker.test.ts tests/approval.test.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2"
+  }
+}
