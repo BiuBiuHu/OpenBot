@@ -18,6 +18,7 @@
 | `IdentitiesOnly=yes` 在未指定 identity 时 | SSH | ssh-agent 密钥被忽略 | 仅当配置了 identityFile 才打开 |
 | 无 TTY 的危险命令 | CLI | CI 里误跑 | 无 TTY 直接拒绝危险命令 |
 | 隧道“假就绪” | 控制面 | 600ms 后 ssh 仍在但转发失败 | `/health` 轮询；失败要求重新 bind |
+| UI 空 host 气泡 | 前端 | `add(..., "")` 不创建 `<pre>`，SSE output 写 null | 始终创建内容节点；已在浏览器复验 uname |
 
 ## 3. 复现模板（后续 bug 使用）
 

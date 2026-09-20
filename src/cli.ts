@@ -9,7 +9,7 @@ import { startControlPlane } from "./server.js";
 import { bootstrapWorker, probeSsh, sshTarget } from "./ssh.js";
 import type { AgentEvent, OpenBotConfig } from "./types.js";
 import { WorkerClient } from "./worker-client.js";
-import { openTunnel } from "./tunnel.js";
+import { ensureWorkerAccess } from "./tunnel.js";
 import { runAgentTurn } from "./agent.js";
 
 function usage(): string {
@@ -105,20 +105,11 @@ async function withWorker<T>(
   if (!config.worker.token) {
     throw new Error("No worker token. Run `npx openbot bind` first.");
   }
-  const tunnel = await openTunnel(config);
+  const access = await ensureWorkerAccess(config);
   try {
-    const worker = WorkerClient.fromPort(config.worker.localPort, config.worker.token);
-    const deadline = Date.now() + 8000;
-    while (Date.now() < deadline) {
-      if (await worker.health()) break;
-      await new Promise((r) => setTimeout(r, 200));
-    }
-    if (!(await worker.health())) {
-      throw new Error("Tunnel is up but the worker did not answer /health. Re-run bind.");
-    }
-    return await fn(worker);
+    return await fn(access.worker);
   } finally {
-    await tunnel.stop();
+    await access.tunnel?.stop();
   }
 }
 

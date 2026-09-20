@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { OpenBotConfig } from "./types.js";
 import { identityPath } from "./config.js";
-import { expandHome, workerSourceDir } from "./paths.js";
+import { workerSourceDir } from "./paths.js";
 
 export interface RunResult {
   code: number;
@@ -79,22 +79,11 @@ export async function scpToRemote(
   localPath: string,
   remotePath: string,
 ): Promise<RunResult> {
-  const identity = identityPath(config);
-  const scpArgs = [
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    "StrictHostKeyChecking=accept-new",
-    "-o",
-    "ConnectTimeout=20",
-    "-P",
-    String(config.host.port || 22),
-  ];
-  if (identity) {
-    scpArgs.push("-o", "IdentitiesOnly=yes", "-i", identity);
-  }
-  scpArgs.push(localPath, `${sshTarget(config)}:${remotePath}`);
-  return runCommand("scp", scpArgs);
+  // Pipe over ssh instead of the SFTP subsystem. Many 2C4G images and
+  // custom sshd configs have no sftp-server; `cat` is enough for text worker files.
+  const body = fs.readFileSync(localPath, "utf8");
+  const args = [...sshBaseArgs(config), sshTarget(config), `cat > ${shellQuote(remotePath)}`];
+  return runCommand("ssh", args, { input: body });
 }
 
 export async function probeSsh(config: OpenBotConfig): Promise<string> {
@@ -116,7 +105,14 @@ export async function bootstrapWorker(config: OpenBotConfig): Promise<{
   uname: string;
 }> {
   const uname = await probeSsh(config);
-  const remoteDir = expandHome(config.worker.remoteHome).replace(/^\/?home\/[^/]+/, "~");
+  const homeProbe = await sshExec(config, 'printf %s "$HOME"');
+  if (homeProbe.code !== 0 || !homeProbe.stdout.trim()) {
+    throw new Error(`Could not resolve remote HOME: ${homeProbe.stderr}`);
+  }
+  const remoteHome = homeProbe.stdout.trim();
+  const configured = config.worker.remoteHome.replace(/^~(?=\/|$)/, remoteHome);
+  const remoteDir = configured.startsWith("/") ? configured : `${remoteHome}/${configured}`;
+  const workspace = config.worker.workspace.replace(/^~(?=\/|$)/, remoteHome);
   const staging = path.join(os.tmpdir(), `openbot-bootstrap-${process.pid}`);
   fs.rmSync(staging, { recursive: true, force: true });
   fs.mkdirSync(staging, { recursive: true });
@@ -134,7 +130,6 @@ export async function bootstrapWorker(config: OpenBotConfig): Promise<{
       throw new Error(`scp ${file} failed: ${copied.stderr || copied.stdout}`);
     }
   }
-  const workspace = config.worker.workspace;
   const remote = [
     `export OPENBOT_WORKER_HOME=${shellQuote(remoteDir)}`,
     `export OPENBOT_WORKER_PORT=${shellQuote(String(config.worker.remotePort))}`,

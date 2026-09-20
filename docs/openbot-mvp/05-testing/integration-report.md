@@ -4,7 +4,8 @@
 
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
-| v0.1 | 2026-09-20 | 初始 | 研发后联调门禁 | 客户端专项启用 |
+| v0.1 | 2026-09-20 | 初始 | 研发后联调门禁 | — |
+| v0.2 | 2026-09-20 | 回填 localhost SSH + Web | Bind/Persist/Remote 实验室闭环 | 客户端专项通过 |
 
 ## 1. 客户端范围判定
 
@@ -12,42 +13,42 @@
 - 移动 App / 小程序 / 桌面原生：否。
 - 客户端专项门禁：**启用**，范围仅本机 Web + CLI。
 
-## 2. 拓扑
+## 2. 拓扑（实验室实测）
 
 ```text
-浏览器/curl  --http-->  控制面 127.0.0.1:3847
-控制面       --http-->  worker 127.0.0.1:<port>   （产品路径经 SSH -L）
-worker       --bash-->  主机
+node dist/cli.js  --ssh:2222-->  本机 sshd
+bootstrap.sh     --> tmux session openbot-worker
+worker.py        --> 127.0.0.1:3848
+CLI/UI           --> 先探测 /health，localhost 则不开 -L
+浏览器/curl      --> 控制面 127.0.0.1:3847
 ```
 
-期望：各端口一份进程。实验室 e2e 可跳过隧道，直接把 WorkerClient 注入控制面，以证明契约；产品 CLI 仍走 SSH。
+进程：sshd 一份、tmux worker 一份、控制面仅在 `serve` 期间一份。
 
 ## 3. 环境变量
 
-- `OPENBOT_HOME`：测试临时目录。
-- `OPENAI_API_KEY`：测试时清空。
-- 预发/生产 URL：不适用。
+- `OPENBOT_HOME=/tmp/openbot-lab-home`（与仓库隔离）
+- 无 `OPENAI_API_KEY`
+- 预发/生产 URL：不适用
 
 ## 4. 联调矩阵
 
 | 客户端 | 环境 | 入口 | 命令 | 结果 | 证据 |
 |--------|------|------|------|------|------|
-| Web | 实验室 | `GET /` | e2e-local | 待填 | HTML 含口号与 Run |
-| CLI | 实验室 | `openbot help` | node dist/cli.js | 待填 | 用法 |
-| Worker | 实验室 | `/v1/jobs` | worker.test | 待填 | uname |
-| SSH bind | 条件 | localhost sshd | 条件 | 待填 | 无 sshd 则 N/A |
+| CLI | 实验室 SSH | bind/run/status | `node dist/cli.js` | 通过 | test-report v0.2 |
+| Web | 实验室 | `GET /` | curl + e2e | 通过 | HTML 含 OpenBot / Run on host |
+| Worker | 实验室 | `/health` `/v1/jobs` | curl + tests | 通过 | persist=tmux |
+| SSH bind | 实验室 :2222 | init+bind | CLI | 通过 | 见失败修复表 |
 
 ## 5. 功能页验收
 
-必须进入 `/` 而不是只看构建日志。
-
-- 目标页：遥控台。
-- 断言：标题 OpenBot、口号、Chat/Run 模式。
-- 无 GUI 时：HTTP 200 + HTML 字符串断言（仍是该功能页，不是首页占位）。
+- 目标页：`http://127.0.0.1:3847/` 遥控台（不是空白壳）。
+- 断言：title `OpenBot — your machine`、口号、Chat/Run。
+- `/api/status`：`ok:true`，`persist:tmux`，`info.uname` 与 `openbot run 'uname -a'` 一致。
 
 ## 6. 失败归因
 
-待执行后填写层级。
+已修复项见测试报告 §3。当前无开放失败。
 
 ## 7. 不适用项
 

@@ -56,6 +56,7 @@ describe("local control plane + worker (no fake remote)", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ command: "uname -a" }),
+      signal: AbortSignal.timeout(20_000),
     });
     assert.equal(res.status, 200);
     const body = await res.text();

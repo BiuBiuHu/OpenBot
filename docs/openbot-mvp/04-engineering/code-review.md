@@ -9,7 +9,7 @@
 ## 1. 当前结论
 
 - 审查范围：`cursor/openbot-mvp-a7b3` 相对 `origin/main`。
-- 正式 PR：创建后回填链接。
+- 正式 PR：https://github.com/BiuBiuHu/OpenBot/pull/1
 - 生产发布：不在本次（见 release-plan）。
 
 ## 2. Diff 自审

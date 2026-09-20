@@ -5,7 +5,7 @@ import { runAgentTurn } from "./agent.js";
 import { classifyCommand } from "./approval.js";
 import { loadConfig } from "./config.js";
 import { repoRoot } from "./paths.js";
-import { openTunnel, type TunnelHandle } from "./tunnel.js";
+import { ensureWorkerAccess, type TunnelHandle } from "./tunnel.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, OpenBotConfig } from "./types.js";
 import { WorkerClient } from "./worker-client.js";
 
@@ -27,10 +27,16 @@ export async function startControlPlane(
   opts: { skipTunnel?: boolean; worker?: WorkerClient } = {},
 ): Promise<ControlPlane> {
   let tunnel: TunnelHandle | undefined;
-  if (!opts.skipTunnel && !opts.worker) {
-    tunnel = await openTunnel(config);
+  let worker = opts.worker;
+  if (!worker) {
+    if (opts.skipTunnel) {
+      worker = WorkerClient.fromPort(config.worker.localPort, config.worker.token);
+    } else {
+      const access = await ensureWorkerAccess(config);
+      worker = access.worker;
+      tunnel = access.tunnel;
+    }
   }
-  const worker = opts.worker ?? WorkerClient.fromPort(config.worker.localPort, config.worker.token);
   const approvals = new Map<string, PendingApproval>();
   let history: ChatMessage[] = [];
 
@@ -230,5 +236,7 @@ async function streamSse(
   } catch (err) {
     emit({ type: "error", message: err instanceof Error ? err.message : String(err) });
     emit({ type: "done" });
+  } finally {
+    res.end();
   }
 }

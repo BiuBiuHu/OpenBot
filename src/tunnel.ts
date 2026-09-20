@@ -2,11 +2,43 @@ import { spawn, type ChildProcess } from "node:child_process";
 import type { OpenBotConfig } from "./types.js";
 import { identityPath } from "./config.js";
 import { sshTarget } from "./ssh.js";
+import { WorkerClient } from "./worker-client.js";
 
 export interface TunnelHandle {
   localPort: number;
   process: ChildProcess;
   stop: () => Promise<void>;
+}
+
+function isLoopback(hostname: string): boolean {
+  return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
+}
+
+export async function ensureWorkerAccess(config: OpenBotConfig): Promise<{
+  worker: WorkerClient;
+  tunnel?: TunnelHandle;
+}> {
+  const ports = new Set<number>([config.worker.localPort, config.worker.remotePort]);
+  for (const port of ports) {
+    const client = WorkerClient.fromPort(port, config.worker.token);
+    if (await client.health()) {
+      return { worker: client };
+    }
+  }
+  if (isLoopback(config.host.hostname)) {
+    throw new Error(
+      `Worker is not reachable on 127.0.0.1:${config.worker.remotePort}. Re-run \`npx openbot bind\`.`,
+    );
+  }
+  const tunnel = await openTunnel(config);
+  const worker = WorkerClient.fromPort(config.worker.localPort, config.worker.token);
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    if (await worker.health()) return { worker, tunnel };
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  await tunnel.stop();
+  throw new Error("Tunnel is up but the worker did not answer /health. Re-run bind.");
 }
 
 export async function openTunnel(config: OpenBotConfig): Promise<TunnelHandle> {

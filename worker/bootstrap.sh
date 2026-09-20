@@ -18,7 +18,9 @@ if [[ ! -f "$SCRIPT_DIR/worker.py" ]]; then
   exit 1
 fi
 
-cp "$SCRIPT_DIR/worker.py" "$WORKER_HOME/worker.py"
+if [[ "$SCRIPT_DIR/worker.py" != "$WORKER_HOME/worker.py" ]]; then
+  cp "$SCRIPT_DIR/worker.py" "$WORKER_HOME/worker.py"
+fi
 chmod 755 "$WORKER_HOME/worker.py"
 
 if [[ ! -f "$WORKER_HOME/token" ]]; then

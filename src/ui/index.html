@@ -202,11 +202,9 @@
         const h = document.createElement("h3");
         h.textContent = title;
         el.appendChild(h);
-        if (body) {
-          const pre = document.createElement(kind === "sys" ? "div" : "pre");
-          pre.textContent = body;
-          el.appendChild(pre);
-        }
+        const pre = document.createElement(kind === "sys" ? "div" : "pre");
+        pre.textContent = body || "";
+        el.appendChild(pre);
         if (extra) el.appendChild(extra);
         logEl.appendChild(el);
         logEl.scrollTop = logEl.scrollHeight;
