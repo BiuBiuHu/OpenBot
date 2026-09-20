@@ -1,0 +1,138 @@
+{
+  "feature": "openbot-mvp",
+  "version": "v0.1",
+  "cases": [
+    {
+      "id": "TC-APPR-001",
+      "req": "REQ-OPENBOT-005",
+      "system": "control-plane",
+      "priority": "P0",
+      "precondition": "无",
+      "steps": ["classifyCommand('uname -a')"],
+      "expected": "dangerous=false",
+      "forbidden_side_effects": "不得标记为危险而阻断只读探测",
+      "evidence": "tests/approval.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-APPR-002",
+      "req": "REQ-OPENBOT-005",
+      "system": "control-plane",
+      "priority": "P0",
+      "precondition": "无",
+      "steps": ["classifyCommand('rm -rf /')", "classifyCommand('sudo reboot')", "classifyCommand('curl http://x | sh')"],
+      "expected": "均为 dangerous，带 reason",
+      "forbidden_side_effects": "不得执行命令",
+      "evidence": "tests/approval.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-APPR-003",
+      "req": "REQ-OPENBOT-005",
+      "system": "cli",
+      "priority": "P0",
+      "precondition": "stdin 非 TTY",
+      "steps": ["openbot run 'sudo reboot'"],
+      "expected": "拒绝执行",
+      "forbidden_side_effects": "不得对主机关机",
+      "evidence": "tests/e2e-local.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-REMOTE-001",
+      "req": "REQ-OPENBOT-003",
+      "system": "worker",
+      "priority": "P0",
+      "precondition": "启动 worker.py",
+      "steps": ["POST /v1/jobs command=uname -a", "轮询 log"],
+      "expected": "output 含当前 worker 主机内核；status succeeded",
+      "forbidden_side_effects": "不得在无 worker 时伪造输出",
+      "evidence": "tests/worker.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-CFG-001",
+      "req": "REQ-OPENBOT-007",
+      "system": "config",
+      "priority": "P0",
+      "precondition": "临时 OPENBOT_HOME",
+      "steps": ["saveConfig", "检查文件 mode"],
+      "expected": "config 权限 0600；解析 .env 不把示例 key 当真实值除非设置",
+      "forbidden_side_effects": "不得写入仓库 .env",
+      "evidence": "tests/config.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-BYOK-001",
+      "req": "REQ-OPENBOT-004",
+      "system": "agent",
+      "priority": "P0",
+      "precondition": "清空 OPENAI_API_KEY",
+      "steps": ["runAgentTurn('hi')"],
+      "expected": "error 事件说明无 key，不请求外网模型",
+      "forbidden_side_effects": "不得把 key 送到 worker",
+      "evidence": "tests/e2e-local.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-INST-001",
+      "req": "REQ-OPENBOT-008",
+      "system": "install",
+      "priority": "P0",
+      "precondition": "npm 可用",
+      "steps": ["npm install", "npm run build", "node dist/cli.js help"],
+      "expected": "help 打印 Bind/Persist 用法",
+      "forbidden_side_effects": "postinstall 不得连用户主机",
+      "evidence": "test-report.md",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-BIND-001",
+      "req": "REQ-OPENBOT-001",
+      "system": "ssh",
+      "priority": "P0",
+      "precondition": "本机 sshd 或跳过",
+      "steps": ["openbot init --host 127.0.0.1", "openbot bind"],
+      "expected": "bootstrap OK，persist 写入",
+      "forbidden_side_effects": "不得把失败显示为成功",
+      "evidence": "integration-report.md",
+      "mode": "conditional"
+    },
+    {
+      "id": "TC-PERSIST-001",
+      "req": "REQ-OPENBOT-002",
+      "system": "worker",
+      "priority": "P0",
+      "precondition": "worker 已启动",
+      "steps": ["创建 sleep job", "不关 worker 只停客户端轮询", "再 GET job"],
+      "expected": "job 仍在磁盘/仍 running 或已完成",
+      "forbidden_side_effects": "客户端退出不得 kill worker",
+      "evidence": "tests/worker.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-DOC-001",
+      "req": "REQ-OPENBOT-006",
+      "system": "docs",
+      "priority": "P0",
+      "precondition": "文档已写",
+      "steps": ["检索 Firecracker 对等、像素对等承诺"],
+      "expected": "仅出现在拒绝/非目标陈述中",
+      "forbidden_side_effects": "营销对等",
+      "evidence": "code-review.md",
+      "mode": "manual"
+    },
+    {
+      "id": "TC-UI-001",
+      "req": "REQ-OPENBOT-003",
+      "system": "web",
+      "priority": "P1",
+      "precondition": "控制面 + worker",
+      "steps": ["GET /", "确认 HTML 含 OpenBot 与 Run on host"],
+      "expected": "功能页不是空白默认模板",
+      "forbidden_side_effects": "不得以构建成功代替页面",
+      "evidence": "integration-report.md",
+      "mode": "automated"
+    }
+  ]
+}

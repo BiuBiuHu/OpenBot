@@ -19,8 +19,6 @@ function sshBaseArgs(config: OpenBotConfig, extras: string[] = []): string[] {
     "-o",
     "StrictHostKeyChecking=accept-new",
     "-o",
-    "IdentitiesOnly=yes",
-    "-o",
     "ConnectTimeout=20",
     "-p",
     String(config.host.port || 22),
@@ -28,7 +26,7 @@ function sshBaseArgs(config: OpenBotConfig, extras: string[] = []): string[] {
   ];
   const identity = identityPath(config);
   if (identity) {
-    args.push("-i", identity);
+    args.push("-o", "IdentitiesOnly=yes", "-i", identity);
   }
   return args;
 }
