@@ -12,4 +12,4 @@ opc-skills 文档根。Feature name：`openbot-mvp`。Project root：本仓库�
 | 03-architecture | [architecture.md](03-architecture/architecture.md)、[remote-agent.md](03-architecture/remote-agent.md) |
 | 04-engineering | implementation-plan / change-impact / evidence / code-review / backlog |
 | 05-testing | test-strategy / test-cases.json / test-report / integration-report |
-| 06-ops | [ops-runbook.md](06-ops/ops-runbook.md)、[release-plan.md](06-ops/release-plan.md) |
+| 06-ops | [ops-runbook.md](06-ops/ops-runbook.md)、[release-plan.md](06-ops/release-plan.md)、[openhands-agent-server-trial.md](06-ops/openhands-agent-server-trial.md)（OH 摸手感，非产品内核） |
