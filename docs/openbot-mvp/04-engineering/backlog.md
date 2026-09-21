@@ -7,6 +7,7 @@
 | v0.1 | 2026-09-20 | 初版 | 把 v0 不做的事从主路径拿走 | 避免范围膨胀 |
 | v0.2 | 2026-09-20 | 按远端 Agent 阶段重排 | 循环 / 瘦客户端 / 浏览 / 群组 分层 | 群组不挡内核 |
 | v0.3 | 2026-09-21 | 补本机 LLM 会话 | 聊天 ≠ 总是 Agent | BL-014；默认可先于 Agent 内核 |
+| v0.4 | 2026-09-21 | 本机 Agent 交接取代 mode 切换 | UX 澄清 | BL-014/011 改为规划+handoff |
 
 ## 1. 当前决策
 
@@ -17,8 +18,8 @@
 | ID | 项 | 优先级 | 依赖 | 备注 |
 |----|----|--------|------|------|
 | BL-010 | Phase 1：远端 `openbot-agent` 循环（队列 + BYOK + 工具 + 审批 + 落盘） | P0 | PR#1 执行原语 | 单进程；SSH 仍只 bind/隧道 |
-| BL-014 | 同一窗口 **本机 LLM**（无工具、笔记本 BYOK、无需 bind） | P1 | 本机控制面 | 默认 mode；不挡 Phase 1；不创建 `/v1/tasks` |
-| BL-011 | Phase 2：瘦客户端 + **1:1 具名 Agent 聊天** + 从本机 LLM 升级 | P1 | BL-010 | 消息 → `/v1/tasks`；事件进线程 |
+| BL-014 | **本机 Agent**（规划/编排，笔记本 BYOK，无需 bind）+ `handoff_proposal` | P1 | 本机控制面 | 不挡 Phase 1；无确认不创建 `/v1/tasks` |
+| BL-011 | Phase 2：交接确认、远端事件回流**同一线程**、本机收尾 | P1 | BL-010、BL-014 | 不是切到另一个聊天 mode |
 | BL-012 | Phase 3：无头浏览 plugin | P3 | BL-010、2C4G 评估 | 禁止冒充 Grok 桌面；plugin ≠ Agent |
 | BL-013 | v0.5：Agent 群组房间（mention / 本机编排 / 按 Agent 扇出） | P2 | BL-011 | 共享发言 vs 私有 memory；不挡 Phase 1 |
 

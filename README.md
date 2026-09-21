@@ -118,14 +118,10 @@ Destructive or privileged commands (`rm -rf`, `sudo`, reboot, pipe-to-shell, …
 ## Shape
 
 ```text
-[ Same chat window ]
-   Local LLM (default)                 Agent 1:1 / later rooms
-   laptop BYOK · no VPS tools          tasks · events · approve
-                                              |
-                                       optional SSH tunnel
-                                              v
-                                    [ openbot-agent ]
-                                    remote disk state
+[ One thread ]
+   local Agent (plan / draft)  --handoff-->  openbot-agent (has the computer)
+                         events back into the same thread
+                         then local Agent wraps up
 ```
 
 SSH is for **bind / bootstrap** and an optional tunnel — not the command channel.

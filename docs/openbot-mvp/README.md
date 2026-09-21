@@ -2,7 +2,7 @@
 
 opc-skills 文档根。Feature name：`openbot-mvp`。Project root：本仓库。
 
-目标运行时：远端 systemd 常驻 **`openbot-agent`**（思考+执行）。本机同一窗口三种会话：默认**本机 LLM**、1:1 Agent、v0.5 群组。聊天 ≠ 总是 Agent。细节从 `03-architecture/` 读起。
+目标运行时：本机 **Agent**（规划/编排）交接给远端 systemd 常驻 **`openbot-agent`**（拥有电脑）。一条线程，不是三个 mode。群组后置。细节从 `03-architecture/` 读起。
 
 | 目录 | 主文档 |
 |------|--------|

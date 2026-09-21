@@ -1,6 +1,6 @@
 # 远端 openbot-agent
 
-聚焦文档：常驻进程、任务状态机、HTTP 草图、以及 **Agent 会话**如何映射到任务队列。本机普通 LLM 聊天**不走本文的 `/v1/tasks`**。总图与三种会话模式见 [architecture.md](architecture.md) §1.0。
+聚焦文档：常驻进程、任务状态机、HTTP 草图、以及本机 Agent **如何交接**到 `/v1/tasks`。本机规划**不**走本文的任务队列。总图与交接流见 [architecture.md](architecture.md) §1.0。
 
 ## 0. 版本历史
 
@@ -8,27 +8,28 @@
 |------|------|----------|----------|------|
 | v0.1 | 2026-09-20 | 初稿：单进程 Agent + 任务 API + 对话分层 | 用户确认远端是 Agent 不是哑 Worker；本地要 1:1 与群组 | 实现按 Phase 1→2→3；群组 v0.5 |
 | v0.2 | 2026-09-21 | 声明聊天 ≠ 总是 Agent；补本机 LLM 模式 | 同一窗口还要普通 NL 对话 | 默认不上 VPS；点选 Agent 才 `POST /v1/tasks` |
+| v0.3 | 2026-09-21 | 改为交接流，不再并列三个 mode | 本机 Agent=编排；远端=电脑 | 同一线程回流；群组仍后置 |
 
 ## 1. 当前决策
 
 - 远端产品进程名叫 **`openbot-agent`**，systemd 常驻（降级 tmux / nohup）。
 - **一个进程**容纳：HTTP、任务队列、模型循环、工具、审批、事件日志。
-- 本机聊天窗口有三种 mode：`local_llm`（默认，无工具）、`agent_1to1`、`agent_group`（v0.5）。**只有后两种**打到本文的 Agent。
-- 对 Agent 模式，本机是瘦客户端：`POST` 任务、订阅事件、批准。
-- v0 工具：`run_shell`、`read_file`、`write_file`、`list_dir`。本机 LLM **零工具**。浏览器是以后的 plugin。
-- 不宣称 Firecracker，不宣称 Grok 像素桌面对等。
+- 用户跟**本机 Agent**说话。只有交接确认后才打到本文的 `/v1/tasks`。不是三个对等聊天 mode。
+- 本机控制面：本机 Agent 循环 + 提出交接 + 订阅远端事件 + 批准。
+- v0 工具：`run_shell`、`read_file`、`write_file`、`list_dir`，只在远端。本机 Agent **零 VPS 工具**。浏览器是以后的 plugin。
+- 群组后置（v0.5）。不宣称 Firecracker，不宣称 Grok 像素桌面对等。
 
 ## 2. Agent 不是什么
 
 ```text
-本机 LLM        = 笔记本上的普通对话（改写 / 问答 / 头脑风暴），无工具
+本机 Agent      = 思考 / 编排同伴（规划、澄清、起草、提出交接），没有电脑
 Worker          = 只执行别人想好的步骤
-openbot-agent   = 自己想 + 自己在这台电脑上做
-computer-use    = 一种工具（看屏幕/点浏览器），挂在 Agent 下面
-群组编排器      = 把一句话变成对多名 Agent 的投递，不代替他们思考
+openbot-agent   = 拥有电脑：想 + 在这台主机上做
+computer-use    = 一种工具（看屏幕/点浏览器），挂在远端 Agent 下面
+群组            = 以后；本机 Agent 向多名远端扇出交接
 ```
 
-**聊天 ≠ 总是 Agent。** 默认 `local_llm` 绝不创建远端任务。
+**不是三个对等 mode。** 默认本机 Agent 绝不创建远端任务，除非它提出交接且（策略要求时）用户确认。
 
 PR#1 的 `worker.py` 是合格的 **Worker**。目标是把它的执行原语收进 Agent，并在同一进程里加上模型循环，而不是再叠一个“云端大脑”。
 
@@ -81,7 +82,8 @@ stateDiagram-v2
 | `type` | 何时 | 会话面怎么画 |
 |--------|------|----------------|
 | `status` | 进入 queued/running/… | 系统行 |
-| `thought` | 模型自然语言 | Agent 气泡（可标“思考”） |
+| `thought` | 模型自然语言 | 本机或远端气泡（标 local / remote） |
+| `handoff_proposal` | 本机 Agent 要电脑 | 交接卡（确认后才 `POST /v1/tasks`） |
 | `tool_start` | 将调工具 | 折叠的工具块 |
 | `approval` | 需要人 | 审批卡（Approve / Deny） |
 | `tool_result` | 工具返回 | 工具块结果 |
@@ -89,7 +91,7 @@ stateDiagram-v2
 | `error` | 可恢复或终态错误 | 红字 |
 | `done` | 任务终态 | 关闭 SSE |
 
-`thought` 与 `token`（PR#1）同义；新实现用 `thought`，读取旧流时可兼认 `token`。
+`thought` 与 `token`（PR#1）同义；新实现用 `thought`，读取旧流时可兼认 `token`。`handoff_proposal` 由**本机 Agent**发出，不是远端进程的事件；列在这里是为了同一条 SSE 线程能画交接卡。
 
 ## 5. API 草图
 
@@ -105,9 +107,10 @@ stateDiagram-v2
   "agent_id": "host:default",
   "thread_id": "chat_1to1_default",
   "source": {
-    "type": "chat",
-    "chat_id": "chat_1to1_default",
-    "message_id": "msg_01"
+    "type": "handoff",
+    "chat_id": "chat_default",
+    "message_id": "msg_01",
+    "proposal_id": "ho_01"
   },
   "timeout_sec": 600
 }
@@ -151,41 +154,51 @@ stateDiagram-v2
 
 `GET /v1/info` 至少返回：`agent_id`、hostname、uname、workspace、persist、是否已配置 BYOK（布尔，**不回 key**）。
 
-## 6. 本机会话面如何说话
+## 6. 本机 Agent 如何交接
 
-同一窗口，三条 mode。切换是显式的：底栏选 Agent/主机，或消息里 `@agent_id`。
+用户始终在**同一条线程**跟本机 Agent 说话。没有“Local LLM / Remote / Group”三个对等入口让人来回切。
 
-### 6.0 本机 LLM（默认，v0）
+### 6.0 本机 Agent（默认）
 
-产品：普通自然语言聊天。头脑风暴、改写、问答。
-
-| 用户动作 | 运行时 |
-|----------|--------|
-| 打开默认线程 | `mode=local_llm`；不探活 Agent |
-| 发一条消息 | 本机控制面调笔记本 BYOK `chat/completions`，**不带 tools** |
-| 看回复 | 本机 SSE：`thought` / `error` / `done` |
-| 合盖 | 这次生成停；不写远端 `tasks/` |
-| 升级到 Agent | 点选 Agent/主机或 `@mention`；**下一条**（或确认后的本条）才 `POST /v1/tasks`。不把整段本机闲聊重放成 shell |
-
-未 bind、无隧道、主机睡着：本机 LLM 仍可用。缺的是笔记本 `OPENAI_API_KEY`（或等价 BYOK），不是 Agent token。
-
-此模式**不是** `openbot-agent` 的职责。下面 6.1 / 6.2 才是。
-
-### 6.1 1:1 Agent 聊天（v0）
-
-产品：用户跟一个**具名**远端 Agent 说话（先是这台 VPS 上的默认人格；以后可以是同机多 persona）。
+产品：思考 / 编排同伴。规划、澄清、起草。笔记本 BYOK。**没有电脑。**
 
 | 用户动作 | 运行时 |
 |----------|--------|
-| 打开线程 | 本机列出 `thread_id`；向 Agent `GET /v1/tasks?thread_id=` 画历史 |
-| 发一条消息 | 本机写入会话缓存，并 `POST /v1/tasks`（新任务）或附在仍 `running` / `awaiting_approval` 的任务上（v0 简化：**总是新任务**，`thread_id` 相同即延续上下文） |
-| 看思考 / 工具 / 审批 | `GET .../events` 画进同一条线程 |
-| 批准 | 本机卡片 → `POST /v1/approvals/:id` |
-| 合盖再打开 | 本机再订阅；任务早在远端跑完或仍在等批准 |
+| 打开线程 | 本机 Agent；不创建远端任务 |
+| 发一条消息 | 笔记本 `chat/completions`；可带 `propose_handoff` 工具（只提案，不执行） |
+| 看回复 | `thought`；需要电脑时 `handoff_proposal` |
+| 合盖 | 本机生成停；已交接任务继续 |
 
-v0 上下文：该 `thread_id` 最近 N 条用户/Agent 消息 + 该 Agent 私有 memory。不在 v0 做跨 Agent 共享。
+未 bind、无隧道、主机睡着：仍能规划。缺的是笔记本 BYOK。要电脑时：未 bind → 提案失败并提示先 `openbot bind`。
 
-### 6.2 Agent 群组（v0.5）
+`handoff_proposal` 草图：
+
+```json
+{
+  "type": "handoff_proposal",
+  "id": "ho_01",
+  "target": { "host_id": "default", "agent_id": "host:default" },
+  "goal": "在工作区写一份 uname 记录",
+  "reason": "需要在主机上执行 shell / 写文件",
+  "thread_id": "chat_default"
+}
+```
+
+### 6.1 交接与回流（v0）
+
+| 步骤 | 运行时 |
+|------|--------|
+| 提案 | 本机 Agent 发 `handoff_proposal`，停等 |
+| 确认 | 策略要求时：`POST /api/handoffs/ho_01` `{allow:true}`。v0 默认要确认 |
+| 创建任务 | 控制面 `POST /v1/tasks`，`source.type=handoff`，**同一** `thread_id` |
+| 回流 | `GET .../events` 画进同一线程，气泡标 `remote` |
+| 远端审批 | 危险工具仍走 `/v1/approvals`（与交接卡分开） |
+| 收尾 | 任务 `done` 后本机 Agent 再开口解释 / 下一步 |
+| 合盖再打开 | 续订远端事件；本机 Agent 在终态后收尾 |
+
+禁止：用户自己切一个“远端聊天 mode”；把提案前整段对话重放成 shell。只交 `goal` + 用户确认的上下文。
+
+### 6.2 Agent 群组（v0.5，后置）
 
 房间 = 一个频道。参与者 = 一个用户 + 多名 Agent（`agent_id`，可指向不同主机）。
 
@@ -258,10 +271,10 @@ v0.5 **先做 `mention` + 可选本机编排器**。不要先做跨机共识或�
 | PR#1 | 目标 |
 |------|------|
 | `POST /v1/jobs` `{command}` | `POST /v1/tasks` `{mode:"exec", command}` 或循环里的 tool step |
-| 本机 `POST /api/chat` 调模型 | **留下**给 `mode=local_llm`（无 tools）。`agent_*` 改为本机只 `POST /v1/tasks` |
-| 本机内存聊天历史 | 本机 LLM：本机缓存即可。Agent 1:1：`thread_id` + 远端事件为权威 |
-| `worker.py` 审批在控制面 | 审批状态在任务上，`awaiting_approval`（仅 Agent 模式） |
-| `OPENAI_API_KEY` 只在笔记本 | **本机 LLM 仍在笔记本**。Agent 循环另用主机 `secrets/`。两把 key 可以相同，但落点分开 |
+| 本机 `POST /api/chat` 调模型 | **留下**给本机 Agent（规划）。交接后才 `POST /v1/tasks` |
+| 本机内存聊天历史 | 一条 `thread_id`：本机规划 + 远端回流。已交接任务以远端事件为权威 |
+| `worker.py` 审批在控制面 | 工具审批在远端任务上；另加本机交接确认 |
+| `OPENAI_API_KEY` 只在笔记本 | **本机 Agent 仍在笔记本**。远端循环另用主机 `secrets/` |
 
 执行原语（文件 API、job 日志格式）尽量原样搬进 Agent，降低 bootstrap 重写面。
 
@@ -270,7 +283,7 @@ v0.5 **先做 `mention` + 可选本机编排器**。不要先做跨机共识或�
 | Phase | 做什么 | 明确不做 |
 |-------|--------|----------|
 | **1. 远端 Agent 循环** | 常驻进程、tasks 落盘、BYOK 循环、shell/文件、审批状态机、`/v1/tasks` + events | 群组、浏览器、拆进程 |
-| **2. 瘦客户端 + 会话面** | 默认本机 LLM；可切 **1:1 Agent**（创建任务、订阅、批准） | 完整多 Agent 房间；不要把本机 LLM 误建成远端任务 |
+| **2. 本机 Agent + 交接** | 规划同伴、`handoff_proposal`、确认、事件回流同一线程、收尾 | 三个对等 mode；静默把闲聊打到 `/v1/tasks`；完整群组 |
 | **3. 无头浏览 plugin** | 可选工具，2C4G 评估后再做 | 像素桌面对等、把 plugin 叫成 Agent |
 | **v0.5 群组房间** | 房间模型 + mention/本机编排 + 扇出任务 | 不阻塞 Phase 1；不做跨机文件同步 |
 

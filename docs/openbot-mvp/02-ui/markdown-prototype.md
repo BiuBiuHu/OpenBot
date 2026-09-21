@@ -7,15 +7,16 @@
 | v0.1 | 2026-09-20 | 单页远程遥控台 | C 端工具页，不是 B 类运营表 | 实现为 `src/ui/index.html` |
 | v0.2 | 2026-09-20 | 会话面：1:1 Agent 线程；预留群组房间 | 本机是瘦客户端，不是模型循环 | v0 只画单 Agent；群组 v0.5 |
 | v0.3 | 2026-09-21 | 同一窗口三种 mode；默认本机 LLM | 聊天 ≠ 总是 Agent | 底栏先 Local LLM；点选 Agent 才升级 |
+| v0.4 | 2026-09-21 | 一条线程 + 交接卡，去掉 mode 切换器 | 本机 Agent 规划，远端回流 | 用户不切 Local/Remote |
 
 ## 1. 当前决策
 
-- 当前 UI 结构：单页**同一聊天窗口**。顶栏标明当前 mode + 底栏切换：`Local LLM`（默认）| `Agent` | `Run on host`。Agent 模式下右侧才出现该主机任务。
-- 当前交互风格：终端感（phosphor / amber）。本机 LLM 像普通对话；切到 Agent 才强调“这是你的机器”。
-- 当前平台形态：本机 Web（`127.0.0.1:3847`）+ CLI。本机 LLM 的循环在笔记本；Agent 循环在远端。
-- 页面类型：**C 类工具页**（会话 + 远程遥控）。不是 B 类运营/审核台。
-- 效率目标：3 秒内看清**现在是本机 LLM 还是 Agent**、主机是否在线、能否 `uname -a`。
-- v0.5：增加 **房间**。v0 不画完整房间 UI。
+- 当前 UI 结构：单页**一条线程**。用户只跟本机 Agent 说话。需要电脑时线程里出**交接卡**；远端 thought/tool 回流同一条对话。右侧是该线程已交接的任务，不是另一个聊天。
+- 当前交互风格：终端感（phosphor / amber）。全程同一位同伴；远端输出标 `remote`，不切窗口。
+- 当前平台形态：本机 Web（`127.0.0.1:3847`）+ CLI。本机 Agent 在笔记本想；远端 Agent 有电脑。
+- 页面类型：**C 类工具页**。不是 B 类运营台，也不是三个 mode 的 segmented control。
+- 效率目标：3 秒内看清本机 Agent 是否就绪、有无待确认交接、主机是否在线。
+- v0.5：房间后置。v0 不画完整房间 UI。
 
 B 类运营效率规则不适用：没有多对象表格、没有批量生图、没有详情抽屉矩阵。Jobs 侧栏是“这台电脑上还活着的任务”，不是运营审核队列。
 
@@ -29,14 +30,14 @@ CLI 入口：`openbot run` / `openbot chat` / `openbot status`。
 
 ### 2.2 导航层级
 
-v0 无多路由。底栏会话 mode：`Local LLM`（默认）| `Chat with agent` | `Run on host`。从 Local LLM `@mention` 或点选 Agent/主机即升级。v0.5 增加房间。
+v0 无多路由、无 mode 切换。底栏就是输入。可选 `Run on host` 作为不经本机 Agent 的直执逃生口。v0.5 才有房间。
 
 ### 2.3 信息分组
 
-1. 当前 mode 徽章：`LOCAL LLM` 或 `AGENT · user@host`
-2. 本机 LLM：用户 / 助手气泡；无工具块、无任务侧栏
-3. Agent 1:1：思考 / 工具 / 审批 + 右侧远端任务
-4. v0.5：房间参与者条（user + @researcher @coder …）
+1. 顶栏：本机 Agent 就绪 + 已 bind 主机（可灰，未 bind 仍能规划）
+2. 同一线程：you / local Agent / 交接卡 / remote 事件 / 本机收尾
+3. 右侧：本线程已交接的远端任务（合盖后仍在）
+4. v0.5：房间参与者条
 
 ### 2.4 上下文与冗余控制
 
@@ -48,7 +49,7 @@ v0 无多路由。底栏会话 mode：`Local LLM`（默认）| `Chat with agent`
 
 | 页面/弹窗 | 入口 | 目标用户 | 关键动作 | 权限 |
 |-----------|------|----------|----------|------|
-| 会话台 `/` | serve | 主人 | 默认本机 LLM；可切 Agent / Run / 批准 | 本机回环 |
+| 会话台 `/` | serve | 主人 | 跟本机 Agent 聊、确认交接、批准工具、可选 Run | 本机回环 |
 | 审批卡片 | 危险工具 | 主机主人 | Approve / Deny（转发远端 `/v1/approvals`） | 单次 id |
 | 房间 `/`（v0.5） | 房间切换 | 主机主人 | @mention 或交给编排器；看多名 Agent 事件 | 本机回环 |
 | CLI | 终端 | 主机主人 | 同等动作 | TTY 确认 |
@@ -57,36 +58,28 @@ v0 无多路由。底栏会话 mode：`Local LLM`（默认）| `Chat with agent`
 
 ### 4.1 遥控台
 
-默认本机 LLM（未 bind 也可）：
+一条线程（规划 → 交接 → 回流 → 收尾）。未 bind 也可先规划。没有 Local/Remote 下拉框。
 
 ```text
-┌ OpenBot ●  LOCAL LLM                      BYOK on laptop: yes
-│                                           agent: not selected
-├───────────────────────────────────────────┤
-│ you   帮我把这段 README 写短一点
-│ llm   （普通助手气泡，无 tool / 无审批）
-├───────────────────────────────────────────┤
-│ [Local LLM ▼] [  帮我把这段…          ][Send]
-│    也可选 Agent:default 升级到远端
-└───────────────────────────────────────────┘
-```
-
-切到 1:1 Agent 之后：
-
-```text
-┌ OpenBot ●  AGENT  default                 ubuntu@203.0.113.10
-│                                           persist systemd-user
-│                                           BYOK on host: yes
+┌ OpenBot ●  local agent                    laptop BYOK: yes
+│                                           host ubuntu@203.0.113.10  idle
 ├───────────────────────────────┬───────────┤
 │ you                           │ TASKS     │
-│  看一下 uname 并写进 workspace │ tsk_a1 … │
-│ agent · thought / tool        │           │
+│  帮我在主机记下 uname         │ tsk_a1    │
+│ local                         │  handoff  │
+│  这步需要在 VPS 上跑 shell。  │           │
+│  [交接卡] 写 uname 到 workspace│           │
+│           [允许] [不用了]     │           │
+│ remote · tool  run_shell      │           │
+│  Linux box 6.12.0-…           │           │
+│ local                         │           │
+│  已经写好，要不要我起草 README│           │
 ├───────────────────────────────┴───────────┤
-│ [Chat with agent ▼] [  看一下 uname…  ][Send]
+│ [  继续说…                              ][Send]
 └───────────────────────────────────────────┘
 ```
 
-v0.5 房间草图（不进 v0 实现）：
+v0.5 房间草图（后置：本机 Agent 扇出交接）：
 
 ```text
 ┌ room: ship-v0     you · @researcher · @coder · @reviewer
@@ -98,24 +91,24 @@ v0.5 房间草图（不进 v0 实现）：
 
 - 布局：顶栏 / 对话 / jobs / 输入。
 - 字段：无登录表单；密钥在 `~/.openbot`。
-- 操作：Send、切换 Local LLM / Agent / Run、Approve、Deny。v0.5 增加 @mention。
-- 升级：从 Local LLM 下拉选 Agent 或输入 `@agent`；系统提示“下一条将在主机上执行”，禁止静默重放整段闲聊。
+- 操作：Send、允许/拒绝交接、Approve/Deny 远端工具。可选 Run。v0.5 才 @mention。
+- 交接：本机 Agent 出卡，不靠用户切 mode。禁止静默重放整段规划。
 - 列表列：status、id、goal/command。
 - 行内可视对象：连接灯（绿=worker 可达）。
 - 详情信息：uname 字符串、错误原文。
-- 批量操作：无。昂贵/危险动作用**一张**审批卡，禁止嵌套确认。
+- 批量操作：无。交接卡与工具审批卡是两张不同的卡，禁止嵌套确认。
 - 反馈：SSE token/output；错误用红色 sys 行。
 
 基础交互路径（紧跟草图）：
 
 1. 进入 serve URL → 顶栏拉 `/api/status`。
-2. 选 `Run on host`，输入 `uname -a`，Send → `/api/run` SSE。
-3. 输出出现在 host 气泡；jobs 刷新。
-4. 若命令危险：出现审批卡，Approve 才继续，Deny 写回拒绝。
-5. 默认 `Local LLM`：本机 BYOK，SSE 只有助手文本。未 bind 也走得通。
-6. `Chat with agent`：消息变成远端 `POST /v1/tasks`，SSE 画 thought/tool/approval。无主机 key 时提示切回 Local LLM 或用 Run。
-7. 失败：顶栏红灯 + 错误文案。Agent 失败不得把输出标成本机 LLM，也不得跳到本机 shell。
-8. 合盖再打开：Local LLM 停在上次气泡；Agent 线程续订远端事件。
+2. 直接跟本机 Agent 说话（未 bind 也能规划）。
+3. 需要电脑：同一线程出交接卡 → 允许 → 远端事件标 `remote` 流回。
+4. 远端危险工具：另出审批卡，Approve 才继续。
+5. 任务结束后本机 Agent 在同一线程收尾。
+6. 可选逃生口：`Run on host` 不经本机 Agent。
+7. 失败：线程红字。远端失败不得标成本机产出。
+8. 合盖再打开：同一线程续订远端事件。
 
 不需要的路径：新建对象、跨页多选、发布确认（非 SaaS）。
 
@@ -124,10 +117,10 @@ v0.5 房间草图（不进 v0 实现）：
 ### 5.1 加载、空态、错误态
 
 - 加载：meta “connecting…”。
-- 本机 LLM 空态：“普通对话。要让 VPS 动手，选一个 Agent。”
-- 空任务（仅 Agent mode）：“No tasks yet. They live on the remote agent.”
-- 错误：无本机 key、agent 不可达、无主机 key、审批拒绝、非零退出。
-- 群组空态（v0.5）：“点名一个 Agent，或打开编排。”
+- 空态：“跟本机 Agent 说话。需要电脑时它会提出交接。”
+- 空任务：“还没有交接出去的任务。它们会活在远端。”
+- 错误：无本机 key、拒绝交接、远端不可达、无主机 key、工具审批拒绝、非零退出。
+- 群组空态（v0.5）：后置。
 
 ### 5.2 表单校验和保存反馈
 
@@ -135,11 +128,11 @@ v0.5 房间草图（不进 v0 实现）：
 
 ### 5.3 权限差异和只读状态
 
-单用户。无本机 key 时 Local LLM 不可用；无主机 key 时 Agent 聊天不可用；Run 仍可用。未 bind 只禁用 Agent / Run，不禁用 Local LLM。群组里审批卡仍贴在**产生危险工具的那名 Agent** 的气泡下。
+单用户。无本机 key 时规划不可用；未 bind / 无主机 key 时交接失败、规划仍可用；Run 仍可用。工具审批卡贴在**远端气泡**下，与交接卡分开。
 
 ### 5.4 预发/线上环境标识
 
-不适用（本地回环应用）。Local LLM 顶栏写 `LOCAL LLM` / laptop BYOK；Agent 模式才展示**远端主机名**，避免把本机闲聊误认成 VPS。
+不适用（本地回环应用）。顶栏始终是本机 Agent + 主机状态。远端产出标 `remote`，避免把规划误认成已在 VPS 执行。
 
 ### 5.5 B 类运营效率检查
 
@@ -160,4 +153,4 @@ v0.5 房间草图（不进 v0 实现）：
 
 - 多会话历史、文件树浏览：Backlog。
 - 群组房间完整 UI：v0.5，见 `03-architecture/remote-agent.md` §6.2。不挡远端 Agent 内核。
-- 从本机 LLM 升级时是否带上最近 N 条作 Agent 上下文：实现时默认**不自动带工具化历史**，只带用户确认的摘要或新消息。
+- 交接时带多少本机上下文：默认只交提案 `goal` + 用户确认的摘要，不重放整段规划。

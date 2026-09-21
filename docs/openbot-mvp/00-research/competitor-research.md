@@ -7,6 +7,7 @@
 | v0.1 | 2026-09-20 | 初始调研 | opc-skills 编码前必须先查成熟方案 | 锁定 SSH 绑定 + 宿主机 HTTP worker，拒绝托管 Firecracker 伪装 |
 | v0.2 | 2026-09-20 | 补 Worker ≠ Agent ≠ computer-use | 远端演进为常驻 Agent | 调研结论不改 SSH；改产品进程名与循环位置 |
 | v0.3 | 2026-09-21 | 本机 LLM ≠ Agent | 聊天窗口默认普通对话 | 不改 SSH 结论 |
+| v0.4 | 2026-09-21 | 本机 Agent（编排）vs 远端（有电脑） | 交接流取代并列 mode | 不改 SSH 结论 |
 
 ## 1. 当前决策
 
@@ -42,7 +43,7 @@ OpenHands 可以挂远程机器，但产品语言是“这次编码任务跑在�
 - 不得声称 Firecracker 隔离或 Grok Bot 像素对等。
 - Agent（及今日的 Worker）以 SSH 用户身份运行，**不是沙箱**。危险命令靠审批门，不是内核隔离。
 - 只绑 `127.0.0.1`，外网不可直连；隧道断开不影响已在跑的任务，也不应杀死模型循环。
-- Worker = 只执行；Agent = 思考+执行；computer-use = 工具；本机 LLM = 无工具 NL。聊天 ≠ 总是 Agent。不得在对外文案里互换。
+- Worker = 只执行；本机 Agent = 编排无电脑；远端 Agent = 有电脑；computer-use = 工具。不是三个聊天 mode。不得在对外文案里互换。
 
 ## 5. 未解决问题
 

@@ -7,11 +7,12 @@
 | v0.1 | 2026-09-20 | 记录已有脚手架并补齐文档/测试 | 先保存再改；implementation-loop | 保存点 8fea153 |
 | v0.2 | 2026-09-20 | 锁定远端 Agent 三阶段 + 对话节奏 | 架构决策已确认；本 PR 只改文档 | Phase 1 循环 → Phase 2 瘦客户端/1:1 → Phase 3 浏览 plugin；群组 v0.5 |
 | v0.3 | 2026-09-21 | 会话面默认本机 LLM | 聊天 ≠ Agent | Phase 2 含 Local LLM；可与 Phase 1 并行 |
+| v0.4 | 2026-09-21 | Phase 2 改为交接流 | 不是三个 mode | 规划 → 提案 → 回流 → 收尾 |
 
 ## 1. 当前决策
 
 - 当前实施策略：PR#1 垂直切片（本机循环 + 远端 Worker）保持可运行；**本 PR 只锁目标架构文档**。下一支代码 PR 再搬模型循环。
-- 当前阶段划分：文档锁定 → Phase 1 远端 Agent 循环 → Phase 2 同一窗口（**默认本机 LLM** + 1:1 Agent）→ Phase 3 无头浏览 plugin。群组 = **v0.5**。本机 LLM 不作为 Phase 1 门禁。
+- 当前阶段划分：文档锁定 → Phase 1 远端循环 → Phase 2 本机 Agent + **交接** → Phase 3 无头浏览 plugin。群组 = **v0.5**（后置）。本机规划不作为 Phase 1 门禁。
 - 当前依赖关系：文档在 `docs/openbot-mvp/`；实现仍基于 PR#1 的 SSH bind 与执行原语。
 
 ## 2. 项目发现
@@ -52,11 +53,11 @@ PR#1 已完成：脚手架 → 00–06 文档 → 测试与 localhost SSH bind �
 | 阶段 | 任务 | 退出条件 | 失败处理 |
 |------|------|----------|----------|
 | 1 | **远端 Agent 循环**：单进程常驻、`/v1/tasks`、BYOK、shell/文件、`awaiting_approval`、事件落盘 | 拔掉隧道后任务仍能到终态或停在审批 | 保留 PR#1 jobs 协议作 tool step；不拆微服务 |
-| 2 | **同一窗口**：默认本机 LLM（笔记本 BYOK、无工具）+ 可选 1:1 Agent（建任务/订阅/批准） | 未 bind 能 LLM 聊；切 Agent 后合盖再订阅仍见任务 | 禁止默认闲聊打到 `/v1/tasks`；无对应 key 时该 mode 失败，exec 仍可用 |
+| 2 | **本机 Agent + 交接**：规划、提案、确认、同一线程回流、收尾 | 未 bind 能规划；确认后合盖任务仍在；终态后本机收尾 | 禁止三个 mode 切换器；禁止静默 `/v1/tasks` |
 | 3 | **无头浏览 plugin** | 工具表可开关；2C4G 可关 | 禁止宣称桌面对等；plugin ≠ Agent |
 | v0.5 | **群组房间**：participants、mention/本机编排、按 Agent 扇出任务 | 房间消息能变成多条 `/v1/tasks` | 不做跨机文件同步；不挡 Phase 1 |
 
-本 PR（文档）退出条件：架构写清 Agent、状态机、**本机 LLM / 1:1 / 群组**，并开中文 PR 待审。不合并。
+本 PR（文档）退出条件：架构写清远端 Agent、状态机、**本机 Agent 交接流**，并开中文 PR 待审。不合并。
 
 ## 6. 自动执行循环
 
