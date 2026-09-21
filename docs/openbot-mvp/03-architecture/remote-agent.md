@@ -1,30 +1,34 @@
 # 远端 openbot-agent
 
-聚焦文档：常驻进程、任务状态机、HTTP 草图、1:1 / 群组如何映射到任务队列。总图与防腐化规则见 [architecture.md](architecture.md)。
+聚焦文档：常驻进程、任务状态机、HTTP 草图、以及 **Agent 会话**如何映射到任务队列。本机普通 LLM 聊天**不走本文的 `/v1/tasks`**。总图与三种会话模式见 [architecture.md](architecture.md) §1.0。
 
 ## 0. 版本历史
 
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-09-20 | 初稿：单进程 Agent + 任务 API + 对话分层 | 用户确认远端是 Agent 不是哑 Worker；本地要 1:1 与群组 | 实现按 Phase 1→2→3；群组 v0.5 |
+| v0.2 | 2026-09-21 | 声明聊天 ≠ 总是 Agent；补本机 LLM 模式 | 同一窗口还要普通 NL 对话 | 默认不上 VPS；点选 Agent 才 `POST /v1/tasks` |
 
 ## 1. 当前决策
 
 - 远端产品进程名叫 **`openbot-agent`**，systemd 常驻（降级 tmux / nohup）。
 - **一个进程**容纳：HTTP、任务队列、模型循环、工具、审批、事件日志。
-- 本机是瘦客户端：`POST` 任务、订阅事件、批准。聊天 UI 只是会话面。
-- v0 工具：`run_shell`、`read_file`、`write_file`、`list_dir`。浏览器是以后的 plugin。
-- v0 对话：与**一个**具名 Agent 1:1。v0.5 才做群组房间。
+- 本机聊天窗口有三种 mode：`local_llm`（默认，无工具）、`agent_1to1`、`agent_group`（v0.5）。**只有后两种**打到本文的 Agent。
+- 对 Agent 模式，本机是瘦客户端：`POST` 任务、订阅事件、批准。
+- v0 工具：`run_shell`、`read_file`、`write_file`、`list_dir`。本机 LLM **零工具**。浏览器是以后的 plugin。
 - 不宣称 Firecracker，不宣称 Grok 像素桌面对等。
 
 ## 2. Agent 不是什么
 
 ```text
+本机 LLM        = 笔记本上的普通对话（改写 / 问答 / 头脑风暴），无工具
 Worker          = 只执行别人想好的步骤
 openbot-agent   = 自己想 + 自己在这台电脑上做
 computer-use    = 一种工具（看屏幕/点浏览器），挂在 Agent 下面
 群组编排器      = 把一句话变成对多名 Agent 的投递，不代替他们思考
 ```
+
+**聊天 ≠ 总是 Agent。** 默认 `local_llm` 绝不创建远端任务。
 
 PR#1 的 `worker.py` 是合格的 **Worker**。目标是把它的执行原语收进 Agent，并在同一进程里加上模型循环，而不是再叠一个“云端大脑”。
 
@@ -149,6 +153,24 @@ stateDiagram-v2
 
 ## 6. 本机会话面如何说话
 
+同一窗口，三条 mode。切换是显式的：底栏选 Agent/主机，或消息里 `@agent_id`。
+
+### 6.0 本机 LLM（默认，v0）
+
+产品：普通自然语言聊天。头脑风暴、改写、问答。
+
+| 用户动作 | 运行时 |
+|----------|--------|
+| 打开默认线程 | `mode=local_llm`；不探活 Agent |
+| 发一条消息 | 本机控制面调笔记本 BYOK `chat/completions`，**不带 tools** |
+| 看回复 | 本机 SSE：`thought` / `error` / `done` |
+| 合盖 | 这次生成停；不写远端 `tasks/` |
+| 升级到 Agent | 点选 Agent/主机或 `@mention`；**下一条**（或确认后的本条）才 `POST /v1/tasks`。不把整段本机闲聊重放成 shell |
+
+未 bind、无隧道、主机睡着：本机 LLM 仍可用。缺的是笔记本 `OPENAI_API_KEY`（或等价 BYOK），不是 Agent token。
+
+此模式**不是** `openbot-agent` 的职责。下面 6.1 / 6.2 才是。
+
 ### 6.1 1:1 Agent 聊天（v0）
 
 产品：用户跟一个**具名**远端 Agent 说话（先是这台 VPS 上的默认人格；以后可以是同机多 persona）。
@@ -236,10 +258,10 @@ v0.5 **先做 `mention` + 可选本机编排器**。不要先做跨机共识或�
 | PR#1 | 目标 |
 |------|------|
 | `POST /v1/jobs` `{command}` | `POST /v1/tasks` `{mode:"exec", command}` 或循环里的 tool step |
-| 本机 `POST /api/chat` 调模型 | 本机只 `POST /v1/tasks`；模型在 Agent 内 |
-| 本机内存聊天历史 | `thread_id` + 远端任务事件为权威；本机可缓存 |
-| `worker.py` 审批在控制面 | 审批状态在任务上，`awaiting_approval` |
-| `OPENAI_API_KEY` 只在笔记本 | 迁到主机 `secrets/`；本机聊天不再需要 key |
+| 本机 `POST /api/chat` 调模型 | **留下**给 `mode=local_llm`（无 tools）。`agent_*` 改为本机只 `POST /v1/tasks` |
+| 本机内存聊天历史 | 本机 LLM：本机缓存即可。Agent 1:1：`thread_id` + 远端事件为权威 |
+| `worker.py` 审批在控制面 | 审批状态在任务上，`awaiting_approval`（仅 Agent 模式） |
+| `OPENAI_API_KEY` 只在笔记本 | **本机 LLM 仍在笔记本**。Agent 循环另用主机 `secrets/`。两把 key 可以相同，但落点分开 |
 
 执行原语（文件 API、job 日志格式）尽量原样搬进 Agent，降低 bootstrap 重写面。
 
@@ -248,7 +270,7 @@ v0.5 **先做 `mention` + 可选本机编排器**。不要先做跨机共识或�
 | Phase | 做什么 | 明确不做 |
 |-------|--------|----------|
 | **1. 远端 Agent 循环** | 常驻进程、tasks 落盘、BYOK 循环、shell/文件、审批状态机、`/v1/tasks` + events | 群组、浏览器、拆进程 |
-| **2. 瘦客户端** | 本机 UI/CLI 只创建任务、订阅、批准；**v0 1:1 会话** | 完整多 Agent 房间 |
+| **2. 瘦客户端 + 会话面** | 默认本机 LLM；可切 **1:1 Agent**（创建任务、订阅、批准） | 完整多 Agent 房间；不要把本机 LLM 误建成远端任务 |
 | **3. 无头浏览 plugin** | 可选工具，2C4G 评估后再做 | 像素桌面对等、把 plugin 叫成 Agent |
 | **v0.5 群组房间** | 房间模型 + mention/本机编排 + 扇出任务 | 不阻塞 Phase 1；不做跨机文件同步 |
 

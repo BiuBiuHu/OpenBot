@@ -118,15 +118,14 @@ Destructive or privileged commands (`rm -rf`, `sudo`, reboot, pipe-to-shell, …
 ## Shape
 
 ```text
-[ Chat UI: 1:1 agent, later group rooms ]
-        create task / events / approve
-                    |
-            optional SSH tunnel
-                    |
-        [ openbot-agent on your machine ]
-         queue · BYOK loop · tools · approvals
-         tasks live on remote disk
-         (no desktop in v0; browser = later plugin)
+[ Same chat window ]
+   Local LLM (default)                 Agent 1:1 / later rooms
+   laptop BYOK · no VPS tools          tasks · events · approve
+                                              |
+                                       optional SSH tunnel
+                                              v
+                                    [ openbot-agent ]
+                                    remote disk state
 ```
 
 SSH is for **bind / bootstrap** and an optional tunnel — not the command channel.
