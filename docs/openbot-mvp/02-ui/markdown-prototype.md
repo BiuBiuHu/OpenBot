@@ -5,14 +5,18 @@
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-09-20 | 单页远程遥控台 | C 端工具页，不是 B 类运营表 | 实现为 `src/ui/index.html` |
+| v0.2 | 2026-09-20 | 会话面：1:1 Agent 线程；预留群组房间 | 本机是瘦客户端，不是模型循环 | v0 只画单 Agent；群组 v0.5 |
+| v0.3 | 2026-09-21 | 同一窗口三种 mode；默认本机 LLM | 聊天 ≠ 总是 Agent | 底栏先 Local LLM；点选 Agent 才升级 |
+| v0.4 | 2026-09-21 | 一条线程 + 交接卡，去掉 mode 切换器 | 本机 Agent 规划，远端回流 | 用户不切 Local/Remote |
 
 ## 1. 当前决策
 
-- 当前 UI 结构：单页。顶栏身份 + 中间对话 + 右侧 host jobs + 底栏输入。
-- 当前交互风格：终端感（phosphor / amber），强调“这是你的机器”而不是通用 AI 聊天气泡。
-- 当前平台形态：本机 Web（`127.0.0.1:3847`）+ CLI。
-- 页面类型：**C 类工具页**（远程遥控）。不是 B 类运营/审核台。
-- 效率目标：3 秒内看清主机是否在线、persist 方式、能否直接 `uname -a`。
+- 当前 UI 结构：单页**一条线程**。用户只跟本机 Agent 说话。需要电脑时线程里出**交接卡**；远端 thought/tool 回流同一条对话。右侧是该线程已交接的任务，不是另一个聊天。
+- 当前交互风格：终端感（phosphor / amber）。全程同一位同伴；远端输出标 `remote`，不切窗口。
+- 当前平台形态：本机 Web（`127.0.0.1:3847`）+ CLI。本机 Agent 在笔记本想；远端 Agent 有电脑。
+- 页面类型：**C 类工具页**。不是 B 类运营台，也不是三个 mode 的 segmented control。
+- 效率目标：3 秒内看清本机 Agent 是否就绪、有无待确认交接、主机是否在线。
+- v0.5：房间后置。v0 不画完整房间 UI。
 
 B 类运营效率规则不适用：没有多对象表格、没有批量生图、没有详情抽屉矩阵。Jobs 侧栏是“这台电脑上还活着的任务”，不是运营审核队列。
 
@@ -26,13 +30,14 @@ CLI 入口：`openbot run` / `openbot chat` / `openbot status`。
 
 ### 2.2 导航层级
 
-无多路由。模式切换在底栏：`Chat (BYOK)` | `Run on host`。
+v0 无多路由、无 mode 切换。底栏就是输入。可选 `Run on host` 作为不经本机 Agent 的直执逃生口。v0.5 才有房间。
 
 ### 2.3 信息分组
 
-1. 主机身份（user@host、persist、uname、是否有模型 key）
-2. 对话 / 命令输出
-3. 远端 jobs（合盖后仍在）
+1. 顶栏：本机 Agent 就绪 + 已 bind 主机（可灰，未 bind 仍能规划）
+2. 同一线程：you / local Agent / 交接卡 / remote 事件 / 本机收尾
+3. 右侧：本线程已交接的远端任务（合盖后仍在）
+4. v0.5：房间参与者条
 
 ### 2.4 上下文与冗余控制
 
@@ -44,50 +49,66 @@ CLI 入口：`openbot run` / `openbot chat` / `openbot status`。
 
 | 页面/弹窗 | 入口 | 目标用户 | 关键动作 | 权限 |
 |-----------|------|----------|----------|------|
-| 遥控台 `/` | serve | 主机主人 | 聊天、Run、批准/拒绝 | 本机回环 |
-| 审批卡片 | 危险命令 | 主机主人 | Approve / Deny | 单次 id |
+| 会话台 `/` | serve | 主人 | 跟本机 Agent 聊、确认交接、批准工具、可选 Run | 本机回环 |
+| 审批卡片 | 危险工具 | 主机主人 | Approve / Deny（转发远端 `/v1/approvals`） | 单次 id |
+| 房间 `/`（v0.5） | 房间切换 | 主机主人 | @mention 或交给编排器；看多名 Agent 事件 | 本机回环 |
 | CLI | 终端 | 主机主人 | 同等动作 | TTY 确认 |
 
 ## 4. 关键页面原型
 
 ### 4.1 遥控台
 
+一条线程（规划 → 交接 → 回流 → 收尾）。未 bind 也可先规划。没有 Local/Remote 下拉框。
+
 ```text
-┌ OpenBot ●  SSH your own machine…          ubuntu@203.0.113.10
-│                                           persist systemd-user
-│                                           Linux … 6.x x86_64
-│                                           model gpt-4o-mini
+┌ OpenBot ●  local agent                    laptop BYOK: yes
+│                                           host ubuntu@203.0.113.10  idle
 ├───────────────────────────────┬───────────┤
-│ sys  ready                    │ JOBS ON   │
-│  Commands run on the host.    │ THE HOST  │
-│                               │ running   │
-│ you  run on host              │ a1b2  uname -a
-│  uname -a                     │           │
-│                               │           │
-│ host                          │           │
-│  Linux box 6.12.0-… x86_64    │           │
+│ you                           │ TASKS     │
+│  帮我在主机记下 uname         │ tsk_a1    │
+│ local                         │  handoff  │
+│  这步需要在 VPS 上跑 shell。  │           │
+│  [交接卡] 写 uname 到 workspace│           │
+│           [允许] [不用了]     │           │
+│ remote · tool  run_shell      │           │
+│  Linux box 6.12.0-…           │           │
+│ local                         │           │
+│  已经写好，要不要我起草 README│           │
 ├───────────────────────────────┴───────────┤
-│ [Run on host ▼] [  uname -a          ][Send]
+│ [  继续说…                              ][Send]
 └───────────────────────────────────────────┘
+```
+
+v0.5 房间草图（后置：本机 Agent 扇出交接）：
+
+```text
+┌ room: ship-v0     you · @researcher · @coder · @reviewer
+│ you     @coder 补测试  @reviewer 看 diff
+│ coder   tool …          （事件来自 vps-a 的一条 task）
+│ reviewer thought …      （事件来自 vps-b 的另一条 task）
+└ [mention routing ▼] [  @coder …                 ][Send]
 ```
 
 - 布局：顶栏 / 对话 / jobs / 输入。
 - 字段：无登录表单；密钥在 `~/.openbot`。
-- 操作：Send、Approve、Deny、切换 Chat/Run。
-- 列表列：status、id、command。
+- 操作：Send、允许/拒绝交接、Approve/Deny 远端工具。可选 Run。v0.5 才 @mention。
+- 交接：本机 Agent 出卡，不靠用户切 mode。禁止静默重放整段规划。
+- 列表列：status、id、goal/command。
 - 行内可视对象：连接灯（绿=worker 可达）。
 - 详情信息：uname 字符串、错误原文。
-- 批量操作：无。昂贵/危险动作用**一张**审批卡，禁止嵌套确认。
+- 批量操作：无。交接卡与工具审批卡是两张不同的卡，禁止嵌套确认。
 - 反馈：SSE token/output；错误用红色 sys 行。
 
 基础交互路径（紧跟草图）：
 
 1. 进入 serve URL → 顶栏拉 `/api/status`。
-2. 选 `Run on host`，输入 `uname -a`，Send → `/api/run` SSE。
-3. 输出出现在 host 气泡；jobs 刷新。
-4. 若命令危险：出现审批卡，Approve 才继续，Deny 写回拒绝。
-5. Chat 模式走 `/api/chat`；无 key 时错误行说明用 Run。
-6. 失败：顶栏红灯 + 错误文案（SSH/worker/模型），不跳到本机 shell。
+2. 直接跟本机 Agent 说话（未 bind 也能规划）。
+3. 需要电脑：同一线程出交接卡 → 允许 → 远端事件标 `remote` 流回。
+4. 远端危险工具：另出审批卡，Approve 才继续。
+5. 任务结束后本机 Agent 在同一线程收尾。
+6. 可选逃生口：`Run on host` 不经本机 Agent。
+7. 失败：线程红字。远端失败不得标成本机产出。
+8. 合盖再打开：同一线程续订远端事件。
 
 不需要的路径：新建对象、跨页多选、发布确认（非 SaaS）。
 
@@ -96,8 +117,10 @@ CLI 入口：`openbot run` / `openbot chat` / `openbot status`。
 ### 5.1 加载、空态、错误态
 
 - 加载：meta “connecting…”。
-- 空 jobs：“No jobs yet. They live on the remote host.”
-- 错误：worker 不可达、无 key、审批拒绝、非零退出。
+- 空态：“跟本机 Agent 说话。需要电脑时它会提出交接。”
+- 空任务：“还没有交接出去的任务。它们会活在远端。”
+- 错误：无本机 key、拒绝交接、远端不可达、无主机 key、工具审批拒绝、非零退出。
+- 群组空态（v0.5）：后置。
 
 ### 5.2 表单校验和保存反馈
 
@@ -105,11 +128,11 @@ CLI 入口：`openbot run` / `openbot chat` / `openbot status`。
 
 ### 5.3 权限差异和只读状态
 
-单用户。无 key 时 Chat 不可用，Run 可用。
+单用户。无本机 key 时规划不可用；未 bind / 无主机 key 时交接失败、规划仍可用；Run 仍可用。工具审批卡贴在**远端气泡**下，与交接卡分开。
 
 ### 5.4 预发/线上环境标识
 
-不适用（本地回环应用）。顶栏展示的是**远端主机名**，避免用户误以为在浏览托管云电脑。
+不适用（本地回环应用）。顶栏始终是本机 Agent + 主机状态。远端产出标 `remote`，避免把规划误认成已在 VPS 执行。
 
 ### 5.5 B 类运营效率检查
 
@@ -128,4 +151,6 @@ CLI 入口：`openbot run` / `openbot chat` / `openbot status`。
 
 ## 7. 未解决问题
 
-- 多会话历史、文件树浏览：Backlog，不进 v0 主路径。
+- 多会话历史、文件树浏览：Backlog。
+- 群组房间完整 UI：v0.5，见 `03-architecture/remote-agent.md` §6.2。不挡远端 Agent 内核。
+- 交接时带多少本机上下文：默认只交提案 `goal` + 用户确认的摘要，不重放整段规划。
