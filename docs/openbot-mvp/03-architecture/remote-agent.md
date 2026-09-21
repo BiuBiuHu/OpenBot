@@ -9,6 +9,7 @@
 | v0.1 | 2026-09-20 | 初稿：单进程 Agent + 任务 API + 对话分层 | 用户确认远端是 Agent 不是哑 Worker；本地要 1:1 与群组 | 实现按 Phase 1→2→3；群组 v0.5 |
 | v0.2 | 2026-09-21 | 声明聊天 ≠ 总是 Agent；补本机 LLM 模式 | 同一窗口还要普通 NL 对话 | 默认不上 VPS；点选 Agent 才 `POST /v1/tasks` |
 | v0.3 | 2026-09-21 | 改为交接流，不再并列三个 mode | 本机 Agent=编排；远端=电脑 | 同一线程回流；群组仍后置 |
+| v0.4 | 2026-09-21 | 标明 OpenHands Agent Server 仅为临时对照运行时 | 2C4G ECS 摸手感，避免升格成内核 | 产品目标仍是本文的 `openbot-agent` |
 
 ## 1. 当前决策
 
@@ -18,6 +19,7 @@
 - 本机控制面：本机 Agent 循环 + 提出交接 + 订阅远端事件 + 批准。
 - v0 工具：`run_shell`、`read_file`、`write_file`、`list_dir`，只在远端。本机 Agent **零 VPS 工具**。浏览器是以后的 plugin。
 - 群组后置（v0.5）。不宣称 Firecracker，不宣称 Grok 像素桌面对等。
+- **OpenHands Agent Server 不是产品内核。** 它只是用户 BYO Linux 上的 **trial / 摸手感** 对照运行时（可选 plugin 候选）。长期形态仍是本文的自建 systemd `openbot-agent`。摸完后决定保留或丢掉，见 [openhands-agent-server-trial.md](../06-ops/openhands-agent-server-trial.md)。禁止无鉴权绑 `0.0.0.0`。
 
 ## 2. Agent 不是什么
 
@@ -32,6 +34,8 @@ computer-use    = 一种工具（看屏幕/点浏览器），挂在远端 Agent 
 **不是三个对等 mode。** 默认本机 Agent 绝不创建远端任务，除非它提出交接且（策略要求时）用户确认。
 
 PR#1 的 `worker.py` 是合格的 **Worker**。目标是把它的执行原语收进 Agent，并在同一进程里加上模型循环，而不是再叠一个“云端大脑”。
+
+OpenHands Agent Server 也 **不是** 这个 Agent。它是第三方 trial 进程，用来在同一类 2C4G 主机上对照安装与手感；可以稍后变成 optional runtime plugin，但不能替换本文的任务状态机、交接流或产品进程名。试装与卸载：[openhands-agent-server-trial.md](../06-ops/openhands-agent-server-trial.md)。
 
 ## 3. 单进程内部
 
