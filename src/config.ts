@@ -74,6 +74,29 @@ export function defaultConfig(partial: Partial<OpenBotConfig> = {}): OpenBotConf
     controlPlane: {
       port: partial.controlPlane?.port || Number(pick(env, "OPENBOT_CONTROL_PORT", "3847")),
     },
+    openhands: {
+      baseUrl: (
+        partial.openhands?.baseUrl ||
+        pick(env, "OPENHANDS_BASE_URL") ||
+        pick(env, "OH_BASE_URL", "http://127.0.0.1:8000")
+      ).replace(/\/$/, ""),
+      sessionApiKey:
+        pick(env, "OPENHANDS_API_KEY") ||
+        pick(env, "OH_SESSION_API_KEY") ||
+        partial.openhands?.sessionApiKey ||
+        "",
+      workspaceDir:
+        partial.openhands?.workspaceDir ||
+        pick(env, "OPENHANDS_WORKSPACE", "workspace/project"),
+      llmModel:
+        partial.openhands?.llmModel ||
+        pick(env, "OPENHANDS_LLM_MODEL") ||
+        pick(env, "OPENAI_MODEL", DEFAULT_MODEL),
+      llmApiKey:
+        pick(env, "OPENHANDS_LLM_API_KEY") ||
+        partial.openhands?.llmApiKey ||
+        "",
+    },
   };
 }
 

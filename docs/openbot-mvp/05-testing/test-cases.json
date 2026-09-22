@@ -133,6 +133,54 @@
       "forbidden_side_effects": "不得以构建成功代替页面",
       "evidence": "integration-report.md",
       "mode": "automated"
+    },
+    {
+      "id": "TC-OH-001",
+      "req": "BL-016",
+      "system": "oh-adapter",
+      "priority": "P0",
+      "precondition": "本地 mock Agent Server",
+      "steps": ["GET /health"],
+      "expected": "health().ok === true；不连真实 ECS",
+      "forbidden_side_effects": "不得把 mock 失败显示为真实主机成功",
+      "evidence": "tests/oh-client.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-OH-002",
+      "req": "BL-016",
+      "system": "oh-adapter",
+      "priority": "P0",
+      "precondition": "本地 mock Agent Server",
+      "steps": ["POST /api/conversations", "poll GET conversation", "GET events/search"],
+      "expected": "拿到 id；终态 finished/succeeded；snippet 非空",
+      "forbidden_side_effects": "不得调用真实模型供应商",
+      "evidence": "tests/oh-client.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-OH-006",
+      "req": "BL-016",
+      "system": "cli",
+      "priority": "P0",
+      "precondition": "mock + OPENHANDS_BASE_URL",
+      "steps": ["openbot oh health", "openbot oh run 'summarize uname'"],
+      "expected": "health ok；打印 conversation id / status / snippet",
+      "forbidden_side_effects": "不得要求 worker bind",
+      "evidence": "tests/oh-client.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-OH-007",
+      "req": "BL-016",
+      "system": "control-plane",
+      "priority": "P0",
+      "precondition": "控制面 + mock OH",
+      "steps": ["POST /api/handoffs {goal}", "POST /api/handoffs/:id {allow:true}"],
+      "expected": "先 needs_confirm；确认后创建 conversation",
+      "forbidden_side_effects": "未确认不得建远端会话",
+      "evidence": "tests/oh-client.test.ts",
+      "mode": "automated"
     }
   ]
 }

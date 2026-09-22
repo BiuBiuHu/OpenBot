@@ -5,11 +5,12 @@
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-09-20 | 实现后自审 | opc-skills 本地自审门禁 | 供中文 Code PR 引用 |
+| v0.2 | 2026-09-22 | Phase 1 OH adapter 自审 | 叠在 #4 上的代码 PR | 不删 worker；无真实密钥 |
 
 ## 1. 当前结论
 
-- 审查范围：`cursor/openbot-mvp-a7b3` 相对 `origin/main`。
-- 正式 PR：https://github.com/BiuBiuHu/OpenBot/pull/1
+- 审查范围：`cursor/phase1-oh-runtime-adapter-2e7a` 相对 `cursor/v0-oh-runtime-decision-361d`（#4）。
+- 正式 PR：本分支 Code PR（叠在 #4 上，不合并）。
 - 生产发布：不在本次（见 release-plan）。
 
 ## 2. Diff 自审

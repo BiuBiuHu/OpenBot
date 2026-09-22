@@ -8,8 +8,8 @@
 
 ## 1. 当前决策
 
-- 当前测试范围：审批分类、配置/密钥隔离、worker job 协议、`uname -a` 远端语义、无 key 聊天失败、危险命令拒绝。
-- 当前测试优先级：P0 上述路径。P2：真实 VPS、真实模型。
+- 当前测试范围：审批分类、配置/密钥隔离、worker job 协议、`uname -a` 远端语义、无 key 聊天失败、危险命令拒绝、**OH adapter mock HTTP**（探活 / 建会话 / 交接 stub）。
+- 当前测试优先级：P0 上述路径。P2：真实 VPS、真实模型、真实 tunneled OH。
 - 当前发布门禁：GitHub Code PR + 本地/实验室测试报告。无 Vercel/生产 SaaS。
 
 ## 2. 需求到测试追踪
@@ -24,6 +24,7 @@
 | REQ-OPENBOT-006 | 无 Firecracker 声明 | TC-DOC-001 | 文档审 | 必测 |
 | REQ-OPENBOT-007 | 密钥不进仓 | TC-CFG-001 | config.test | 必测 |
 | REQ-OPENBOT-008 | 构建安装路径 | TC-INST-001 | npm build | 必测 |
+| BL-016 | OH adapter 探活 + 建会话（mock） | TC-OH-001..007 | oh-client.test | 必测 |
 
 ## 3. 测试范围
 

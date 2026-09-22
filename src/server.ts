@@ -4,6 +4,8 @@ import path from "node:path";
 import { runAgentTurn } from "./agent.js";
 import { classifyCommand } from "./approval.js";
 import { loadConfig } from "./config.js";
+import { deliverConfirmedHandoff, HandoffStore } from "./handoff.js";
+import { OpenHandsClient } from "./oh-client.js";
 import { repoRoot } from "./paths.js";
 import { ensureWorkerAccess, type TunnelHandle } from "./tunnel.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, OpenBotConfig } from "./types.js";
@@ -38,6 +40,8 @@ export async function startControlPlane(
     }
   }
   const approvals = new Map<string, PendingApproval>();
+  const handoffs = new HandoffStore();
+  const oh = OpenHandsClient.fromConfig(config);
   let history: ChatMessage[] = [];
 
   const uiFile = path.join(repoRoot(), "src/ui/index.html");
@@ -51,7 +55,7 @@ export async function startControlPlane(
         return;
       }
       if (req.method === "GET" && url.pathname === "/api/status") {
-        await json(res, await statusPayload(config, worker));
+        await json(res, await statusPayload(config, worker, oh));
         return;
       }
       if (req.method === "GET" && url.pathname === "/api/jobs") {
@@ -61,6 +65,19 @@ export async function startControlPlane(
       if (req.method === "GET" && url.pathname.startsWith("/api/jobs/")) {
         const id = url.pathname.split("/")[3];
         await json(res, await worker.getJob(id));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/api/handoffs") {
+        const body = await readJson(req);
+        const result = await handleHandoff(body, undefined, handoffs, oh, config);
+        await json(res, result, result.ok ? 200 : 400);
+        return;
+      }
+      if (req.method === "POST" && url.pathname.startsWith("/api/handoffs/")) {
+        const id = url.pathname.split("/")[3];
+        const body = await readJson(req);
+        const result = await handleHandoff(body, id, handoffs, oh, config);
+        await json(res, result, result.ok ? 200 : 400);
         return;
       }
       if (req.method === "POST" && url.pathname === "/api/approve") {
@@ -138,7 +155,59 @@ export async function startControlPlane(
   };
 }
 
-async function statusPayload(config: OpenBotConfig, worker: WorkerClient) {
+async function handleHandoff(
+  body: Record<string, unknown>,
+  pathId: string | undefined,
+  store: HandoffStore,
+  oh: OpenHandsClient,
+  config: OpenBotConfig,
+): Promise<Record<string, unknown>> {
+  const allow = body.allow;
+  const goal = String(body.goal || "").trim();
+  const reason = String(body.reason || "");
+  const threadId = String(body.thread_id || body.threadId || "chat_default");
+  const id = pathId || (body.id ? String(body.id) : "");
+
+  if (allow === false) {
+    const denied = id ? store.deny(id) : undefined;
+    return { ok: true, denied: true, id: denied?.id || id || null };
+  }
+
+  if (allow === true || allow === "true") {
+    const pending = id ? store.take(id) : undefined;
+    const nextGoal = pending?.goal || goal;
+    if (!nextGoal) {
+      return { ok: false, error: "no such handoff or goal" };
+    }
+    const delivery = await deliverConfirmedHandoff(
+      oh,
+      {
+        id: pending?.id || id || undefined,
+        goal: nextGoal,
+        reason: pending?.reason || reason,
+        threadId: pending?.threadId || threadId,
+      },
+      config.openhands,
+    );
+    return {
+      ok: true,
+      proposal: delivery.proposal,
+      conversation: {
+        id: delivery.conversation.id,
+        execution_status: delivery.conversation.executionStatus,
+        status: delivery.conversation.status,
+      },
+    };
+  }
+
+  if (!goal) {
+    return { ok: false, error: "goal required to propose a handoff" };
+  }
+  const proposal = store.propose({ id: id || undefined, goal, reason, threadId });
+  return { ok: true, needs_confirm: true, proposal };
+}
+
+async function statusPayload(config: OpenBotConfig, worker: WorkerClient, oh: OpenHandsClient) {
   const healthy = await worker.health();
   let info = null;
   let error: string | undefined;
@@ -151,6 +220,7 @@ async function statusPayload(config: OpenBotConfig, worker: WorkerClient) {
   } else {
     error = "worker not reachable — is the SSH tunnel up? run `npx openbot bind` then `npx openbot serve`.";
   }
+  const ohProbe = await oh.health();
   return {
     ok: healthy,
     slogan: "SSH your own machine. The agent gets a computer — you keep the keys.",
@@ -165,6 +235,12 @@ async function statusPayload(config: OpenBotConfig, worker: WorkerClient) {
       model: config.llm.model,
       baseUrl: config.llm.baseUrl,
       hasKey: Boolean(config.llm.apiKey),
+    },
+    openhands: {
+      baseUrl: config.openhands.baseUrl,
+      ok: ohProbe.ok,
+      hasSessionKey: Boolean(config.openhands.sessionApiKey),
+      error: ohProbe.ok ? undefined : ((ohProbe.raw as { error?: string })?.error || "not reachable"),
     },
     info,
     error,

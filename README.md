@@ -80,6 +80,12 @@ npx openbot init --host YOUR_VPS --user ubuntu --identity ~/.ssh/id_ed25519
 npx openbot bind
 npx openbot run 'uname -a'
 npx openbot serve          # http://127.0.0.1:3847
+
+# v0 remote runtime (OpenHands Agent Server via SSH tunnel):
+# ssh -L 8000:127.0.0.1:8000 user@host
+# then set OPENHANDS_API_KEY in ~/.openbot/.env
+npx openbot oh health
+npx openbot oh run 'summarize uname on this machine'
 ```
 
 `uname -a` is executed on the **remote host**, not the browser and not as a fake local stub.
