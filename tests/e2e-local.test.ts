@@ -48,6 +48,7 @@ describe("local control plane + worker (no fake remote)", () => {
     assert.match(html, /OpenBot/);
     assert.match(html, /SSH your own machine/);
     assert.match(html, /Run on host/);
+    assert.match(html, /This computer/);
   });
 
   it("TC-REMOTE-001 via /api/run: uname streams from worker", async () => {

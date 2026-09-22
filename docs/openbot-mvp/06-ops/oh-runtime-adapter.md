@@ -49,6 +49,16 @@ npx openbot oh run '在工作区写一份 uname 记录'
 
 未确认不创建远端会话。没有第三个聊天 mode。
 
+## 3.1 Web 遥控台（先连远端）
+
+```bash
+# 只要隧道 + session key。不必先 bind worker。
+npx openbot serve
+# 打开 http://127.0.0.1:3847/
+```
+
+默认输入是 **This computer**：发一条 goal → 同一线程出交接卡 → 确认后 `POST /api/handoffs/stream` 创建 OH conversation，事件标 `remote` 回流。`Run on host` 仍是 PR#1 worker 直执逃生口。本机规划 Agent 仍属 Phase 2，这刀先把 Web 接到远端。
+
 ## 4. 代码位置
 
 | 文件 | 职责 |

@@ -105,6 +105,8 @@ export interface ToolCall {
 export type AgentEvent =
   | { type: "status"; text: string }
   | { type: "token"; text: string }
+  | { type: "thought"; text: string }
+  | { type: "handoff_proposal"; id: string; goal: string; reason: string }
   | { type: "tool_start"; name: string; args: Record<string, unknown> }
   | { type: "approval"; id: string; command: string; reason: string }
   | { type: "job"; job: JobRecord }

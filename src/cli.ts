@@ -22,7 +22,7 @@ Usage:
                    [--name NAME] [--model MODEL] [--base-url URL]
   npx openbot bind              Install/start the worker on the remote host
   npx openbot status            SSH + worker + OpenHands tunnel health
-  npx openbot serve [--port N]  Local control plane + SSH tunnel + chat UI
+  npx openbot serve [--port N]  Local control plane + UI (OH handoff and/or worker)
   npx openbot run <command>     Run a command on the remote host (no LLM)
   npx openbot chat [message]    One-shot BYOK chat that uses remote tools
   npx openbot oh health         Probe tunneled OpenHands Agent Server
@@ -144,16 +144,23 @@ async function cmdStatus(): Promise<void> {
 
 async function cmdServe(flags: Record<string, string>): Promise<void> {
   const config = loadConfig();
-  if (!config.host.hostname || !config.worker.token) {
-    throw new Error("Run `npx openbot init` and `npx openbot bind` first.");
-  }
   if (flags.port) config.controlPlane.port = Number(flags.port);
-  const plane = await startControlPlane(config);
+  const hasWorker = Boolean(config.host.hostname && config.worker.token);
+  const plane = await startControlPlane(
+    config,
+    hasWorker ? {} : { skipTunnel: true, allowWithoutWorker: true },
+  );
   const url = `http://127.0.0.1:${config.controlPlane.port}`;
   console.log(`Control plane ${url}`);
-  console.log(`Tunnel 127.0.0.1:${config.worker.localPort} → ${sshTarget(config)}:${config.worker.remotePort}`);
-  console.log(`Persist on host: ${config.worker.persist}`);
-  console.log("Close this laptop whenever. The worker stays on the remote machine.");
+  if (hasWorker) {
+    console.log(`Tunnel 127.0.0.1:${config.worker.localPort} → ${sshTarget(config)}:${config.worker.remotePort}`);
+    console.log(`Persist on host: ${config.worker.persist}`);
+    console.log("Close this laptop whenever. The worker stays on the remote machine.");
+  } else {
+    console.log("Worker not bound — UI talks to OpenHands via the local tunnel.");
+    console.log(`OpenHands ${config.openhands.baseUrl} (ssh -L 8000:127.0.0.1:8000)`);
+    console.log("Optional: `npx openbot bind` if you still want PR#1 worker jobs.");
+  }
   const shutdown = async () => {
     await plane.close();
     process.exit(0);
