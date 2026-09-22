@@ -1,6 +1,6 @@
 # OpenHands Agent Server 试装（2C4G 阿里云 ECS）
 
-本文件是 **trial / 摸手感** 运维笔记，不是产品内核说明。产品目标运行时仍是自建 systemd **`openbot-agent`**，见 [remote-agent.md](../03-architecture/remote-agent.md)。
+本文件是 **v0 远端 runtime** 的试装 / 运维笔记（随 PR#3 落地）。产品决策：OH Agent Server 是 dependency / plugin，不是整仓 fork，也不是产品控制台。见 [runtime-decision-v0.md](../03-architecture/runtime-decision-v0.md)。交接 UX 仍见 [remote-agent.md](../03-architecture/remote-agent.md)。
 
 现场已在 **2026-09-21** 于 Ubuntu 24.04、2C4G 阿里云 ECS 复现。下文命令用占位符 `<ECS_HOST>`、`<SSH_IDENTITY>`，**不**把某台公网 IP、PEM 路径或会话密钥写成规范值。
 
@@ -9,29 +9,30 @@
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-09-21 | 2C4G ECS 试装 runbook：uv / 阿里云 PyPI / systemd / SSH 隧道 | 在用户 BYO 主机上摸 OpenHands Agent Server 手感，对照自建 `openbot-agent` | 仅文档；不改应用代码；不把 OH 升格为产品内核 |
+| v0.2 | 2026-09-22 | 回写：选 OH 作 v0 远端 runtime；native 延后 | 用户锁定；出货速度 | §10 不再悬空；链到 runtime-decision-v0.md |
 
 ## 1. 当前决策
 
-- OpenHands Agent Server 是用户自有 Linux 上的 **trial / 摸手感** 运行时。它 **不是** OpenBot 产品核心。
-- 长期形态仍是自建 systemd `openbot-agent`（本机 Agent 交接 → 远端 `/v1/tasks`）。OH 控制台也 **不是** 产品隐喻。
-- 试装目的：在同一类 2C4G 主机上摸安装成本、内存、探活、隧道与安全边界，方便和自建路径对比。
-- 摸完后二选一，见 §10：**保留为 optional runtime plugin**，或 **丢掉**。在此之前不要把 OH 写进主安装路径。
+- OpenHands Agent Server 是用户自有 Linux 上的 **v0 远端执行后端**（dependency / remote runtime plugin）。
+- 本仓库 **不** fork OH，也 **不** 用 OH 控制台当产品隐喻。用户语言仍是「这台机器就是我的电脑」。
+- 本机壳：规划、BYOK、SSH bind、同一线程交接。远端循环先用本文的进程。自建 `openbot-agent` **延后**。
+- 试装目的：在同一类 2C4G 主机上锁定安装成本、内存、探活、隧道与安全边界，供 v0 adapter 复用。
 - **禁止**在无鉴权时把 Agent Server 绑到 `0.0.0.0`。只听 `127.0.0.1`；本机用 SSH 本地转发到达。
 - 密钥只落在主机 `EnvironmentFile`（`chmod 600`），**永不入库、不贴聊天**。
 
-## 2. 与 `openbot-agent` 的关系
+## 2. 与本仓库的关系
 
-| | 产品目标 | 本 trial |
-|--|----------|----------|
-| 进程 | `openbot-agent` | `openhands-agent-server` |
-| 角色 | 拥有电脑的远端 Agent（思考 + 执行） | 第三方对照运行时，摸手感 |
-| 监听 | `127.0.0.1`（产品端口见架构文） | `127.0.0.1:8000` |
-| 到达方式 | SSH bind / 本地转发 | 同上，见 §7 |
-| 产品地位 | 内核 | **临时**；可选 plugin 或删除 |
+| | v0（已锁定） | 以后 optional native |
+|--|--------------|----------------------|
+| 进程 | `openhands-agent-server` | `openbot-agent` |
+| 角色 | 拥有电脑的远端循环（思考 + 执行） | 并列的自建 runtime |
+| 监听 | `127.0.0.1:8000` | `127.0.0.1`（产品端口见架构文） |
+| 到达方式 | SSH bind / 本地转发 | 同上 |
+| 产品地位 | **v0 远端 runtime plugin** | 延后；不挡 v0 |
 
-同一台主机可以同时存在 PR#1 的 `openbot-worker` / 目标 `openbot-agent` 与本 trial。它们 **不是** 同一个产品进程，也不共用 token。试装失败或卸载，不影响 OpenBot 主路径。
+同一台主机可以同时存在 PR#1 的 `openbot-worker`、本 runtime、以及以后的 native agent。它们 **不是** 同一个产品进程，也不共用 token。卸载 OH 不等于卸载 OpenBot 本机壳。
 
-后续若保留 OH，也只应是 **optional plugin**（对照或兼容），不能替换 [remote-agent.md](../03-architecture/remote-agent.md) 的任务状态机与交接流。调研里已拒绝把 OpenHands 编码控制台当产品主隐喻，见 `00-research/competitor-research.md`。
+OH **不能**替换 [remote-agent.md](../03-architecture/remote-agent.md) 的交接流（同一线程、先问再动手）。调研里已拒绝把 OpenHands 编码控制台当产品主隐喻，见 `00-research/competitor-research.md`。
 
 ## 3. 前置
 
@@ -246,25 +247,28 @@ systemctl daemon-reload
 rm -rf /opt/openhands-agent
 ```
 
-卸载 OH **不等于**卸载 OpenBot。`openbot-worker` / 目标 `openbot-agent`、`~/.openbot/`、主机 workspace 走 [ops-runbook.md](ops-runbook.md)。
+卸载 OH **不等于**卸载 OpenBot。`openbot-worker`、本机 `~/.openbot/`、主机 workspace 走 [ops-runbook.md](ops-runbook.md)。以后 optional native `openbot-agent` 也不因卸载 OH 而自动出现。
 
 ## 10. 决策出口
 
-摸完手感后必须写回一句产品决策，不要让 trial 进程默认常驻成“第二个内核”：
+**已锁定（2026-09-22）**：选 **B 的加强版** —— OpenHands Agent Server 是 **v0 默认远端 runtime**（plugin / dependency），不是丢掉，也不是整仓 fork。自建 `openbot-agent` 延后为 optional native。全文：[runtime-decision-v0.md](../03-architecture/runtime-decision-v0.md)。本机 adapter：backlog BL-016。
 
-| 选项 | 含义 | 下一步 |
-|------|------|--------|
-| **A. 丢掉** | OH 只用来对照，不进主路径 | 按 §9 卸载；实现继续 BL-010 `openbot-agent` |
-| **B. optional plugin** | 保留为可选对照 / 兼容运行时 | 仍以 `openbot-agent` 为产品目标；OH 不得抢默认安装、不得绑 `0.0.0.0` |
+历史对照表（不再悬空）：
 
-无论 A 还是 B：
+| 选项 | 含义 | 状态 |
+|------|------|------|
+| **A. 丢掉** | OH 只用来对照，不进主路径 | **未选** |
+| **B. runtime plugin** | 保留为远端执行后端 | **已选（v0 默认）** |
+
+无论当时 A 还是 B，下面几条仍成立：
 
 - 用户语言仍是“这台机器就是我的电脑”，不是“这次任务跑在哪个 OpenHands backend”。
 - 本机 Agent 交接协议仍以 [remote-agent.md](../03-architecture/remote-agent.md) 为准。
 - 不要把 OH 控制台、VSCode 集成或 Playwright 说成 OpenBot 已交付能力。
+- 不得无鉴权绑 `0.0.0.0`。
 
 ## 11. 未解决问题
 
 - 非 root 用户、目录权限、以及 root 关闭 Chromium sandbox 的残留风险。
-- trial 后选 A 还是 B（§10）——等摸完再定，不在本文件拍板。
-- 若选 B：与自建 `/v1/tasks` 的适配器仍是调研级（backlog BL-005 / BL-015），不是现在实现。
+- 本机壳 adapter（BL-016）如何把 `handoff_proposal` 映射到 OH API —— 实现 PR，不在本运维笔记拍协议细节。
+- 以后是否再做 native `openbot-agent`（BL-010）—— 不挡 v0。

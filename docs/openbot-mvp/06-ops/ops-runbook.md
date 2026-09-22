@@ -7,12 +7,14 @@
 | v0.1 | 2026-09-20 | 用户自托管手册 | 产品是本地安装，不是云项目 | 巡检命令针对 worker |
 | v0.2 | 2026-09-20 | 指向目标进程名 openbot-agent | 架构已确认，实现未搬 | 下列命令仍描述 PR#1 现场 |
 | v0.3 | 2026-09-21 | 链到 OpenHands Agent Server 试装笔记 | 2C4G ECS 摸手感，对照自建内核 | 不改变 OpenBot 巡检命令 |
+| v0.4 | 2026-09-22 | v0 远端 runtime 定为 OH Agent Server | 用户锁定 | 试装笔记升为 v0 运维路径；native 延后 |
 
 ## 1. 当前决策
 
-- 运行模式（**现场 / PR#1**）：笔记本上的控制面（可关）+ 用户 Linux 主机上的 worker（应常驻）。
-- 运行模式（**目标**）：本机瘦客户端 + 主机上的 `openbot-agent`（思考+执行，应常驻）。见 `03-architecture/remote-agent.md`。实现落地前，巡检命令仍用下面的 `openbot-worker`。
-- OpenHands Agent Server 只是 BYO Linux 上的 **trial / 摸手感** 对照运行时，**不是**产品内核。装、探活、隧道、卸载见 [openhands-agent-server-trial.md](openhands-agent-server-trial.md)。摸完后选自建 vs OH optional plugin。
+- 运行模式（**现场 / PR#1**）：笔记本上的控制面（可关）+ 用户 Linux 主机上的 worker（应常驻）。下面巡检命令仍描述这条现场路径。
+- 运行模式（**v0 目标**）：本机瘦客户端 + 主机上的 **OpenHands Agent Server**（思考+执行，应常驻）。决策：[runtime-decision-v0.md](../03-architecture/runtime-decision-v0.md)。交接：[remote-agent.md](../03-architecture/remote-agent.md)。
+- 自建 `openbot-agent` **延后**，不是 v0 运维对象。
+- OpenHands 装、探活、隧道、卸载见 [openhands-agent-server-trial.md](openhands-agent-server-trial.md)（PR#3）。只听 `127.0.0.1`，经 `ssh -L` 到达。
 - 无托管预发/生产项目。运维对象是**用户自己的主机**。
 
 ## 2. 环境隔离
@@ -87,15 +89,15 @@ kill "$(cat ~/.openbot-worker/worker.pid)"
 
 v0 无中心告警。用户自己看 `worker.log` 与 job 状态。
 
-## 8. OpenHands Agent Server 试装（对照，非内核）
+## 8. OpenHands Agent Server（v0 远端 runtime）
 
-完整步骤、systemd、SSH 隧道与决策出口：[openhands-agent-server-trial.md](openhands-agent-server-trial.md)。
+完整步骤、systemd、SSH 隧道与已锁定决策：[openhands-agent-server-trial.md](openhands-agent-server-trial.md)。
 
 - 只听 `127.0.0.1:8000`，经 `ssh -L 8000:127.0.0.1:8000` 到达。禁止无鉴权绑 `0.0.0.0`。
 - 探活：`curl -sS http://127.0.0.1:8000/health` → `{"status":"ok"}`。
-- 停服：`systemctl disable --now openhands-agent-server`。这不影响 `openbot-worker` / 目标 `openbot-agent`。
+- 停服：`systemctl disable --now openhands-agent-server`。这不影响 `openbot-worker` / 以后的 native `openbot-agent`。
 
 ## 9. 未解决问题
 
 - 多机、自动升级。
-- OpenHands trial 之后：丢掉 vs 保留为 optional plugin。
+- 本机壳 adapter（BL-016）落地后，把 OH 探活并进 `openbot status`。

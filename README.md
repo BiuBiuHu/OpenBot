@@ -96,7 +96,7 @@ Secrets live in `~/.openbot` (mode `0600`). Never commit them. See `.env.example
 2. **tmux** session `openbot-worker`
 3. **nohup** + `~/.openbot-worker/worker.pid`
 
-Jobs and logs stay under `~/.openbot-worker/jobs` on the host. Closing the UI only drops the SSH tunnel. Target architecture moves the **model loop** into a resident `openbot-agent` and keeps task state on that disk (see architecture docs).
+Jobs and logs stay under `~/.openbot-worker/jobs` on the host. Closing the UI only drops the SSH tunnel. **v0** moves the remote **model loop** onto **OpenHands Agent Server** (already trialled on 2C4G); a self-built `openbot-agent` is deferred. See [runtime-decision-v0.md](docs/openbot-mvp/03-architecture/runtime-decision-v0.md).
 
 ```bash
 npx openbot status
@@ -119,14 +119,14 @@ Destructive or privileged commands (`rm -rf`, `sudo`, reboot, pipe-to-shell, …
 
 ```text
 [ One thread ]
-   local Agent (plan / draft)  --handoff-->  openbot-agent (has the computer)
+   local Agent (plan / draft)  --handoff-->  remote runtime (v0: OpenHands Agent Server)
                          events back into the same thread
                          then local Agent wraps up
 ```
 
 SSH is for **bind / bootstrap** and an optional tunnel — not the command channel.
 
-Today's runnable slice (PR#1) still uses a remote **worker** plus a laptop-side model loop. The agreed target is the remote agent above. Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`docs/openbot-mvp/03-architecture/architecture.md`](docs/openbot-mvp/03-architecture/architecture.md), [`docs/openbot-mvp/03-architecture/remote-agent.md`](docs/openbot-mvp/03-architecture/remote-agent.md).
+Today's runnable slice (PR#1) still uses a remote **worker** plus a laptop-side model loop. **v0** talks to OpenHands Agent Server through a thin local adapter — not a whole-repo fork, and not a self-built `openbot-agent`. Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`runtime-decision-v0.md`](docs/openbot-mvp/03-architecture/runtime-decision-v0.md), [`docs/openbot-mvp/03-architecture/architecture.md`](docs/openbot-mvp/03-architecture/architecture.md), [`docs/openbot-mvp/03-architecture/remote-agent.md`](docs/openbot-mvp/03-architecture/remote-agent.md). Trial ops: [`openhands-agent-server-trial.md`](docs/openbot-mvp/06-ops/openhands-agent-server-trial.md).
 
 ---
 
