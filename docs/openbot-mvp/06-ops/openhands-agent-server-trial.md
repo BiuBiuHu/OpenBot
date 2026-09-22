@@ -270,5 +270,5 @@ rm -rf /opt/openhands-agent
 ## 11. 未解决问题
 
 - 非 root 用户、目录权限、以及 root 关闭 Chromium sandbox 的残留风险。
-- 本机壳 adapter（BL-016）如何把 `handoff_proposal` 映射到 OH API —— 实现 PR，不在本运维笔记拍协议细节。
+- 本机壳 adapter（BL-016）薄切片已落地：`npx openbot oh health` / `oh run`，确认交接 → `POST /api/conversations`。笔记：[oh-runtime-adapter.md](oh-runtime-adapter.md)。同一线程回流仍属 BL-011。
 - 以后是否再做 native `openbot-agent`（BL-010）—— 不挡 v0。

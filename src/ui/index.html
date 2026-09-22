@@ -222,6 +222,12 @@
             "<br>persist " + escapeHtml(s.persist || "unknown") +
             (info ? "<br>" + escapeHtml(info.uname.string) : "") +
             (s.llm && s.llm.hasKey ? "<br>model " + escapeHtml(s.llm.model) : "<br>no LLM key — use Run on host") +
+            (s.openhands
+              ? "<br>OH " +
+                (s.openhands.ok ? "ok" : "down") +
+                " " +
+                escapeHtml(s.openhands.baseUrl || "")
+              : "") +
             (s.error ? "<br class='err'>" + escapeHtml(s.error) : "");
         } catch (err) {
           lamp.classList.remove("ok");

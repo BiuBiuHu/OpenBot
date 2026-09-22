@@ -25,11 +25,34 @@ export interface ControlPlaneConfig {
   port: number;
 }
 
+/** Local tunnel client for v0 remote runtime = OpenHands Agent Server. */
+export interface OpenHandsConfig {
+  /** Default http://127.0.0.1:8000 — reach via `ssh -L 8000:127.0.0.1:8000`. */
+  baseUrl: string;
+  /** Sent as X-Session-API-Key. From OPENHANDS_API_KEY / OH_SESSION_API_KEY. */
+  sessionApiKey: string;
+  /** OH LocalWorkspace.working_dir. Not a public path. */
+  workspaceDir: string;
+  /** Optional model id forwarded when creating a conversation. */
+  llmModel: string;
+  /** Optional remote-loop key (host BYOK). Never commit. */
+  llmApiKey: string;
+}
+
 export interface OpenBotConfig {
   host: HostConfig;
   worker: WorkerConfig;
   llm: LlmConfig;
   controlPlane: ControlPlaneConfig;
+  openhands: OpenHandsConfig;
+}
+
+export interface HandoffProposal {
+  id: string;
+  goal: string;
+  reason: string;
+  threadId: string;
+  createdAt: number;
 }
 
 export interface JobRecord {

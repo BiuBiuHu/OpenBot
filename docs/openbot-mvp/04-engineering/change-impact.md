@@ -10,15 +10,16 @@
 | v0.4 | 2026-09-21 | 改为交接流 | 文档 only | 去掉三个对等 mode |
 | v0.5 | 2026-09-22 | v0 远端 runtime 定为 OH Agent Server | 文档 only | 实现改为 adapter，不先自建 agent |
 | v0.6 | 2026-09-22 | 补扩展层（桌面/VNC） | 文档 only | 近端 backlog；不改运行时 |
+| v0.7 | 2026-09-22 | Phase 1 OH adapter | 代码 PR | 本机壳多 HTTP 客户端 + CLI；不删 worker |
 
 ## 1. 当前结论
 
-- 影响范围：本轮 **仅文档**（`docs/openbot-mvp/`，外加根 `ARCHITECTURE.md` / README 形状说明）。运行时仍是 PR#1 控制面 + worker；v0 目标改为对接已试装的 OH Agent Server。
+- 影响范围：本轮 **代码 + 短文档**。新增 `src/oh-client.ts` / `src/handoff.ts`，扩展 config / CLI / `/api/status` / `/api/handoffs`。PR#1 worker 路径不动。
 - 是否跨 repo：否。
-- 是否改接口契约：文档中的**目标**契约改为 `/v1/tasks`；**未改代码**，PR#1 `/v1/jobs` 仍有效。
-- 是否需要迁移：否（本 PR）。实现 Phase 1 时再兼容 jobs → tasks。
-- 是否影响客户端版本：否（本 PR）。
-- 回滚复杂度：低。还原本 PR 的 git 即可。
+- 是否改接口契约：控制面新增交接 stub；worker `/v1/jobs` 仍有效。OH 侧打的是 Agent Server `/health` 与 `/api/conversations*`。
+- 是否需要迁移：否。旧 `~/.openbot/config.json` 缺 `openhands` 时 `loadConfig` 填默认值。
+- 是否影响客户端版本：CLI 新子命令；旧 `run`/`chat`/`serve` 行为不变。
+- 回滚复杂度：低。还原本 PR 的 git 即可。worker 单元不受影响。
 
 ## 2. 受影响对象
 

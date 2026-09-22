@@ -11,6 +11,7 @@
 | v0.5 | 2026-09-21 | 补 OH Agent Server trial 后的运行时决策 | 摸手感对照，避免当成内核 | BL-015 |
 | v0.6 | 2026-09-22 | v0 锁定 OH runtime；补 adapter；native 延后 | 用户确认出货路径 | BL-016 P0；BL-010 延后；BL-015 已决 |
 | v0.7 | 2026-09-22 | 补扩展层：桌面/VNC 近端项 | OH 无可见屏幕；避免 OH-only forever | BL-017 P2；不挡 v0；不 fork OH |
+| v0.8 | 2026-09-22 | BL-016 薄 adapter 落地 | Phase 1 代码 PR | 探活 / 建会话 / 交接 stub；完整同一线程回流仍属 BL-011 |
 
 ## 1. 当前决策
 
@@ -21,7 +22,7 @@
 
 | ID | 项 | 优先级 | 依赖 | 备注 |
 |----|----|--------|------|------|
-| BL-016 | Phase 1：**本机壳的 OH runtime adapter**（隧道 / API、交接投递、事件回流、探活） | P0 | PR#1 bind 故事；[试装笔记](../06-ops/openhands-agent-server-trial.md) | v0 执行后端；不 fork OH；不自建远端循环 |
+| BL-016 | Phase 1：**本机壳的 OH runtime adapter**（隧道 / API、交接投递、事件回流、探活） | P0 | PR#1 bind 故事；[试装笔记](../06-ops/openhands-agent-server-trial.md) | **本 PR 落地薄切片**：`src/oh-client.ts` + `openbot oh health\|run` + `/api/handoffs` 确认 stub。完整同一线程回流 / 收尾仍走 BL-011。不 fork OH；不自建远端循环；[adapter 笔记](../06-ops/oh-runtime-adapter.md) |
 | BL-014 | **本机 Agent**（规划/编排，笔记本 BYOK，无需 bind）+ `handoff_proposal` | P1 | 本机控制面 | 不挡 Phase 1；无确认不创建远端任务 |
 | BL-011 | Phase 2：交接确认、远端事件回流**同一线程**、本机收尾 | P1 | BL-016、BL-014 | 不是切到另一个聊天 mode |
 | BL-012 | Phase 3：无头浏览 plugin | P3 | BL-016、2C4G 评估 | 禁止冒充 Grok 桌面；plugin ≠ Agent；**不是** BL-017 的可见屏幕 |

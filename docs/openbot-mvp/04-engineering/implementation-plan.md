@@ -10,12 +10,13 @@
 | v0.4 | 2026-09-21 | Phase 2 改为交接流 | 不是三个 mode | 规划 → 提案 → 回流 → 收尾 |
 | v0.5 | 2026-09-22 | Phase 1 改为 OH runtime adapter；native 延后 | v0 runtime 锁定 | 不先自建 `openbot-agent` |
 | v0.6 | 2026-09-22 | 近端扩展：桌面/VNC sidecar | OH 无可见屏幕 | 不挡 Phase 1/2；不 fork OH |
+| v0.7 | 2026-09-22 | Phase 1 薄 adapter 代码 | 文档 PR#4 已锁 runtime | `oh-client` + CLI 探活/run + 交接 stub |
 
 ## 1. 当前决策
 
-- 当前实施策略：PR#1 垂直切片（本机循环 + 远端 Worker）保持可运行；**本 PR 只锁 v0 runtime 文档**。下一支代码 PR 做本机壳的 OH adapter，不自建远端循环。
-- 当前阶段划分：文档锁定 → Phase 1 **OH runtime adapter** → Phase 2 本机 Agent + **交接** → Phase 3 无头浏览 plugin。自建 `openbot-agent` = **以后 optional**。群组 = **v0.5**（后置）。本机规划不作为 Phase 1 门禁。
-- 当前依赖关系：文档在 `docs/openbot-mvp/`；实现仍基于 PR#1 的 SSH bind 与执行原语；远端循环复用已试装的 Agent Server。
+- 当前实施策略：PR#1 垂直切片保持可运行；文档 PR#4 已锁 v0 runtime。**本代码 PR 做 Phase 1 薄 adapter**（探活、建会话、轮询、交接确认 stub），不自建远端循环，不删 `worker.py`。
+- 当前阶段划分：文档锁定（#4）→ Phase 1 **OH runtime adapter（本 PR 薄切片）** → Phase 2 本机 Agent + **交接回流** → Phase 3 无头浏览 plugin。自建 `openbot-agent` = **以后 optional**。群组 = **v0.5**（后置）。
+- 当前依赖关系：实现叠在 `cursor/v0-oh-runtime-decision-361d`（#4）上；SSH bind 仍是 PR#1；远端循环复用已试装的 Agent Server。
 
 ## 2. 项目发现
 
@@ -50,7 +51,7 @@
 
 PR#1 已完成：脚手架 → 00–06 文档 → 测试与 localhost SSH bind → 中文 Code PR。
 
-**下一支实现（不在本文档 PR 写代码）**：
+**Phase 1 薄切片（本代码 PR）**：`src/oh-client.ts`、`openbot oh health|conversations|run`、`POST /api/handoffs`。退出条件：mock HTTP 下探活 + 建会话 + 轮询终态；文档给出 `ssh -L` 手工路径。完整「拔掉隧道后任务仍到终态」靠真实 ECS，不在本实验室门禁。
 
 | 阶段 | 任务 | 退出条件 | 失败处理 |
 |------|------|----------|----------|
@@ -61,7 +62,7 @@ PR#1 已完成：脚手架 → 00–06 文档 → 测试与 localhost SSH bind �
 | 以后 | **optional native `openbot-agent`** | 与 OH 并列可选 | 不挡 v0 |
 | v0.5 | **群组房间**：participants、mention/本机编排、按 Agent 扇出任务 | 房间消息能变成多条远端任务 | 不做跨机文件同步；不挡 Phase 1 |
 
-本 PR（文档）退出条件：写清 **v0 = OH Agent Server**、本机壳边界、**交接流不变**，并开中文 PR 待审。不合并。
+文档 PR#4 退出条件已满足（锁 v0 = OH）。本代码 PR 退出条件：adapter 探活 + 建/轮询会话（mock 绿；真实路径见 ops 笔记），中文 PR 待审。不合并。
 
 ## 6. 自动执行循环
 

@@ -7,15 +7,29 @@ import { defaultConfig, parseEnvFile, saveConfig, configPath } from "../src/conf
 
 describe("REQ-OPENBOT-007 config isolation", () => {
   const prev = process.env.OPENBOT_HOME;
+  const prevOh = {
+    OPENHANDS_BASE_URL: process.env.OPENHANDS_BASE_URL,
+    OPENHANDS_API_KEY: process.env.OPENHANDS_API_KEY,
+    OH_SESSION_API_KEY: process.env.OH_SESSION_API_KEY,
+    OH_BASE_URL: process.env.OH_BASE_URL,
+  };
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "openbot-home-"));
 
   before(() => {
     process.env.OPENBOT_HOME = home;
+    delete process.env.OPENHANDS_BASE_URL;
+    delete process.env.OPENHANDS_API_KEY;
+    delete process.env.OH_SESSION_API_KEY;
+    delete process.env.OH_BASE_URL;
   });
 
   after(() => {
     if (prev === undefined) delete process.env.OPENBOT_HOME;
     else process.env.OPENBOT_HOME = prev;
+    for (const [key, value] of Object.entries(prevOh)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
     fs.rmSync(home, { recursive: true, force: true });
   });
 
@@ -25,6 +39,8 @@ describe("REQ-OPENBOT-007 config isolation", () => {
     assert.equal(parsed.OPENAI_MODEL, "gpt-4o-mini");
 
     const cfg = defaultConfig();
+    assert.equal(cfg.openhands.baseUrl, "http://127.0.0.1:8000");
+    assert.equal(cfg.openhands.workspaceDir, "workspace/project");
     cfg.host.hostname = "203.0.113.10";
     const file = saveConfig(cfg);
     assert.equal(file, configPath());
