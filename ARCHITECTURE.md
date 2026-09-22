@@ -8,7 +8,7 @@ This is **not** three equal chat modes the user switches between. Group rooms st
 
 The remote process **thinks and executes** (task queue, BYOK model loop, tools, approval gates). Handed-off task state lives on **remote disk** so that work survives closing the laptop. Local planning stops when the laptop sleeps — that is expected.
 
-It is not a hosted Firecracker fleet. It does not provide desktop / pixel computer-use in v0. A worker that only runs shell jobs is **not** the Agent; computer-use is a later **plugin**.
+It is not a hosted Firecracker fleet. Desktop / VNC / a live visible screen is an OpenBot **extension** (same BYO machine, beside OH — not an OH fork). It is **not** required to ship v0, but it is a near-term backlog item so the product is not “OH-only forever.” A worker that only runs shell jobs is **not** the Agent.
 
 Canonical design:
 

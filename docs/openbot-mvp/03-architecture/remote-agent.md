@@ -15,15 +15,17 @@
 | v0.3 | 2026-09-21 | 改为交接流，不再并列三个 mode | 本机 Agent=编排；远端=电脑 | 同一线程回流；群组仍后置 |
 | v0.4 | 2026-09-21 | 标明 OpenHands Agent Server 仅为临时对照运行时 | 2C4G ECS 摸手感，避免升格成内核 | 产品目标仍是本文的 `openbot-agent` |
 | v0.5 | 2026-09-22 | v0 执行后端改为 OpenHands Agent Server；自建进程延后 | 用户锁定；出货速度 | 本机壳 + adapter；`openbot-agent` 不再是 v0 必做 |
+| v0.6 | 2026-09-22 | 点名扩展层：桌面/VNC 由 OpenBot 外挂 | OH 无可见屏幕 | 不挡 v0；不进本文 native 草图 |
 
 ## 1. 当前决策
 
 - **v0 执行后端是 OpenHands Agent Server**（用户 BYO Linux，已在 2C4G ECS 试装）。决策全文：[runtime-decision-v0.md](runtime-decision-v0.md)。运维：[openhands-agent-server-trial.md](../06-ops/openhands-agent-server-trial.md)。
 - 本机是**薄客户端**：本机 Agent 循环 + 提出交接 + 经隧道 / API 交给 OH + 订阅事件 + 批准。不是三个对等聊天 mode。
 - 用户跟**本机 Agent**说话。只有交接确认后才打到远端 runtime。本机规划不走远端队列。
-- OpenHands 是 **dependency / remote runtime plugin**。不 fork 整仓，不用 OH 控制台当产品隐喻。语言仍是「这台机器就是我的电脑」。
+- OpenHands 是 **dependency / remote Agent runtime plugin**。不 fork 整仓，不用 OH 控制台当产品隐喻。语言仍是「这台机器就是我的电脑」。
+- **扩展层归 OpenBot**：OH 负责循环 / 工具 / 事件；本机壳 + 交接 + 桌面/VNC 等缺口外挂归本仓库。第一缺口是 **无可见屏幕**。挂在同一台机器、OH 旁边，见 [runtime-decision-v0.md](runtime-decision-v0.md) §3.1。**v0 不必出货桌面/VNC**。
 - 自建 systemd **`openbot-agent` 延后到 v0 之后**，以后可作为 optional / native runtime。v0 **不必**自建远端循环。
-- v0 工具仍只在远端（OH 侧）。本机 Agent **零 VPS 工具**。浏览器是以后的 plugin。
+- v0 工具仍只在远端（OH 侧）。本机 Agent **零 VPS 工具**。无头浏览是以后的 plugin（BL-012），与可见桌面/VNC（BL-017）分开。
 - 群组后置（v0.5）。不宣称 Firecracker，不宣称 Grok 像素桌面对等。
 - 禁止无鉴权绑 `0.0.0.0`。只听 `127.0.0.1`，本机用 SSH 本地转发。
 
@@ -299,6 +301,7 @@ v0.5 **先做 `mention` + 可选本机编排器**。不要先做跨机共识或�
 | **1. OH runtime adapter** | 本机薄客户端经隧道 / API 对接已试装的 Agent Server；交接投递、事件回流、探活 | fork OH、自建远端循环、把 OH 控制台当 UI |
 | **2. 本机 Agent + 交接** | 规划同伴、`handoff_proposal`、确认、事件回流同一线程、收尾 | 三个对等 mode；静默把闲聊打到远端；完整群组 |
 | **3. 无头浏览 plugin** | 可选工具，2C4G 评估后再做 | 像素桌面对等、把 plugin 叫成 Agent |
+| **近端扩展：桌面/VNC** | 可选 sidecar，同一台 BYO 机器、OH 旁边 | fork OH；当成 v0 门禁；当成第二个 Agent |
 | **以后 optional native** | 自建 `openbot-agent`（§3–5）与 `/v1/tasks` | 不挡 v0；不替换 BYO 电脑隐喻 |
 | **v0.5 群组房间** | 房间模型 + mention/本机编排 + 扇出任务 | 不阻塞 Phase 1；不做跨机文件同步 |
 

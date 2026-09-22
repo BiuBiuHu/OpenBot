@@ -9,6 +9,7 @@
 | v0.3 | 2026-09-21 | 会话面默认本机 LLM | 聊天 ≠ Agent | Phase 2 含 Local LLM；可与 Phase 1 并行 |
 | v0.4 | 2026-09-21 | Phase 2 改为交接流 | 不是三个 mode | 规划 → 提案 → 回流 → 收尾 |
 | v0.5 | 2026-09-22 | Phase 1 改为 OH runtime adapter；native 延后 | v0 runtime 锁定 | 不先自建 `openbot-agent` |
+| v0.6 | 2026-09-22 | 近端扩展：桌面/VNC sidecar | OH 无可见屏幕 | 不挡 Phase 1/2；不 fork OH |
 
 ## 1. 当前决策
 
@@ -56,6 +57,7 @@ PR#1 已完成：脚手架 → 00–06 文档 → 测试与 localhost SSH bind �
 | 1 | **OH runtime adapter**：本机经隧道 / API 对接 Agent Server；交接投递、事件回流、探活 | 拔掉隧道后已交接任务仍能到终态或停在审批 | 不 fork OH；不自建远端循环；保留 PR#1 jobs 作对照 |
 | 2 | **本机 Agent + 交接**：规划、提案、确认、同一线程回流、收尾 | 未 bind 能规划；确认后合盖任务仍在；终态后本机收尾 | 禁止三个 mode 切换器；禁止静默打到远端 |
 | 3 | **无头浏览 plugin** | 工具表可开关；2C4G 可关 | 禁止宣称桌面对等；plugin ≠ Agent |
+| 近端 | **扩展层：桌面/VNC sidecar**（同一台 BYO 机器、OH 旁边） | 可选打开可见屏幕；2C4G 可关 | 不挡 v0；不 fork OH；不是第二个 Agent |
 | 以后 | **optional native `openbot-agent`** | 与 OH 并列可选 | 不挡 v0 |
 | v0.5 | **群组房间**：participants、mention/本机编排、按 Agent 扇出任务 | 房间消息能变成多条远端任务 | 不做跨机文件同步；不挡 Phase 1 |
 

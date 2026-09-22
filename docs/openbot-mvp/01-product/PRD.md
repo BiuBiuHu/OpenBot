@@ -9,6 +9,7 @@
 | v0.3 | 2026-09-21 | 同一窗口三种会话；默认可本机 LLM | 聊天 ≠ 总是 Agent | 未 bind 也能 NL 聊；点选 Agent 才上 VPS |
 | v0.4 | 2026-09-21 | 一条线程交接流，取代三个对等 mode | 本机 Agent 规划，远端拥有电脑 | 提案→确认→回流→收尾 |
 | v0.5 | 2026-09-22 | v0 远端 runtime 定为 OpenHands Agent Server | 出货速度；用户确认 | 不要求 v0 自建 `openbot-agent` |
+| v0.6 | 2026-09-22 | 点名扩展层：桌面/VNC 近端、不挡 v0 | OH 无可见屏幕 | 产品壳拥有扩展；不 fork OH |
 
 ## 1. 当前决策
 
@@ -73,7 +74,7 @@
 
 ### 5.2 Out of Scope
 
-团队 ACL、市场、Firecracker、桌面/浏览器自动化（Phase 3 才做 plugin）、移动端精修、和 OpenHands 比 IDE、v0 完整多 Agent 群组（v0.5）。
+团队 ACL、市场、Firecracker、**v0 桌面/VNC/可见屏幕**（近端扩展 BL-017，不挡 v0，不是永远不做）、无头浏览（Phase 3 / BL-012）、移动端精修、和 OpenHands 比 IDE、v0 完整多 Agent 群组（v0.5）。不 fork OH 去补桌面。
 
 ### 5.3 权限和环境范围
 

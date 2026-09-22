@@ -9,18 +9,20 @@
 | v0.3 | 2026-09-21 | 同一窗口三种会话：本机 LLM / Agent 1:1 / 群组；默认本机 LLM | **聊天 ≠ 总是 Agent**；头脑风暴不必上 VPS | 本机保留 NL BYOK；Agent 模式才建远端任务 |
 | v0.4 | 2026-09-21 | 一条线程：本机 Agent 规划 → 交接远端 → 结果回流 → 本机收尾 | 不是三个对等 mode 来回切 | 本机 Agent=编排同伴；远端=拥有电脑 |
 | v0.5 | 2026-09-22 | v0 远端执行后端定为 OpenHands Agent Server | 出货速度；ECS 已证明 | 自建 `openbot-agent` 延后；见 [runtime-decision-v0.md](runtime-decision-v0.md) |
+| v0.6 | 2026-09-22 | 补扩展层：桌面/VNC 等 OH 缺口由 OpenBot 外挂 | 用户点名无可见屏幕；避免 OH-only forever | 不挡 v0；不 fork OH |
 
 根目录 `ARCHITECTURE.md` 是本文件的短索引。v0 runtime 决策见 **[runtime-decision-v0.md](runtime-decision-v0.md)**。交接与以后 native 草图见 **[remote-agent.md](remote-agent.md)**。细节冲突时以本目录这三篇为准。
 
 ## 1. 当前决策
 
-- **v0 锁定（2026-09-22）**：远端执行后端 = **OpenHands Agent Server**。本仓库自建本机 app shell + BYOK + SSH bind/bootstrap + 同一线程顺序交接。OH 是 **dependency / remote runtime plugin**，不整仓 fork。全文：[runtime-decision-v0.md](runtime-decision-v0.md)；试装：[openhands-agent-server-trial.md](../06-ops/openhands-agent-server-trial.md)。
+- **v0 锁定（2026-09-22）**：远端 **Agent runtime** = **OpenHands Agent Server**。本仓库自建本机 app shell + BYOK + SSH bind/bootstrap + 同一线程顺序交接 + **扩展层**（OH 缺的能力）。OH 是 **dependency / remote runtime plugin**，不整仓 fork。全文：[runtime-decision-v0.md](runtime-decision-v0.md)；试装：[openhands-agent-server-trial.md](../06-ops/openhands-agent-server-trial.md)。
 - **本机角色**：**本机 Agent**（思考 / 编排同伴）+ 会话面。默认用笔记本 BYOK 规划、澄清、起草。需要电脑时**交接**给远端 runtime，结果回到**同一条线程**，再由本机 Agent 收尾。不是三个对等聊天 mode 让用户来回切。
-- **远端角色**：拥有电脑的运行时。v0 这台电脑上的循环是 OH Agent Server。命令、文件、以后的浏览器只发生在这里。
+- **远端角色**：拥有电脑的运行时。v0 这台电脑上的 **Agent 循环 / 工具 / 事件** 是 OH Agent Server。命令、文件先发生在这里。
+- **扩展层（OpenBot 拥有）**：OH 没有的能力由本仓库 **外挂** 到同一台 BYO 机器。第一缺口：**无桌面 / 无 VNC / 无实时可见屏幕**。以可选 sidecar / plugin 挂在 OH **旁边**，不 fork OH。**v0 不必出货**，近端必须占位（BL-017）。
 - **SSH 职责**：只做 bind / bootstrap，以及可选的 `ssh -L` 隧道。SSH **不是**命令通道，也不是 Agent。只跟本机 Agent 规划时**不需要** bind。
-- **v0 进程形态**：2C4G 上 **一个**远端 runtime 进程（OH）。本机控制面另有本机 Agent 循环（随笔记本）。不拆微服务，也不为 v0 再自建 `openbot-agent`。
+- **v0 进程形态**：2C4G 上 **一个**远端 Agent runtime 进程（OH）。本机控制面另有本机 Agent 循环（随笔记本）。不拆微服务，也不为 v0 再自建 `openbot-agent`。桌面 / VNC sidecar 是近端可选进程，不是 v0 常驻门禁。
 - **以后可选**：自建 systemd `openbot-agent` 可作为 native runtime 回来，不挡 v0。
-- **工具 v0**：shell + 文件，且**只在远端**。本机 Agent 无 VPS 工具，只负责想和交接。无头浏览器 / computer-use 是后续 **plugin**。
+- **工具 v0**：shell + 文件，且**只在远端**。本机 Agent 无 VPS 工具，只负责想和交接。无头浏览是后续 **plugin**（BL-012），与可见桌面 / VNC（BL-017）不是同一项。
 - **群组**：v0.5 以后。不阻塞本机交接或远端 runtime。
 
 被拒绝的替代：
@@ -33,6 +35,7 @@
 - v0 上多进程拆分（agent / tool-runner / event-bus）。
 - 为 v0 fork OpenHands 整仓，或把 OH 控制台当产品 UI。
 - 把自建 `openbot-agent` 当成 v0 门禁。
+- 为了桌面 / VNC 去 fork OH；或把「v0 不出桌面」写成永远不做。
 
 ### 1.0 一条线程：规划 → 交接 → 执行 → 收尾
 
@@ -70,7 +73,8 @@
 | **Worker** | 只执行：接 job、跑 shell/文件、写日志。不思考。 | PR#1 的 `worker.py`（执行原语，迁移后内嵌为远端 Agent 的 tool runtime） |
 | **本机 Agent** | 思考 / 编排同伴：规划、澄清、起草；提出向远端交接。无 VPS 工具。 | 本机控制面；笔记本 BYOK |
 | **远端 runtime** | 拥有电脑：排队、想、执行、审批。v0 = OpenHands Agent Server；以后可选自建 `openbot-agent`。 | 主机常驻进程 |
-| **computer-use** | 一类工具（无头浏览 / 像素桌面）。 | v0 不做；以后 plugin。**不是**任何一种 Agent |
+| **computer-use** | 一类工具（无头浏览）。 | BL-012；**不是**任何一种 Agent |
+| **扩展层** | OH 缺的能力：先点名桌面 / VNC / 可见屏幕；以后 connectors | OpenBot plugin / sidecar，挂在同一台 BYO 机器、OH 旁边。**不挡 v0**；不 fork OH |
 | **瘦客户端 / 会话面** | 同一条线程的 UI/CLI；转发交接、订事件、批准。 | `src/ui`、`src/cli.ts`、`127.0.0.1:3847` |
 | **编排器** | 群组里决定“谁开口 / 谁动手”。v0 的编排就是本机 Agent 的交接。 | v0.5 才多 Agent |
 
@@ -136,6 +140,7 @@ flowchart LR
     Loop[Agent 模型循环]
     Tools[工具 shell+files]
     Gate[审批门]
+    Ext[扩展层 可选桌面/VNC]
   end
   subgraph Disk[远端磁盘]
     Tasks[(tasks/events)]
@@ -155,6 +160,8 @@ flowchart LR
   LocalAPI --> Tun
   SSH --> A
   Tun --> A
+  Tun -.-> Ext
+  Ext -.-> WS
   A --> Q
   Q --> Loop
   Loop --> LLM
@@ -175,7 +182,8 @@ flowchart LR
 
 | 进程 / 目录 | 角色 | 生命周期 | 备注 |
 |-------------|------|----------|------|
-| `openhands-agent-server`（v0） | 思考 + 执行 + HTTP | 试装为 systemd（见 ops trial） | **v0 远端 runtime**。只听 `127.0.0.1` |
+| `openhands-agent-server`（v0） | Agent 循环 + 工具 + 事件 | 试装为 systemd（见 ops trial） | **v0 远端 Agent runtime**。只听 `127.0.0.1` |
+| 扩展 sidecar（近端） | 可选桌面 / VNC / 可见屏幕 | 用户开关；不挡 v0 | 同一台 BYO 机器、OH **旁边**；不进 OH fork。BL-017 |
 | `openbot-agent`（以后可选） | 自建 native 循环 | systemd-user（降级 tmux / nohup） | 不挡 v0；草图见 remote-agent.md |
 | `~/openbot-workspace` | 工作区文件 | 随用户文件 | Agent 的“电脑桌面”；不是沙箱 |
 | 远端 tasks/events | 任务与事件 | 合盖后仍在 | v0 落在 OH 侧；native 时见 `~/.openbot-agent/` |
@@ -375,14 +383,17 @@ PR#1 `/v1/jobs` 在迁移完成前可继续存在，作为内部 tool step。
 | 本机 Agent | 思考 / 编排同伴（笔记本 BYOK） | 没有电脑；合盖停规划是预期 |
 | 远端 runtime | 拥有电脑（v0 = OH Agent Server） | 不是用户日常对谈的那一位 |
 | 交接 | 本机提案 →（确认）→ `POST /v1/tasks` → 事件回流 | 不是用户手动“切到远端聊天” |
+| 扩展层 | OH 缺口（桌面/VNC 等）挂在同一台机器旁边 | 不是 OH fork，不是 v0 门禁，不是第三个 mode |
 
 用户始终跟本机 Agent 说话。需要电脑时由它交接。群组 v0.5。不要为了群组先拆单进程远端内核。
 
 ## 10. 自研边界与选型
 
-见 `00-research/competitor-research.md`。仍采纳系统 SSH + stdlib HTTP；拒绝 paramiko、默认 Docker runtime、把 OpenHands 控制台当产品隐喻。**v0 把 OH Agent Server 当远端 runtime plugin**，不是整仓 fork，也不是产品 UI。
+见 `00-research/competitor-research.md`。仍采纳系统 SSH + stdlib HTTP；拒绝 paramiko、默认 Docker runtime、把 OpenHands 控制台当产品隐喻。**v0 把 OH Agent Server 当远端 Agent runtime plugin**，不是整仓 fork，也不是产品 UI。
 
-后续替换路径：本机壳的 runtime adapter 先对接 OH；以后可选再接自建 `openbot-agent`。不必改“这台主机就是我的电脑”。无头浏览以 **plugin** 挂进工具表。详见 [runtime-decision-v0.md](runtime-decision-v0.md)。
+后续替换路径：本机壳的 runtime adapter 先对接 OH；以后可选再接自建 `openbot-agent`。不必改“这台主机就是我的电脑”。
+
+**扩展层**（OpenBot 拥有）：OH 缺的能力以 **plugin / sidecar** 挂在同一台 BYO 机器、OH **旁边**。第一缺口是桌面 / VNC / 可见屏幕（BL-017，不挡 v0）。无头浏览另走 BL-012。禁止为了补缺口去 fork OH。详见 [runtime-decision-v0.md](runtime-decision-v0.md) §3.1。
 
 ## 11. 防腐化约束
 
@@ -395,6 +406,7 @@ PR#1 `/v1/jobs` 在迁移完成前可继续存在，作为内部 tool step。
 7. **入口仍是 `npx openbot`**。临时脚本不得成为业务入口。
 8. **群组不升级权限**。编排器只能投递任务；每台主机的审批门仍在该 Agent 上。
 9. **禁止静默交接**。v0 默认先提案再执行；不得把整段本机规划重放成 shell。
+10. **扩展挂在 OH 旁边**。桌面 / VNC / 以后 connectors 是本仓库扩展层，不是 OH fork，也不是第二个 Agent。v0 可不出货，文档不得写成永远不做。
 
 ## 12. 失败处理、重试与回滚
 
@@ -409,3 +421,4 @@ PR#1 `/v1/jobs` 在迁移完成前可继续存在，作为内部 tool step。
 - 多主机配置文件格式、Agent 热升级：Backlog。
 - 群组房间权威落在本机还是某台“lead”主机：v0.5 再锁；默认本机房间 + 远端任务。
 - PR#1 `jobs/` 目录的兼容读取窗口：实现 Phase 1 时写适配，不在本文拍死亡日期。
+- 桌面 / VNC sidecar 的具体协议与 2C4G 成本：BL-017 实现时再锁；本文只锁「同一台机器、OH 旁边、不 fork」。
