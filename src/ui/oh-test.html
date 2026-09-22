@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenBot — 本机试连远端</title>
+    <style>
+      :root {
+        --bg: #10140f;
+        --panel: #171d16;
+        --ink: #e7eedc;
+        --muted: #8b9778;
+        --line: #2b3526;
+        --phosphor: #b6e36a;
+        --amber: #e2b14a;
+        --danger: #e07a5f;
+        --mono: "IBM Plex Mono", "ui-monospace", "SFMono-Regular", Menlo, Consolas, monospace;
+        --sans: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); }
+      body { max-width: 52rem; margin: 0 auto; padding: 1.2rem 1.4rem 3rem; }
+      h1 { margin: 0 0 0.25rem; font-size: 1.2rem; }
+      .sub { color: var(--muted); margin: 0 0 1.2rem; }
+      a { color: var(--phosphor); }
+      .step {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        padding: 0.9rem 1rem;
+        margin: 0 0 0.75rem;
+      }
+      .step h2 {
+        margin: 0 0 0.45rem;
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      pre, code { font-family: var(--mono); font-size: 0.78rem; }
+      pre {
+        background: #0e120d;
+        border: 1px solid var(--line);
+        padding: 0.6rem 0.7rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #d5e8b8;
+      }
+      label { display: block; color: var(--muted); font-size: 0.85rem; margin: 0.4rem 0 0.25rem; }
+      textarea, input[type="text"] {
+        width: 100%;
+        background: #0e120d;
+        color: var(--ink);
+        border: 1px solid var(--line);
+        padding: 0.5rem 0.6rem;
+        font-family: var(--sans);
+        font-size: 1rem;
+      }
+      button {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        border: 1px solid var(--line);
+        background: #22291d;
+        color: var(--ink);
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        margin-right: 0.4rem;
+        margin-top: 0.45rem;
+      }
+      button.yes { border-color: var(--phosphor); color: var(--phosphor); }
+      .lamp {
+        display: inline-block;
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+        background: var(--danger);
+        margin-right: 0.35rem;
+      }
+      .lamp.ok { background: var(--phosphor); }
+      .err { color: var(--danger); }
+      .ok { color: var(--phosphor); }
+      #log { min-height: 4rem; }
+    </style>
+  </head>
+  <body>
+    <h1><span id="lamp" class="lamp"></span>本机试连远端</h1>
+    <p class="sub">
+      在你的笔记本上测 OpenHands 隧道。密钥只放 <code>~/.openbot/.env</code>，本页不回显。
+      <a href="/">回会话台</a>
+    </p>
+
+    <section class="step">
+      <h2>1. 笔记本上先开隧道</h2>
+      <p>Agent Server 只听主机 <code>127.0.0.1:8000</code>。另开一个终端：</p>
+      <pre>ssh -i &lt;SSH_IDENTITY&gt; -L 8000:127.0.0.1:8000 &lt;USER&gt;@&lt;ECS_HOST&gt;</pre>
+      <p>然后本机应能 <code>curl -sS http://127.0.0.1:8000/health</code> 看到 <code>{"status":"ok"}</code>。</p>
+      <p><code>~/.openbot/.env</code> 至少：</p>
+      <pre>OPENHANDS_BASE_URL=http://127.0.0.1:8000
+OPENHANDS_API_KEY=&lt;主机 OH_SESSION_API_KEYS_0&gt;</pre>
+      <p>可选：<code>OPENHANDS_LLM_MODEL</code> / <code>OPENHANDS_LLM_API_KEY</code>（远端循环自己的 BYOK）。不要把 PEM 或 key 贴进聊天。</p>
+    </section>
+
+    <section class="step">
+      <h2>2. 探活（经本机壳，避免浏览器直打 8000 的 CORS）</h2>
+      <p id="probeLine">还没探。</p>
+      <button id="probe" type="button" class="yes">探活 OpenHands</button>
+      <pre id="probeJson">{}</pre>
+    </section>
+
+    <section class="step">
+      <h2>3. 确认后发一条测试 goal</h2>
+      <label for="goal">发给这台电脑（确认后才创建 OH conversation）</label>
+      <textarea id="goal" rows="3">在工作区写一份 uname 记录，用一两句话说明内核。</textarea>
+      <button id="send" type="button" class="yes">我确认，发给远端</button>
+      <p id="sendLine"></p>
+      <pre id="log"></pre>
+    </section>
+
+    <script>
+      const lamp = document.getElementById("lamp");
+      const probeLine = document.getElementById("probeLine");
+      const probeJson = document.getElementById("probeJson");
+      const logEl = document.getElementById("log");
+      const sendLine = document.getElementById("sendLine");
+
+      function show(el, value) {
+        el.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+      }
+
+      async function probe() {
+        probeLine.textContent = "探活中…";
+        try {
+          const res = await fetch("/api/oh/health");
+          const data = await res.json();
+          show(probeJson, data);
+          lamp.classList.toggle("ok", !!data.ok);
+          if (data.ok) {
+            probeLine.innerHTML =
+              '<span class="ok">通了</span> ' +
+              escapeHtml(data.baseUrl || "") +
+              (data.hasSessionKey ? " · session key 已配置" : " · 还没配 OPENHANDS_API_KEY");
+          } else {
+            probeLine.innerHTML =
+              '<span class="err">不通</span> ' +
+              escapeHtml(data.hint || data.error || "隧道或 key 有问题");
+          }
+        } catch (err) {
+          lamp.classList.remove("ok");
+          probeLine.innerHTML = '<span class="err">' + escapeHtml(String(err)) + "</span>";
+          show(probeJson, { error: String(err) });
+        }
+      }
+
+      async function send() {
+        const goal = document.getElementById("goal").value.trim();
+        if (!goal) {
+          sendLine.innerHTML = '<span class="err">先写 goal</span>';
+          return;
+        }
+        sendLine.textContent = "已确认，正在创建 conversation…";
+        show(logEl, "");
+        try {
+          const created = await (
+            await fetch("/api/handoffs", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ goal: goal, allow: true, thread_id: "laptop_trial" }),
+            })
+          ).json();
+          if (!created.ok) {
+            sendLine.innerHTML = '<span class="err">' + escapeHtml(created.error || "handoff failed") + "</span>";
+            show(logEl, created);
+            return;
+          }
+          const id = created.conversation && created.conversation.id;
+          sendLine.textContent = "conversation " + (id || "?") + " · 轮询中";
+          show(logEl, created);
+          if (!id) return;
+          const deadline = Date.now() + 60_000;
+          let last = created;
+          while (Date.now() < deadline) {
+            const snap = await (await fetch("/api/conversations/" + encodeURIComponent(id))).json();
+            last = snap;
+            show(logEl, snap);
+            const st = (snap.conversation && (snap.conversation.execution_status || snap.conversation.status)) || "";
+            sendLine.textContent = "conversation " + id + " · " + st;
+            if (/finished|succeeded|error|failed|stuck|cancelled/.test(String(st))) break;
+            await new Promise((r) => setTimeout(r, 400));
+          }
+          if (last && last.snippet) {
+            sendLine.textContent += " · 有 snippet";
+          }
+        } catch (err) {
+          sendLine.innerHTML = '<span class="err">' + escapeHtml(String(err)) + "</span>";
+        }
+      }
+
+      function escapeHtml(s) {
+        return String(s || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      document.getElementById("probe").onclick = probe;
+      document.getElementById("send").onclick = send;
+      probe();
+    </script>
+  </body>
+</html>

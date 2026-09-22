@@ -5,7 +5,7 @@ import { runAgentTurn } from "./agent.js";
 import { classifyCommand } from "./approval.js";
 import { loadConfig } from "./config.js";
 import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "./handoff.js";
-import { OpenHandsClient } from "./oh-client.js";
+import { conversationSnippet, OpenHandsClient } from "./oh-client.js";
 import { repoRoot } from "./paths.js";
 import { ensureWorkerAccess, type TunnelHandle } from "./tunnel.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, HandoffProposal, OpenBotConfig } from "./types.js";
@@ -48,6 +48,7 @@ export async function startControlPlane(
   let history: ChatMessage[] = [];
 
   const uiFile = path.join(repoRoot(), "src/ui/index.html");
+  const trialFile = path.join(repoRoot(), "src/ui/oh-test.html");
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
@@ -55,6 +56,24 @@ export async function startControlPlane(
       if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         res.end(fs.readFileSync(uiFile));
+        return;
+      }
+      if (req.method === "GET" && (url.pathname === "/oh-test" || url.pathname === "/oh-test.html")) {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(fs.readFileSync(trialFile));
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/api/oh/health") {
+        const probe = await oh.health();
+        await json(res, {
+          ok: probe.ok,
+          baseUrl: config.openhands.baseUrl,
+          hasSessionKey: Boolean(config.openhands.sessionApiKey),
+          raw: probe.raw,
+          hint: probe.ok
+            ? undefined
+            : "在笔记本上先开：ssh -L 8000:127.0.0.1:8000 user@host，并把 OPENHANDS_API_KEY 写入 ~/.openbot/.env",
+        });
         return;
       }
       if (req.method === "GET" && url.pathname === "/api/status") {
@@ -95,6 +114,34 @@ export async function startControlPlane(
             conversations: [],
             error: err instanceof Error ? err.message : String(err),
           });
+        }
+        return;
+      }
+      if (req.method === "GET" && url.pathname.startsWith("/api/conversations/")) {
+        const id = url.pathname.split("/")[3];
+        if (!id) {
+          await json(res, { ok: false, error: "conversation id required" }, 400);
+          return;
+        }
+        try {
+          const conv = await oh.getConversation(id);
+          let snippet = "";
+          try {
+            snippet = conversationSnippet(await oh.searchEvents(id, { limit: 50 }));
+          } catch {
+            /* events optional */
+          }
+          await json(res, {
+            ok: true,
+            conversation: {
+              id: conv.id,
+              execution_status: conv.executionStatus,
+              status: conv.status,
+            },
+            snippet,
+          });
+        } catch (err) {
+          await json(res, { ok: false, error: err instanceof Error ? err.message : String(err) }, 404);
         }
         return;
       }

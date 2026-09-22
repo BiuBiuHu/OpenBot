@@ -23,6 +23,7 @@ Usage:
   npx openbot bind              Install/start the worker on the remote host
   npx openbot status            SSH + worker + OpenHands tunnel health
   npx openbot serve [--port N]  Local control plane + UI (OH handoff and/or worker)
+                                Laptop trial: http://127.0.0.1:3847/oh-test
   npx openbot run <command>     Run a command on the remote host (no LLM)
   npx openbot chat [message]    One-shot BYOK chat that uses remote tools
   npx openbot oh health         Probe tunneled OpenHands Agent Server
@@ -152,6 +153,7 @@ async function cmdServe(flags: Record<string, string>): Promise<void> {
   );
   const url = `http://127.0.0.1:${config.controlPlane.port}`;
   console.log(`Control plane ${url}`);
+  console.log(`Laptop trial  ${url}/oh-test`);
   if (hasWorker) {
     console.log(`Tunnel 127.0.0.1:${config.worker.localPort} → ${sshTarget(config)}:${config.worker.remotePort}`);
     console.log(`Persist on host: ${config.worker.persist}`);

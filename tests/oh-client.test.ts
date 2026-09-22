@@ -241,6 +241,40 @@ describe("web → OpenHands (no worker)", () => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
+  it("TC-OH-010: laptop trial page /oh-test and /api/oh/health", async () => {
+    const port = plane.config.controlPlane.port;
+    const page = await (await fetch(`http://127.0.0.1:${port}/oh-test`)).text();
+    assert.match(page, /本机试连远端/);
+    assert.match(page, /ssh -L 8000:127.0.0.1:8000/);
+    assert.match(page, /我确认，发给远端/);
+    const health = (await (await fetch(`http://127.0.0.1:${port}/api/oh/health`)).json()) as {
+      ok?: boolean;
+      hasSessionKey?: boolean;
+      baseUrl?: string;
+    };
+    assert.equal(health.ok, true);
+    assert.equal(health.hasSessionKey, true);
+    assert.equal(health.baseUrl, mock.baseUrl);
+    assert.ok(!JSON.stringify(health).includes("web-key"));
+
+    const created = (await (
+      await fetch(`http://127.0.0.1:${port}/api/handoffs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goal: "laptop trial ping", allow: true }),
+      })
+    ).json()) as { ok?: boolean; conversation?: { id: string } };
+    assert.equal(created.ok, true);
+    const id = created.conversation!.id;
+    const snap = (await (await fetch(`http://127.0.0.1:${port}/api/conversations/${id}`)).json()) as {
+      ok?: boolean;
+      conversation?: { id: string };
+      snippet?: string;
+    };
+    assert.equal(snap.ok, true);
+    assert.equal(snap.conversation?.id, id);
+  });
+
   it("TC-OH-008: serve without bind; page is This computer; status.ok follows OH", async () => {
     const port = plane.config.controlPlane.port;
     const html = await (await fetch(`http://127.0.0.1:${port}/`)).text();
