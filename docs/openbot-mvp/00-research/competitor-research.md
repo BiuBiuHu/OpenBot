@@ -8,12 +8,13 @@
 | v0.2 | 2026-09-20 | 补 Worker ≠ Agent ≠ computer-use | 远端演进为常驻 Agent | 调研结论不改 SSH；改产品进程名与循环位置 |
 | v0.3 | 2026-09-21 | 本机 LLM ≠ Agent | 聊天窗口默认普通对话 | 不改 SSH 结论 |
 | v0.4 | 2026-09-21 | 本机 Agent（编排）vs 远端（有电脑） | 交接流取代并列 mode | 不改 SSH 结论 |
+| v0.5 | 2026-09-22 | v0 远端循环采用 OH Agent Server（plugin） | 出货速度；不改隐喻 | 仍拒绝 OH 控制台当产品；不 fork |
 
 ## 1. 当前决策
 
-- 当前采用：用户自有 Linux 主机 + 系统 `ssh`/`scp` 绑定 + 远端单进程 **`openbot-agent`**（任务队列 + BYOK 循环 + 工具 + 审批，仅 `127.0.0.1`）+ 本机瘦客户端经可选 SSH 隧道访问。PR#1 的 HTTP worker 是执行原语来源，不是终态产品名。
-- 被拒绝：远端只当哑 Worker、默认 Docker/Firecracker 沙箱、像素级 computer-use 冒充 Agent、把 OpenHands 编码控制台做成产品主隐喻。
-- 调研日期：2026-09-20。
+- 当前采用：用户自有 Linux 主机 + 系统 `ssh`/`scp` 绑定 + **v0 远端 OpenHands Agent Server**（dependency / plugin，仅 `127.0.0.1`）+ 本机瘦客户端经可选 SSH 隧道访问。自建 `openbot-agent` 延后。PR#1 的 HTTP worker 是执行原语来源，不是终态产品名。
+- 被拒绝：远端只当哑 Worker、默认 Docker/Firecracker 沙箱、像素级 computer-use 冒充 Agent、把 OpenHands 编码控制台做成产品主隐喻、为 v0 fork OpenHands 整仓。
+- 调研日期：2026-09-20。v0 runtime 锁定：2026-09-22，见 [runtime-decision-v0.md](../03-architecture/runtime-decision-v0.md)。
 
 ## 2. 产品隐喻对比
 
@@ -31,7 +32,7 @@ OpenHands 可以挂远程机器，但产品语言是“这次编码任务跑在�
 | 候选 | 来源 | 适用性 | 决策 |
 |------|------|--------|------|
 | 系统 `ssh`/`scp` | OpenSSH 官方客户端 | 用户已有密钥、ssh-agent、ProxyJump | **采纳**。不引入 paramiko/ssh2，避免第二套密钥语义。 |
-| OpenHands Action Execution Server | [docs](https://docs.openhands.dev/openhands/usage/architecture/runtime)、[issue #2404](https://github.com/OpenHands/OpenHands/issues/2404) | 远端执行用 REST，不再把 SSH 当命令通道 | **借鉴协议形态**：worker 用 HTTP；**拒绝** Docker sandbox 作为 v0 默认，也拒绝宣称 EventStream 对等。OpenHands 已弃用 SSH 作为 runtime 通信，是因为他们要镜像无关沙箱；OpenBot 的差异化就是“SSH 就是绑定动作”。 |
+| OpenHands Action Execution Server | [docs](https://docs.openhands.dev/openhands/usage/architecture/runtime)、[issue #2404](https://github.com/OpenHands/OpenHands/issues/2404) | 远端执行用 REST，不再把 SSH 当命令通道 | **v0 采用 Agent Server 当远端 runtime plugin**（不 fork、不用其控制台）。SSH 仍只做绑定。**拒绝** Docker sandbox 作为产品默认，也拒绝宣称 EventStream 对等。 |
 | paramiko / node-ssh | PyPI / npm | 可编程 SSH | **拒绝**。2C4G 主机与用户本机都已有 OpenSSH；自研封装系统客户端成本更低。 |
 | systemd --user / tmux / nohup | Linux 发行版 | 笔记本合盖后进程仍在 | **采纳**，按可用性降级。 |
 | Fastify / Express | npm | 本地控制面 | **拒绝**。Node 22 内置 `http` + `fetch` 足够，零 runtime 依赖。 |

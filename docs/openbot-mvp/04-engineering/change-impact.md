@@ -8,10 +8,11 @@
 | v0.2 | 2026-09-20 | 架构目标改为远端 Agent + 会话面 | 文档 PR，不改运行时代码 | 下一支实现才动协议；本 PR 无迁移 |
 | v0.3 | 2026-09-21 | 补本机 LLM 会话模式 | 文档 only | 默认聊天不再隐含远端任务 |
 | v0.4 | 2026-09-21 | 改为交接流 | 文档 only | 去掉三个对等 mode |
+| v0.5 | 2026-09-22 | v0 远端 runtime 定为 OH Agent Server | 文档 only | 实现改为 adapter，不先自建 agent |
 
 ## 1. 当前结论
 
-- 影响范围：本轮（v0.2）**仅文档**（`docs/openbot-mvp/`、`ARCHITECTURE.md`、根 README 形状说明）。运行时仍是 PR#1 控制面 + worker。
+- 影响范围：本轮 **仅文档**（`docs/openbot-mvp/`，外加根 `ARCHITECTURE.md` / README 形状说明）。运行时仍是 PR#1 控制面 + worker；v0 目标改为对接已试装的 OH Agent Server。
 - 是否跨 repo：否。
 - 是否改接口契约：文档中的**目标**契约改为 `/v1/tasks`；**未改代码**，PR#1 `/v1/jobs` 仍有效。
 - 是否需要迁移：否（本 PR）。实现 Phase 1 时再兼容 jobs → tasks。

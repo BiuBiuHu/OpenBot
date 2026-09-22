@@ -1,6 +1,10 @@
-# 远端 openbot-agent
+# 远端运行时与交接
 
-聚焦文档：常驻进程、任务状态机、HTTP 草图、以及本机 Agent **如何交接**到 `/v1/tasks`。本机规划**不**走本文的任务队列。总图与交接流见 [architecture.md](architecture.md) §1.0。
+聚焦文档：本机 Agent **如何交接**到远端执行后端，以及任务/事件怎么回到同一条线程。本机规划**不**走远端任务队列。总图见 [architecture.md](architecture.md) §1.0。
+
+**v0 执行后端 = OpenHands Agent Server。** 本机薄客户端经隧道 / API 跟它说话。决策：[runtime-decision-v0.md](runtime-decision-v0.md)。试装：[openhands-agent-server-trial.md](../06-ops/openhands-agent-server-trial.md)。
+
+下文的 `/v1/tasks` 与单进程 `openbot-agent` 图，是**产品级交接契约**和**以后 optional native** 草图，不是 v0 必自建的内核。
 
 ## 0. 版本历史
 
@@ -10,34 +14,40 @@
 | v0.2 | 2026-09-21 | 声明聊天 ≠ 总是 Agent；补本机 LLM 模式 | 同一窗口还要普通 NL 对话 | 默认不上 VPS；点选 Agent 才 `POST /v1/tasks` |
 | v0.3 | 2026-09-21 | 改为交接流，不再并列三个 mode | 本机 Agent=编排；远端=电脑 | 同一线程回流；群组仍后置 |
 | v0.4 | 2026-09-21 | 标明 OpenHands Agent Server 仅为临时对照运行时 | 2C4G ECS 摸手感，避免升格成内核 | 产品目标仍是本文的 `openbot-agent` |
+| v0.5 | 2026-09-22 | v0 执行后端改为 OpenHands Agent Server；自建进程延后 | 用户锁定；出货速度 | 本机壳 + adapter；`openbot-agent` 不再是 v0 必做 |
 
 ## 1. 当前决策
 
-- 远端产品进程名叫 **`openbot-agent`**，systemd 常驻（降级 tmux / nohup）。
-- **一个进程**容纳：HTTP、任务队列、模型循环、工具、审批、事件日志。
-- 用户跟**本机 Agent**说话。只有交接确认后才打到本文的 `/v1/tasks`。不是三个对等聊天 mode。
-- 本机控制面：本机 Agent 循环 + 提出交接 + 订阅远端事件 + 批准。
-- v0 工具：`run_shell`、`read_file`、`write_file`、`list_dir`，只在远端。本机 Agent **零 VPS 工具**。浏览器是以后的 plugin。
+- **v0 执行后端是 OpenHands Agent Server**（用户 BYO Linux，已在 2C4G ECS 试装）。决策全文：[runtime-decision-v0.md](runtime-decision-v0.md)。运维：[openhands-agent-server-trial.md](../06-ops/openhands-agent-server-trial.md)。
+- 本机是**薄客户端**：本机 Agent 循环 + 提出交接 + 经隧道 / API 交给 OH + 订阅事件 + 批准。不是三个对等聊天 mode。
+- 用户跟**本机 Agent**说话。只有交接确认后才打到远端 runtime。本机规划不走远端队列。
+- OpenHands 是 **dependency / remote runtime plugin**。不 fork 整仓，不用 OH 控制台当产品隐喻。语言仍是「这台机器就是我的电脑」。
+- 自建 systemd **`openbot-agent` 延后到 v0 之后**，以后可作为 optional / native runtime。v0 **不必**自建远端循环。
+- v0 工具仍只在远端（OH 侧）。本机 Agent **零 VPS 工具**。浏览器是以后的 plugin。
 - 群组后置（v0.5）。不宣称 Firecracker，不宣称 Grok 像素桌面对等。
-- **OpenHands Agent Server 不是产品内核。** 它只是用户 BYO Linux 上的 **trial / 摸手感** 对照运行时（可选 plugin 候选）。长期形态仍是本文的自建 systemd `openbot-agent`。摸完后决定保留或丢掉，见 [openhands-agent-server-trial.md](../06-ops/openhands-agent-server-trial.md)。禁止无鉴权绑 `0.0.0.0`。
+- 禁止无鉴权绑 `0.0.0.0`。只听 `127.0.0.1`，本机用 SSH 本地转发。
 
 ## 2. Agent 不是什么
 
 ```text
 本机 Agent      = 思考 / 编排同伴（规划、澄清、起草、提出交接），没有电脑
-Worker          = 只执行别人想好的步骤
-openbot-agent   = 拥有电脑：想 + 在这台主机上做
-computer-use    = 一种工具（看屏幕/点浏览器），挂在远端 Agent 下面
+Worker          = 只执行别人想好的步骤（PR#1 worker.py）
+远端 runtime    = 拥有电脑：想 + 在这台主机上做
+  v0            = OpenHands Agent Server（dependency，不是本仓 fork）
+  以后可选      = 自建 openbot-agent（本文 §3–5 草图）
+computer-use    = 一种工具（看屏幕/点浏览器），挂在远端 runtime 下面
 群组            = 以后；本机 Agent 向多名远端扇出交接
 ```
 
 **不是三个对等 mode。** 默认本机 Agent 绝不创建远端任务，除非它提出交接且（策略要求时）用户确认。
 
-PR#1 的 `worker.py` 是合格的 **Worker**。目标是把它的执行原语收进 Agent，并在同一进程里加上模型循环，而不是再叠一个“云端大脑”。
+PR#1 的 `worker.py` 是合格的 **Worker**。v0 不把它升格成远端大脑；执行循环先用 OH。
 
-OpenHands Agent Server 也 **不是** 这个 Agent。它是第三方 trial 进程，用来在同一类 2C4G 主机上对照安装与手感；可以稍后变成 optional runtime plugin，但不能替换本文的任务状态机、交接流或产品进程名。试装与卸载：[openhands-agent-server-trial.md](../06-ops/openhands-agent-server-trial.md)。
+OpenHands Agent Server **是** v0 的远端执行后端，**不是**用户日常对谈的那一位，也不是本仓库要 fork 的产品。本机壳经隧道 / API 调用它；交接流、同一线程、先问再动手仍以本文 §6 为准。试装与卸载：[openhands-agent-server-trial.md](../06-ops/openhands-agent-server-trial.md)。
 
-## 3. 单进程内部
+## 3. 单进程内部（以后 optional native，v0 不做）
+
+v0 远端进程是 `openhands-agent-server`（只听 `127.0.0.1`，经 `ssh -L` 到达）。下面这张图是延后的自建 `openbot-agent`，留给以后 native runtime，不挡 v0 adapter。
 
 ```text
                     ┌──────── openbot-agent（一个 OS 进程）────────┐
@@ -60,7 +70,7 @@ OpenHands Agent Server 也 **不是** 这个 Agent。它是第三方 trial 进�
 
 并发策略（v0，2C4G）：**同一时刻一条模型循环**；队列里可以有多条 `queued` 任务。不要为了并行先上 worker pool。工具子进程可以有，但仍属同一 Agent 进程树。
 
-## 4. 任务状态机
+## 4. 任务状态机（产品级；v0 由 adapter 对齐 OH）
 
 ```mermaid
 stateDiagram-v2
@@ -99,7 +109,7 @@ stateDiagram-v2
 
 ## 5. API 草图
 
-均仅监听 `127.0.0.1`。鉴权：`Authorization: Bearer <bind token>`（`/health` 可无鉴权，与 PR#1 相同，方便 persist 探活）。
+v0 本机壳打的是 **OH Agent Server**（经隧道），不是先实现下面这组路径。这组 `/v1/tasks` 是交接契约与以后 native 的草图；adapter 负责映射。均仅监听 `127.0.0.1`。鉴权：`Authorization: Bearer <bind token>`（`/health` 可无鉴权，与 PR#1 相同，方便 persist 探活）。
 
 ### 5.1 创建任务
 
@@ -194,7 +204,7 @@ stateDiagram-v2
 |------|--------|
 | 提案 | 本机 Agent 发 `handoff_proposal`，停等 |
 | 确认 | 策略要求时：`POST /api/handoffs/ho_01` `{allow:true}`。v0 默认要确认 |
-| 创建任务 | 控制面 `POST /v1/tasks`，`source.type=handoff`，**同一** `thread_id` |
+| 创建任务 | 控制面经 **runtime adapter** 把交接交给远端（v0 = OH Agent Server；以后可选 `POST /v1/tasks`）。`source.type=handoff`，**同一** `thread_id` |
 | 回流 | `GET .../events` 画进同一线程，气泡标 `remote` |
 | 远端审批 | 危险工具仍走 `/v1/approvals`（与交接卡分开） |
 | 收尾 | 任务 `done` 后本机 Agent 再开口解释 / 下一步 |
@@ -286,12 +296,13 @@ v0.5 **先做 `mention` + 可选本机编排器**。不要先做跨机共识或�
 
 | Phase | 做什么 | 明确不做 |
 |-------|--------|----------|
-| **1. 远端 Agent 循环** | 常驻进程、tasks 落盘、BYOK 循环、shell/文件、审批状态机、`/v1/tasks` + events | 群组、浏览器、拆进程 |
-| **2. 本机 Agent + 交接** | 规划同伴、`handoff_proposal`、确认、事件回流同一线程、收尾 | 三个对等 mode；静默把闲聊打到 `/v1/tasks`；完整群组 |
+| **1. OH runtime adapter** | 本机薄客户端经隧道 / API 对接已试装的 Agent Server；交接投递、事件回流、探活 | fork OH、自建远端循环、把 OH 控制台当 UI |
+| **2. 本机 Agent + 交接** | 规划同伴、`handoff_proposal`、确认、事件回流同一线程、收尾 | 三个对等 mode；静默把闲聊打到远端；完整群组 |
 | **3. 无头浏览 plugin** | 可选工具，2C4G 评估后再做 | 像素桌面对等、把 plugin 叫成 Agent |
+| **以后 optional native** | 自建 `openbot-agent`（§3–5）与 `/v1/tasks` | 不挡 v0；不替换 BYO 电脑隐喻 |
 | **v0.5 群组房间** | 房间模型 + mention/本机编排 + 扇出任务 | 不阻塞 Phase 1；不做跨机文件同步 |
 
-Phase 1 的验收应能在**不打开本机 UI** 的情况下，用 curl 经隧道 `POST /v1/tasks` 后拔掉隧道，任务仍在远端走到终态或停在审批。
+Phase 1 的验收：经隧道打到 OH（至少 `/health`，再加 adapter 能投递的那条任务 API）后拔掉隧道，已交接任务仍在远端走到终态或停在审批。不必先有自建 `openbot-agent`。
 
 ## 9. 诚实边界
 

@@ -8,13 +8,15 @@
 | v0.2 | 2026-09-20 | Persist/Remote 含远端 Agent 循环；本机为瘦客户端；对话分 1:1 与群组 | 用户确认远端是 think+execute 的常驻 Agent | 模型循环与任务权威迁到主机；群组为 v0.5 |
 | v0.3 | 2026-09-21 | 同一窗口三种会话；默认可本机 LLM | 聊天 ≠ 总是 Agent | 未 bind 也能 NL 聊；点选 Agent 才上 VPS |
 | v0.4 | 2026-09-21 | 一条线程交接流，取代三个对等 mode | 本机 Agent 规划，远端拥有电脑 | 提案→确认→回流→收尾 |
+| v0.5 | 2026-09-22 | v0 远端 runtime 定为 OpenHands Agent Server | 出货速度；用户确认 | 不要求 v0 自建 `openbot-agent` |
 
 ## 1. 当前决策
 
-- 当前产品决策：SSH 绑定用户自己的 Linux 主机 + **systemd 常驻 `openbot-agent`（拥有电脑）** + 本机 **Agent（思考/编排同伴）**。用户始终在**一条线程**里跟本机 Agent 说话；需要电脑时由它**交接**给远端，结果回流后再收尾。口号：**SSH your own machine. The agent gets a computer — you keep the keys.**
+- 当前产品决策：SSH 绑定用户自己的 Linux 主机 + **v0 远端 runtime = OpenHands Agent Server（拥有电脑）** + 本机 **Agent（思考/编排同伴）**。用户始终在**一条线程**里跟本机 Agent 说话；需要电脑时由它**交接**给远端，结果回流后再收尾。口号：**SSH your own machine. The agent gets a computer — you keep the keys.**
+- v0 本仓库自建本机壳 + BYOK + bind + 交接；OH 是 **dependency / plugin**，不是整仓 fork。自建 `openbot-agent` **延后**。见 [runtime-decision-v0.md](../03-architecture/runtime-decision-v0.md)。
 - **不是三个对等聊天 mode。** 群组是以后的事（v0.5）。
-- 被拒绝的替代方案：远端只当哑 Worker、用户来回切 Local/Remote/Group、把每句规划静默变成远端任务、托管 Firecracker、v0 像素桌面、把 computer-use 叫成 Agent。
-- 当前范围边界：单机、单用户、无头 2C4G、远端**单进程**。v0 = 本机 Agent + 向一台主机交接。群组后置。
+- 被拒绝的替代方案：远端只当哑 Worker、用户来回切 Local/Remote/Group、把每句规划静默变成远端任务、托管 Firecracker、v0 像素桌面、把 computer-use 叫成 Agent、为 v0 fork OpenHands。
+- 当前范围边界：单机、单用户、无头 2C4G、远端**单进程**（v0 = OH）。v0 = 本机 Agent + 向一台主机交接。群组后置。
 
 ## 2. 需求验证结论
 
@@ -30,7 +32,7 @@
 - 核心工作流：本机 Agent 规划 → 提出交接（策略则确认）→ 远端执行 → 事件回流同一线程 → 本机 Agent 收尾。合盖只停本机思考，已交接任务继续。
 - 工作单元和批量范围：v0 **一条线程**，可含零或一条（随后可多条）远端任务。群组扇出是 v0.5。
 - 成本、时效和质量约束：2C4G 单进程远端；python3+bash；交接先问、危险工具再问；本机 Agent 用笔记本 BYOK，远端用主机 BYOK。
-- 返工/重试/回滚方式：拒绝交接或拒绝审批；重新 bind；`systemctl --user restart openbot-agent`。
+- 返工/重试/回滚方式：拒绝交接或拒绝审批；重新 bind；v0 重启远端 `openhands-agent-server`（以后 native 才是 `openbot-agent`）。
 - 用户已确认结论：隐喻对齐 Grok Bot 的持久电脑；本机 Agent 没有电脑，远端才有；不是三个 mode 切换器。
 
 ## 4. 用户、问题与场景
@@ -63,9 +65,9 @@
 ### 5.1 In Scope
 
 1. Bind：`openbot init` + `openbot bind`（SSH 只做登记与 bootstrap）
-2. Persist：systemd-user / tmux / nohup 拉起 **`openbot-agent`**；任务/事件在远端盘
-3. Remote：**远端 Agent 循环**（想 + 执行）+ `run_shell` / 文件工具 + 事件回传
-4. 本机 Agent + **交接**：规划、提案、确认、远端事件回流同一线程、收尾。群组 v0.5
+2. Persist：主机常驻远端 runtime（**v0 = OpenHands Agent Server**，试装见 [openhands-agent-server-trial.md](../06-ops/openhands-agent-server-trial.md)）；任务/事件在远端盘
+3. Remote：**远端循环**（想 + 执行；v0 用 OH）+ shell / 文件工具 + 事件回传
+4. 本机 Agent + **交接**：规划、提案、确认、远端事件回流同一线程、收尾。群组 v0.5。本机壳含 **OH runtime adapter**
 5. 审批门（任务状态 `awaiting_approval`）
 6. MIT、`.gitignore`、`.env.example`、架构文档（含 Worker≠Agent≠computer-use）
 
@@ -107,7 +109,7 @@ SSH 失败、主机无 python3、隧道断、无 API key、拒绝交接、审批
 
 | 需求 ID | 验收标准 | 证据类型 | 优先级 |
 |---------|----------|----------|--------|
-| REQ-OPENBOT-001 | bind 经 SSH 安装 **openbot-agent**（保留 bootstrap 故事），config 记下 token 与 persist | 命令/日志 | P0 |
+| REQ-OPENBOT-001 | bind 经 SSH 登记主机并让远端 runtime 可达（**v0 = OpenHands Agent Server**，保留 bootstrap 故事；不必为 v0 自建 `openbot-agent`），config 记下 token 与 persist | 命令/日志 | P0 |
 | REQ-OPENBOT-002 | 停掉本机后 Agent 仍响应 /health；**任务与 Agent 循环**仍在远端盘 | 进程+文件 | P0 |
 | REQ-OPENBOT-003 | Remote 含远端 Agent 循环；`uname -a` 级执行仍在主机并回传 | 测试/CLI | P0 |
 | REQ-OPENBOT-004 | BYOK 分两处：本机 Agent 用笔记本 key，远端用主机 key；缺对应 key 时该步不可用，exec/run 可用 | 代码+测试 | P0 |
@@ -127,7 +129,7 @@ SSH 失败、主机无 python3、隧道断、无 API key、拒绝交接、审批
 
 ### 8.2 版本路线
 
-- v0 内核：远端循环（Phase 1）+ 本机 Agent 与交接（Phase 2）。
+- v0 内核：OH runtime adapter（Phase 1）+ 本机 Agent 与交接（Phase 2）。自建 `openbot-agent` 不在 v0 门禁。
 - v0.5：群组（后置）。
 - 以后：无头浏览 plugin（Phase 3）。不把群组当内核门禁。不是三个 mode 切换器。
 

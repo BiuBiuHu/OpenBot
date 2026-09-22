@@ -8,10 +8,11 @@
 | v0.2 | 2026-09-20 | Bind/Persist/Remote 纳入远端 Agent 循环；补 1:1 / 群组 | 用户确认常驻 Agent + 本地会话面 | 思考权威在主机；群组不挡 P0 |
 | v0.3 | 2026-09-21 | 聊天窗口含本机 LLM 模式 | 聊天 ≠ 总是 Agent | 默认不上 VPS；REQ-011 |
 | v0.4 | 2026-09-21 | 改为本机 Agent 交接流 | 不是三个对等 mode | 本机=编排；远端=电脑 |
+| v0.5 | 2026-09-22 | v0 远端 runtime = OpenHands Agent Server | 用户锁定；不必 v0 自建 agent | 交接 UX 不变 |
 
 ## 1. 当前结论
 
-- 是否可以进入 PRD/UI/架构：**可以**。用户目标已澄清：SSH 自己的机器当 Agent PC；**本机 Agent** 规划/编排；需要电脑时**交接**给远端 `openbot-agent`；结果回流同一线程再收尾。**不是三个对等 mode。** 群组后置。
+- 是否可以进入 PRD/UI/架构：**可以**。用户目标已澄清：SSH 自己的机器当 Agent PC；**本机 Agent** 规划/编排；需要电脑时**交接**给远端 runtime（**v0 = OpenHands Agent Server**）；结果回流同一线程再收尾。**不是三个对等 mode。** 不要求 v0 自建 `openbot-agent`。群组后置。见 [runtime-decision-v0.md](../03-architecture/runtime-decision-v0.md)。
 - 是否需要竞品调研：**需要**，见 `../00-research/competitor-research.md`。
 - 是否需要用户确认：产品隐喻已锁定；本 Code PR 同时交付文档与可运行 MVP（用户明确要求“文档+MVP 一起成 PR”，视为实施授权）。
 - 当前最大风险：本环境可能没有用户真实 VPS；必须用本机 SSH 或直接 worker 证明 `uname -a` 在“远端”执行，并在文档中区分实验室主机与用户 VPS。
@@ -31,7 +32,7 @@
 
 | 需求 ID | 需求描述 | 用户/角色 | 场景 | 优先级 |
 |---------|----------|-----------|------|--------|
-| REQ-OPENBOT-001 | Bind：用 SSH 把一台 Linux 主机登记为“我的电脑”并 bootstrap **openbot-agent** | 个人用户 | 首次安装 | P0 |
+| REQ-OPENBOT-001 | Bind：用 SSH 把一台 Linux 主机登记为“我的电脑”并让远端 runtime 可达（**v0 = OpenHands Agent Server**） | 个人用户 | 首次安装 | P0 |
 | REQ-OPENBOT-002 | Persist：Agent 进程 + 任务/事件在笔记本断开后继续（含**远端 Agent 循环**） | 个人用户 | 合盖、断网、关 UI | P0 |
 | REQ-OPENBOT-003 | Remote：远端 Agent 循环 + shell / 工作区文件工具执行并回传 | 个人用户 | 聊天或 `openbot run` | P0 |
 | REQ-OPENBOT-004 | BYOK：本机 Agent 用笔记本 key；远端循环用主机 secrets | 个人用户 | 规划与交接 | P0 |
@@ -60,7 +61,7 @@
 - 角色权限：单用户，SSH 账号即该主机执行账号。无多租户。群组里每名 Agent 仍只在自己的 SSH 用户下动手；编排器无额外工具权。
 - 预发/线上差异：本产品是本地可安装应用，**没有托管 SaaS 预发**。共享环境发布不适用；“发布”= GitHub 默认分支上的可克隆提交。
 - 数据来源：主机 `uname`、workspace、任务事件；本机 Agent 调笔记本 BYOK，远端循环调主机 BYOK。
-- 数据写入和副作用：只有确认交接后才写远端 shell / workspace / `~/.openbot-agent`。本机规划只写线程缓存。
+- 数据写入和副作用：只有确认交接后才写远端 shell / workspace / 远端 runtime 落盘（v0 在 OH 侧；以后 native 才是 `~/.openbot-agent`）。本机规划只写线程缓存。
 
 ## 6. 边界、异常和成本保护
 

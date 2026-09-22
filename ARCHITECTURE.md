@@ -1,6 +1,6 @@
 # Architecture (index)
 
-OpenBot is a **local Agent** (think / orchestration companion) plus a **systemd-resident `openbot-agent` that has the computer**.
+OpenBot is a **local Agent** (think / orchestration companion) plus a **remote runtime that has the computer**. v0 remote runtime is **OpenHands Agent Server** (dependency / plugin, not a fork). A self-built `openbot-agent` is deferred. See [docs/openbot-mvp/03-architecture/runtime-decision-v0.md](docs/openbot-mvp/03-architecture/runtime-decision-v0.md).
 
 The user talks in **one thread**. Default: plan, clarify, and draft with the local Agent (laptop BYOK). When the work needs the host (shell, files, later browser), the local Agent **proposes a handoff**; the user confirms if policy requires it. The remote agent executes; events stream back into the **same thread**; the local Agent wraps up.
 
@@ -12,8 +12,10 @@ It is not a hosted Firecracker fleet. It does not provide desktop / pixel comput
 
 Canonical design:
 
+- **[docs/openbot-mvp/03-architecture/runtime-decision-v0.md](docs/openbot-mvp/03-architecture/runtime-decision-v0.md)** — v0 remote runtime lock
 - **[docs/openbot-mvp/03-architecture/architecture.md](docs/openbot-mvp/03-architecture/architecture.md)** — layers, handoff flow, process table, task lifecycle
-- **[docs/openbot-mvp/03-architecture/remote-agent.md](docs/openbot-mvp/03-architecture/remote-agent.md)** — `/v1/tasks` sketch, state machine, `handoff_proposal`
+- **[docs/openbot-mvp/03-architecture/remote-agent.md](docs/openbot-mvp/03-architecture/remote-agent.md)** — handoff UX, state machine, later native `/v1/tasks` sketch
+- **[docs/openbot-mvp/06-ops/openhands-agent-server-trial.md](docs/openbot-mvp/06-ops/openhands-agent-server-trial.md)** — OH Agent Server install / tunnel (PR#3)
 
 ```text
 [ One thread ]
@@ -21,7 +23,7 @@ Canonical design:
               │
               │  handoff_proposal  (confirm if policy says so)
               v
-        [ openbot-agent : has the computer ]
+        [ remote runtime v0=OpenHands Agent Server : has the computer ]
               │
               │  events back into the same thread
               v
@@ -29,5 +31,5 @@ Canonical design:
 ```
 
 - Bind / bootstrap: still SSH. SSH is not the command channel.
-- Persist: systemd-user → tmux → nohup (`openbot-worker` evolves to `openbot-agent`).
-- Group rooms (v0.5) must not block the single-process remote core.
+- Persist: v0 = `openhands-agent-server` (see trial ops). PR#1 still uses systemd-user → tmux → nohup `openbot-worker`. Native `openbot-agent` is later / optional.
+- Group rooms (v0.5) must not block the v0 handoff path.
