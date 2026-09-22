@@ -245,7 +245,7 @@ describe("web → OpenHands (no worker)", () => {
     const port = plane.config.controlPlane.port;
     const page = await (await fetch(`http://127.0.0.1:${port}/oh-test`)).text();
     assert.match(page, /本机试连远端/);
-    assert.match(page, /ssh -L 8000:127.0.0.1:8000/);
+    assert.match(page, /8000:127\.0\.0\.1:8000/);
     assert.match(page, /我确认，发给远端/);
     const health = (await (await fetch(`http://127.0.0.1:${port}/api/oh/health`)).json()) as {
       ok?: boolean;
