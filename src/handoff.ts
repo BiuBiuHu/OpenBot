@@ -1,9 +1,11 @@
 import {
   OpenHandsClient,
+  conversationSnippet,
+  isTerminalStatus,
   type CreateConversationInput,
   type OhConversation,
 } from "./oh-client.js";
-import type { HandoffProposal, OpenHandsConfig } from "./types.js";
+import type { AgentEvent, HandoffProposal, OpenHandsConfig } from "./types.js";
 
 export interface HandoffDelivery {
   proposal: HandoffProposal;
@@ -69,4 +71,77 @@ export async function deliverConfirmedHandoff(
   };
   const conversation = await client.createConversation(input, oh);
   return { proposal: normalized, conversation };
+}
+
+export interface HandoffTurnDeps {
+  client: OpenHandsClient;
+  oh?: OpenHandsConfig;
+  store: HandoffStore;
+  waitForConfirm: (proposal: HandoffProposal) => Promise<boolean>;
+  emit: (event: AgentEvent) => void;
+  pollMs?: number;
+  timeoutMs?: number;
+  threadId?: string;
+}
+
+/**
+ * Same-thread handoff: emit a confirm card, then create an OH conversation
+ * and poll events back as `thought` / `status`. Does not call the local LLM.
+ */
+export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promise<OhConversation | undefined> {
+  const proposal = deps.store.propose({ goal, threadId: deps.threadId });
+  deps.emit({
+    type: "handoff_proposal",
+    id: proposal.id,
+    goal: proposal.goal,
+    reason: proposal.reason,
+  });
+  const allowed = await deps.waitForConfirm(proposal);
+  if (!allowed) {
+    deps.store.deny(proposal.id);
+    deps.emit({ type: "error", message: "Handoff denied — nothing sent to the computer." });
+    deps.emit({ type: "done" });
+    return undefined;
+  }
+  deps.store.take(proposal.id);
+  deps.emit({ type: "status", text: `handoff ${proposal.id} → OpenHands` });
+  const delivery = await deliverConfirmedHandoff(deps.client, proposal, deps.oh);
+  const id = delivery.conversation.id;
+  deps.emit({
+    type: "status",
+    text: `remote conversation ${id} ${delivery.conversation.executionStatus}`,
+  });
+  if (!id) {
+    deps.emit({ type: "error", message: "OpenHands created a conversation without an id" });
+    deps.emit({ type: "done" });
+    return delivery.conversation;
+  }
+
+  const seen = new Set<string>();
+  const timeoutMs = deps.timeoutMs ?? 60_000;
+  const pollMs = deps.pollMs ?? 250;
+  const deadline = Date.now() + timeoutMs;
+  let last = delivery.conversation;
+  while (Date.now() < deadline) {
+    last = await deps.client.getConversation(id);
+    deps.emit({ type: "status", text: `remote ${last.executionStatus} (${last.status})` });
+    try {
+      const page = await deps.client.searchEvents(id, { limit: 50 });
+      const snippet = conversationSnippet(page);
+      if (snippet && !seen.has(snippet)) {
+        seen.add(snippet);
+        deps.emit({ type: "thought", text: snippet });
+      }
+    } catch {
+      /* events search is optional across OH versions */
+    }
+    if (isTerminalStatus(last.executionStatus)) break;
+    await sleep(pollMs);
+  }
+  deps.emit({ type: "done" });
+  return last;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

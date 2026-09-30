@@ -51,7 +51,7 @@
 
 PR#1 已完成：脚手架 → 00–06 文档 → 测试与 localhost SSH bind → 中文 Code PR。
 
-**Phase 1 薄切片（本代码 PR）**：`src/oh-client.ts`、`openbot oh health|conversations|run`、`POST /api/handoffs`。退出条件：mock HTTP 下探活 + 建会话 + 轮询终态；文档给出 `ssh -L` 手工路径。完整「拔掉隧道后任务仍到终态」靠真实 ECS，不在本实验室门禁。
+**Phase 1 薄切片**：adapter CLI + 交接 stub（#5）。**下一刀（本分支）**：Web 默认 This computer → 交接卡 → OH 事件回流；`serve` 可不 bind worker。完整本机规划仍属 Phase 2。
 
 | 阶段 | 任务 | 退出条件 | 失败处理 |
 |------|------|----------|----------|

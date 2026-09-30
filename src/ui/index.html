@@ -168,23 +168,23 @@
     <header>
       <div class="brand">
         <h1><span id="lamp" class="lamp"></span>OpenBot</h1>
-        <p>SSH your own machine. The agent gets a computer — you keep the keys.</p>
+        <p>SSH your own machine. The agent gets a computer — you keep the keys. <a href="/oh-test" style="color:var(--phosphor)">本机试连</a></p>
       </div>
       <div class="meta" id="meta">connecting…</div>
     </header>
     <main>
       <section id="log"></section>
       <aside>
-        <h2>Jobs on the host</h2>
-        <div id="jobs">They persist if you close the laptop.</div>
+        <h2>On this computer</h2>
+        <div id="jobs">Handed-off conversations persist on the host.</div>
       </aside>
     </main>
     <footer>
       <select id="mode" aria-label="Input mode">
-        <option value="chat">Chat (BYOK)</option>
+        <option value="handoff">This computer</option>
         <option value="run">Run on host</option>
       </select>
-      <textarea id="box" rows="2" placeholder="Ask what this machine is, or run uname -a on the host."></textarea>
+      <textarea id="box" rows="2" placeholder="Hand a goal to this computer. Confirm before anything runs remotely."></textarea>
       <button id="send" type="button">Send</button>
     </footer>
     <script>
@@ -214,21 +214,22 @@
       async function refreshStatus() {
         try {
           const s = await (await fetch("/api/status")).json();
-          lamp.classList.toggle("ok", !!s.ok);
+          const ohOk = !!(s.openhands && s.openhands.ok);
+          lamp.classList.toggle("ok", ohOk || !!s.ok);
           const host = s.host || {};
           const info = s.info;
+          const hostLine = host.hostname ? host.user + "@" + host.hostname : "no SSH bind (OH-only is ok)";
           meta.innerHTML =
-            escapeHtml(host.user + "@" + host.hostname) +
-            "<br>persist " + escapeHtml(s.persist || "unknown") +
-            (info ? "<br>" + escapeHtml(info.uname.string) : "") +
-            (s.llm && s.llm.hasKey ? "<br>model " + escapeHtml(s.llm.model) : "<br>no LLM key — use Run on host") +
+            escapeHtml(hostLine) +
             (s.openhands
               ? "<br>OH " +
-                (s.openhands.ok ? "ok" : "down") +
+                (ohOk ? "ok" : "down") +
                 " " +
                 escapeHtml(s.openhands.baseUrl || "")
-              : "") +
-            (s.error ? "<br class='err'>" + escapeHtml(s.error) : "");
+              : "<br>OH not configured") +
+            "<br>persist " + escapeHtml(s.persist || "unknown") +
+            (info ? "<br>" + escapeHtml(info.uname.string) : "") +
+            (s.error && !ohOk ? "<br class='err'>" + escapeHtml(s.error) : "");
         } catch (err) {
           lamp.classList.remove("ok");
           meta.textContent = String(err);
@@ -237,10 +238,27 @@
 
       async function refreshJobs() {
         try {
+          const conv = await (await fetch("/api/conversations")).json();
+          const items = conv.conversations || [];
+          if (items.length) {
+            jobsEl.innerHTML = items
+              .slice(0, 12)
+              .map((c) => {
+                return (
+                  '<div class="job"><strong>' +
+                  escapeHtml(c.status || c.execution_status) +
+                  "</strong> " +
+                  escapeHtml(c.id) +
+                  "</div>"
+                );
+              })
+              .join("");
+            return;
+          }
           const data = await (await fetch("/api/jobs")).json();
           const jobs = data.jobs || [];
           if (!jobs.length) {
-            jobsEl.textContent = "No jobs yet. They live on the remote host.";
+            jobsEl.textContent = "No remote conversations yet. Confirm a handoff to start one.";
             return;
           }
           jobsEl.innerHTML = jobs
@@ -296,43 +314,66 @@
         }
       }
 
+      function decideCard(kind, ev, extraLines) {
+        const actions = document.createElement("div");
+        const yes = document.createElement("button");
+        yes.className = "yes";
+        yes.textContent = kind === "handoff" ? "Confirm handoff" : "Approve";
+        const no = document.createElement("button");
+        no.className = "no";
+        no.textContent = kind === "handoff" ? "Not now" : "Deny";
+        actions.append(yes, no);
+        const card = add(
+          "approval",
+          kind === "handoff" ? "handoff to this computer" : "approval gate",
+          extraLines,
+          actions,
+        );
+        const decide = async (allow) => {
+          yes.disabled = no.disabled = true;
+          const url = kind === "handoff" ? "/api/handoffs/" + ev.id : "/api/approve";
+          await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: ev.id, allow }),
+          });
+          card.querySelector("h3").textContent = allow
+            ? kind === "handoff"
+              ? "handoff confirmed"
+              : "approved"
+            : kind === "handoff"
+              ? "handoff denied"
+              : "denied";
+        };
+        yes.onclick = () => decide(true);
+        no.onclick = () => decide(false);
+      }
+
       async function send() {
         const text = box.value.trim();
         if (!text) return;
         box.value = "";
         const isRun = mode.value === "run";
         add("user", isRun ? "run on host" : "you", text);
-        const out = add("bot", isRun ? "host" : "openbot", "");
+        const out = add("bot", isRun ? "host" : "remote", "");
         const pre = out.querySelector("pre");
         sendBtn.disabled = true;
         try {
-          await consumeSse(isRun ? "/api/run" : "/api/chat", isRun ? { command: text } : { message: text }, (ev) => {
-            if (ev.type === "token" || ev.type === "output") {
+          const url = isRun ? "/api/run" : "/api/handoffs/stream";
+          const payload = isRun ? { command: text } : { goal: text };
+          await consumeSse(url, payload, (ev) => {
+            if (ev.type === "token" || ev.type === "thought" || ev.type === "output") {
+              if (pre.textContent) pre.textContent += "\n";
               pre.textContent += ev.text || ev.chunk || "";
               logEl.scrollTop = logEl.scrollHeight;
+            } else if (ev.type === "status") {
+              add("sys", "remote", ev.text);
             } else if (ev.type === "tool_start") {
               add("sys", "tool", ev.name + " " + JSON.stringify(ev.args));
+            } else if (ev.type === "handoff_proposal") {
+              decideCard("handoff", ev, ev.reason + "\n" + ev.goal);
             } else if (ev.type === "approval") {
-              const actions = document.createElement("div");
-              const yes = document.createElement("button");
-              yes.className = "yes";
-              yes.textContent = "Approve";
-              const no = document.createElement("button");
-              no.className = "no";
-              no.textContent = "Deny";
-              actions.append(yes, no);
-              const card = add("approval", "approval gate", ev.reason + "\n" + ev.command, actions);
-              const decide = async (allow) => {
-                yes.disabled = no.disabled = true;
-                await fetch("/api/approve", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ id: ev.id, allow }),
-                });
-                card.querySelector("h3").textContent = allow ? "approved" : "denied";
-              };
-              yes.onclick = () => decide(true);
-              no.onclick = () => decide(false);
+              decideCard("approval", ev, ev.reason + "\n" + ev.command);
             } else if (ev.type === "error") {
               add("sys err", "error", ev.message);
             } else if (ev.type === "done") {
@@ -361,7 +402,7 @@
       add(
         "sys",
         "ready",
-        "This UI is a remote control. Commands execute on your bound Linux host, not this browser.\nTry Run on host → uname -a",
+        "One thread: type a goal, confirm the handoff card, events come back from OpenHands on this computer.\nRun on host is the old worker shell. Tunnel first: ssh -L 8000:127.0.0.1:8000",
       );
     </script>
   </body>

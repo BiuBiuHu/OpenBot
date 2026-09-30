@@ -4,11 +4,11 @@ import path from "node:path";
 import { runAgentTurn } from "./agent.js";
 import { classifyCommand } from "./approval.js";
 import { loadConfig } from "./config.js";
-import { deliverConfirmedHandoff, HandoffStore } from "./handoff.js";
-import { OpenHandsClient } from "./oh-client.js";
+import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "./handoff.js";
+import { conversationSnippet, OpenHandsClient } from "./oh-client.js";
 import { repoRoot } from "./paths.js";
 import { ensureWorkerAccess, type TunnelHandle } from "./tunnel.js";
-import type { AgentEvent, ApprovalRequest, ChatMessage, OpenBotConfig } from "./types.js";
+import type { AgentEvent, ApprovalRequest, ChatMessage, HandoffProposal, OpenBotConfig } from "./types.js";
 import { WorkerClient } from "./worker-client.js";
 
 interface PendingApproval {
@@ -19,19 +19,21 @@ interface PendingApproval {
 export interface ControlPlane {
   server: http.Server;
   config: OpenBotConfig;
-  worker: WorkerClient;
+  worker?: WorkerClient;
   tunnel?: TunnelHandle;
   close: () => Promise<void>;
 }
 
 export async function startControlPlane(
   config: OpenBotConfig,
-  opts: { skipTunnel?: boolean; worker?: WorkerClient } = {},
+  opts: { skipTunnel?: boolean; worker?: WorkerClient; allowWithoutWorker?: boolean } = {},
 ): Promise<ControlPlane> {
   let tunnel: TunnelHandle | undefined;
   let worker = opts.worker;
   if (!worker) {
-    if (opts.skipTunnel) {
+    if (opts.allowWithoutWorker) {
+      worker = undefined;
+    } else if (opts.skipTunnel) {
       worker = WorkerClient.fromPort(config.worker.localPort, config.worker.token);
     } else {
       const access = await ensureWorkerAccess(config);
@@ -41,10 +43,12 @@ export async function startControlPlane(
   }
   const approvals = new Map<string, PendingApproval>();
   const handoffs = new HandoffStore();
+  const handoffWaiters = new Map<string, (allow: boolean) => void>();
   const oh = OpenHandsClient.fromConfig(config);
   let history: ChatMessage[] = [];
 
   const uiFile = path.join(repoRoot(), "src/ui/index.html");
+  const trialFile = path.join(repoRoot(), "src/ui/oh-test.html");
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
@@ -54,29 +58,126 @@ export async function startControlPlane(
         res.end(fs.readFileSync(uiFile));
         return;
       }
+      if (req.method === "GET" && (url.pathname === "/oh-test" || url.pathname === "/oh-test.html")) {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(fs.readFileSync(trialFile));
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/api/oh/health") {
+        const probe = await oh.health();
+        await json(res, {
+          ok: probe.ok,
+          baseUrl: config.openhands.baseUrl,
+          hasSessionKey: Boolean(config.openhands.sessionApiKey),
+          raw: probe.raw,
+          hint: probe.ok
+            ? undefined
+            : "在笔记本上先开：ssh -L 8000:127.0.0.1:8000 user@host，并把 OPENHANDS_API_KEY 写入 ~/.openbot/.env",
+        });
+        return;
+      }
       if (req.method === "GET" && url.pathname === "/api/status") {
         await json(res, await statusPayload(config, worker, oh));
         return;
       }
       if (req.method === "GET" && url.pathname === "/api/jobs") {
+        if (!worker) {
+          await json(res, { ok: true, jobs: [], error: "worker not bound" });
+          return;
+        }
         await json(res, { ok: true, jobs: await worker.listJobs() });
         return;
       }
       if (req.method === "GET" && url.pathname.startsWith("/api/jobs/")) {
+        if (!worker) {
+          await json(res, { ok: false, error: "worker not bound" }, 404);
+          return;
+        }
         const id = url.pathname.split("/")[3];
         await json(res, await worker.getJob(id));
         return;
       }
+      if (req.method === "GET" && url.pathname === "/api/conversations") {
+        try {
+          const page = await oh.listConversations({ limit: 20 });
+          await json(res, {
+            ok: true,
+            conversations: page.items.map((c) => ({
+              id: c.id,
+              execution_status: c.executionStatus,
+              status: c.status,
+            })),
+          });
+        } catch (err) {
+          await json(res, {
+            ok: false,
+            conversations: [],
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        return;
+      }
+      if (req.method === "GET" && url.pathname.startsWith("/api/conversations/")) {
+        const id = url.pathname.split("/")[3];
+        if (!id) {
+          await json(res, { ok: false, error: "conversation id required" }, 400);
+          return;
+        }
+        try {
+          const conv = await oh.getConversation(id);
+          let snippet = "";
+          try {
+            snippet = conversationSnippet(await oh.searchEvents(id, { limit: 50 }));
+          } catch {
+            /* events optional */
+          }
+          await json(res, {
+            ok: true,
+            conversation: {
+              id: conv.id,
+              execution_status: conv.executionStatus,
+              status: conv.status,
+            },
+            snippet,
+          });
+        } catch (err) {
+          await json(res, { ok: false, error: err instanceof Error ? err.message : String(err) }, 404);
+        }
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/api/handoffs/stream") {
+        const body = await readJson(req);
+        const goal = String(body.goal || body.message || "").trim();
+        if (!goal) {
+          await json(res, { ok: false, error: "goal required" }, 400);
+          return;
+        }
+        await streamSse(req, res, async (emit) => {
+          await runHandoffTurn(goal, {
+            client: oh,
+            oh: config.openhands,
+            store: handoffs,
+            emit,
+            timeoutMs: typeof body.timeout_ms === "number" ? body.timeout_ms : 60_000,
+            pollMs: typeof body.poll_ms === "number" ? body.poll_ms : 250,
+            waitForConfirm: (proposal: HandoffProposal) =>
+              new Promise<boolean>((resolve) => {
+                handoffWaiters.set(proposal.id, resolve);
+              }),
+          });
+        });
+        return;
+      }
       if (req.method === "POST" && url.pathname === "/api/handoffs") {
         const body = await readJson(req);
-        const result = await handleHandoff(body, undefined, handoffs, oh, config);
+        const result = await handleHandoff(body, undefined, handoffs, oh, config, handoffWaiters);
         await json(res, result, result.ok ? 200 : 400);
         return;
       }
       if (req.method === "POST" && url.pathname.startsWith("/api/handoffs/")) {
         const id = url.pathname.split("/")[3];
         const body = await readJson(req);
-        const result = await handleHandoff(body, id, handoffs, oh, config);
+        const result = await handleHandoff(body, id, handoffs, oh, config, handoffWaiters);
         await json(res, result, result.ok ? 200 : 400);
         return;
       }
@@ -100,8 +201,13 @@ export async function startControlPlane(
           await json(res, { ok: false, error: "command required" }, 400);
           return;
         }
+        if (!worker) {
+          await json(res, { ok: false, error: "worker not bound — use This computer (OH handoff) or `openbot bind`" }, 400);
+          return;
+        }
+        const boundWorker = worker;
         await streamSse(req, res, async (emit) => {
-          await runDirect(command, worker, approvals, emit);
+          await runDirect(command, boundWorker, approvals, emit);
         });
         return;
       }
@@ -112,9 +218,14 @@ export async function startControlPlane(
           await json(res, { ok: false, error: "message required" }, 400);
           return;
         }
+        if (!worker) {
+          await json(res, { ok: false, error: "worker not bound — local BYOK chat still uses the PR#1 worker tools" }, 400);
+          return;
+        }
+        const boundWorker = worker;
         await streamSse(req, res, async (emit) => {
           const next = await runAgentTurn(message, {
-            worker,
+            worker: boundWorker,
             llm: loadConfig().llm,
             history,
             emit,
@@ -161,12 +272,20 @@ async function handleHandoff(
   store: HandoffStore,
   oh: OpenHandsClient,
   config: OpenBotConfig,
+  waiters?: Map<string, (allow: boolean) => void>,
 ): Promise<Record<string, unknown>> {
   const allow = body.allow;
   const goal = String(body.goal || "").trim();
   const reason = String(body.reason || "");
   const threadId = String(body.thread_id || body.threadId || "chat_default");
   const id = pathId || (body.id ? String(body.id) : "");
+
+  if (id && waiters?.has(id) && (allow === true || allow === false || allow === "true" || allow === "false")) {
+    const waiter = waiters.get(id);
+    waiters.delete(id);
+    waiter?.(allow === true || allow === "true");
+    return { ok: true, stream: true, allow: allow === true || allow === "true" };
+  }
 
   if (allow === false) {
     const denied = id ? store.deny(id) : undefined;
@@ -207,22 +326,28 @@ async function handleHandoff(
   return { ok: true, needs_confirm: true, proposal };
 }
 
-async function statusPayload(config: OpenBotConfig, worker: WorkerClient, oh: OpenHandsClient) {
-  const healthy = await worker.health();
+async function statusPayload(config: OpenBotConfig, worker: WorkerClient | undefined, oh: OpenHandsClient) {
+  const healthy = worker ? await worker.health() : false;
   let info = null;
   let error: string | undefined;
-  if (healthy) {
+  if (healthy && worker) {
     try {
       info = await worker.info();
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     }
-  } else {
+  } else if (worker) {
     error = "worker not reachable — is the SSH tunnel up? run `npx openbot bind` then `npx openbot serve`.";
   }
   const ohProbe = await oh.health();
+  if (!ohProbe.ok && !healthy) {
+    error =
+      error ||
+      ((ohProbe.raw as { error?: string })?.error ||
+        "OpenHands not reachable — ssh -L 8000:127.0.0.1:8000 then retry. Worker bind is optional for this path.");
+  }
   return {
-    ok: healthy,
+    ok: ohProbe.ok || healthy,
     slogan: "SSH your own machine. The agent gets a computer — you keep the keys.",
     host: {
       name: config.host.name,

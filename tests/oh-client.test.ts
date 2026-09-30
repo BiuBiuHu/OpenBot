@@ -217,6 +217,127 @@ describe("control plane handoff stub", () => {
   });
 });
 
+describe("web → OpenHands (no worker)", () => {
+  let plane: Awaited<ReturnType<typeof startControlPlane>>;
+  let mock: Awaited<ReturnType<typeof startMockOhServer>>;
+  const prevHome = process.env.OPENBOT_HOME;
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "openbot-oh-web-"));
+
+  before(async () => {
+    process.env.OPENBOT_HOME = home;
+    mock = await startMockOhServer({ sessionKey: "web-key" });
+    const config = defaultConfig();
+    config.controlPlane.port = await freePort();
+    config.openhands.baseUrl = mock.baseUrl;
+    config.openhands.sessionApiKey = "web-key";
+    plane = await startControlPlane(config, { skipTunnel: true, allowWithoutWorker: true });
+  });
+
+  after(async () => {
+    await plane?.close();
+    await mock?.stop();
+    if (prevHome === undefined) delete process.env.OPENBOT_HOME;
+    else process.env.OPENBOT_HOME = prevHome;
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it("TC-OH-010: laptop trial page /oh-test and /api/oh/health", async () => {
+    const port = plane.config.controlPlane.port;
+    const page = await (await fetch(`http://127.0.0.1:${port}/oh-test`)).text();
+    assert.match(page, /本机试连远端/);
+    assert.match(page, /8000:127\.0\.0\.1:8000/);
+    assert.match(page, /我确认，发给远端/);
+    const health = (await (await fetch(`http://127.0.0.1:${port}/api/oh/health`)).json()) as {
+      ok?: boolean;
+      hasSessionKey?: boolean;
+      baseUrl?: string;
+    };
+    assert.equal(health.ok, true);
+    assert.equal(health.hasSessionKey, true);
+    assert.equal(health.baseUrl, mock.baseUrl);
+    assert.ok(!JSON.stringify(health).includes("web-key"));
+
+    const created = (await (
+      await fetch(`http://127.0.0.1:${port}/api/handoffs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goal: "laptop trial ping", allow: true }),
+      })
+    ).json()) as { ok?: boolean; conversation?: { id: string } };
+    assert.equal(created.ok, true);
+    const id = created.conversation!.id;
+    const snap = (await (await fetch(`http://127.0.0.1:${port}/api/conversations/${id}`)).json()) as {
+      ok?: boolean;
+      conversation?: { id: string };
+      snippet?: string;
+    };
+    assert.equal(snap.ok, true);
+    assert.equal(snap.conversation?.id, id);
+  });
+
+  it("TC-OH-008: serve without bind; page is This computer; status.ok follows OH", async () => {
+    const port = plane.config.controlPlane.port;
+    const html = await (await fetch(`http://127.0.0.1:${port}/`)).text();
+    assert.match(html, /This computer/);
+    assert.match(html, /handoffs\/stream/);
+    const status = (await (await fetch(`http://127.0.0.1:${port}/api/status`)).json()) as {
+      ok?: boolean;
+      openhands?: { ok?: boolean };
+    };
+    assert.equal(status.openhands?.ok, true);
+    assert.equal(status.ok, true);
+  });
+
+  it("TC-OH-009: stream proposes handoff; confirm creates conversation and returns snippet", async () => {
+    const port = plane.config.controlPlane.port;
+    const res = await fetch(`http://127.0.0.1:${port}/api/handoffs/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ goal: "list workspace", timeout_ms: 3000, poll_ms: 20 }),
+    });
+    assert.equal(res.status, 200);
+    assert.ok(res.body);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    const events: Array<Record<string, unknown>> = [];
+    let buf = "";
+    let confirmed = false;
+    const deadline = Date.now() + 8000;
+    while (Date.now() < deadline) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const parts = buf.split("\n\n");
+      buf = parts.pop() || "";
+      for (const part of parts) {
+        const line = part.split("\n").find((l) => l.startsWith("data: "));
+        if (!line) continue;
+        const ev = JSON.parse(line.slice(6)) as Record<string, unknown>;
+        events.push(ev);
+        if (ev.type === "handoff_proposal" && !confirmed) {
+          confirmed = true;
+          const allow = await fetch(`http://127.0.0.1:${port}/api/handoffs/${ev.id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ allow: true }),
+          });
+          assert.equal(allow.status, 200);
+        }
+      }
+      if (events.some((e) => e.type === "done")) break;
+    }
+    assert.ok(events.some((e) => e.type === "handoff_proposal"));
+    assert.ok(events.some((e) => e.type === "thought"));
+    assert.ok(events.some((e) => e.type === "done"));
+    const thought = events.find((e) => e.type === "thought");
+    assert.match(String(thought?.text || ""), /list workspace/);
+    const listed = (await (await fetch(`http://127.0.0.1:${port}/api/conversations`)).json()) as {
+      conversations: Array<{ id: string }>;
+    };
+    assert.ok(listed.conversations.length >= 1);
+  });
+});
+
 describe("HandoffStore", () => {
   it("propose / take / deny", () => {
     const store = new HandoffStore();

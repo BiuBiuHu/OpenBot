@@ -49,6 +49,16 @@ npx openbot oh run '在工作区写一份 uname 记录'
 
 未确认不创建远端会话。没有第三个聊天 mode。
 
+## 3.1 Web 遥控台（先连远端）
+
+```bash
+# 只要隧道 + session key。不必先 bind worker。
+npx openbot serve
+# 打开 http://127.0.0.1:3847/
+```
+
+默认输入是 **This computer**：发一条 goal → 同一线程出交接卡 → 确认后 `POST /api/handoffs/stream` 创建 OH conversation，事件标 `remote` 回流。`Run on host` 仍是 PR#1 worker 直执逃生口。本机规划 Agent 仍属 Phase 2，这刀先把 Web 接到远端。
+
 ## 4. 代码位置
 
 | 文件 | 职责 |
@@ -61,7 +71,28 @@ npx openbot oh run '在工作区写一份 uname 记录'
 
 类型按 OpenHands Agent Server OpenAPI 对齐，但本地自持、字段缺失不崩。
 
-## 5. 手工打真实 ECS
+## 5. 在你自己的笔记本上试（推荐）
+
+不要在云 Agent 里填真实 IP / PEM。在**你的电脑**上：
+
+```bash
+# 终端 A：隧道
+ssh -i <SSH_IDENTITY> -L 8000:127.0.0.1:8000 <USER>@<ECS_HOST>
+
+# 终端 B：本机壳
+cd /path/to/OpenBot
+# ~/.openbot/.env 写 OPENHANDS_BASE_URL 与 OPENHANDS_API_KEY
+npx openbot serve
+```
+
+浏览器打开 **http://127.0.0.1:3847/oh-test**（会话台首页也有「本机试连」）。
+
+1. 点 **探活 OpenHands** → 应绿灯，`{"status":"ok"}`。
+2. 改一条 goal，点 **我确认，发给远端** → 创建 conversation 并轮询 snippet。
+
+页面只经本机壳 `127.0.0.1:3847` 转发，不让浏览器直打 8000（避免 CORS，key 也不进页面）。
+
+## 6. 手工打真实 ECS（CLI）
 
 1. 主机按 [试装笔记](openhands-agent-server-trial.md) 跑着 `openhands-agent-server`。
 2. 笔记本 `ssh -L 8000:127.0.0.1:8000 …`。

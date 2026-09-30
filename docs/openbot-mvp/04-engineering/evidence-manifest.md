@@ -6,13 +6,15 @@
 |------|------|----------|----------|------|
 | v0.1 | 2026-09-20 | 初始清单 | 实施前占位 | — |
 | v0.2 | 2026-09-20 | 回填命令结果 | 验证完成 | 与 test-report 对齐 |
+| v0.3 | 2026-09-22 | OH adapter mock 证据 | Phase 1 | npm test 19/19 |
 
 ## 1. 当前结论
 
 - 保存点：`8fea153` 脚手架；文档提交 `0690587`；本轮修复在后续 commit。
-- 最小充分测试集：`npm test` → **9 passed**。
+- 最小充分测试集：`npm test` → **19 passed**（含 OH adapter mock）。
 - 产品路径：localhost SSH `bind` → `run 'uname -a'` → CLI 退出后 worker `/health` 仍 ok。
-- 未执行：真实公网 VPS、真实付费模型、SaaS 预发。
+- Phase 1：`openbot oh health` / `oh run` / `POST /api/handoffs` 对 **mock** Agent Server 通过。
+- 未执行：真实公网 VPS、真实付费模型、真实 tunneled OH、SaaS 预发。
 
 ## 2. 证据表
 
@@ -26,6 +28,7 @@
 | EV-006 | REQ-OPENBOT-004 | 无 key `runAgentTurn` | 通过 | e2e-local | 不打真实供应商 |
 | EV-007 | REQ-OPENBOT-006 | README/架构 | 通过 | 文档仅在拒绝句出现 Firecracker | |
 | EV-008 | REQ-OPENBOT-003 | `GET /` 与 `/api/status` | 通过 | curl HTML + JSON | |
+| EV-009 | BL-016 | mock OH `health` / create / poll / CLI `oh run` / `/api/handoffs` | 通过 | tests/oh-client.test.ts | 真实 ECS 隧道为手工路径 |
 
 ## 3. 环境
 
