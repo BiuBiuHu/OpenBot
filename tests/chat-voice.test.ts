@@ -11,8 +11,10 @@ import {
   voiceCodingReady,
   voiceFromDocument,
   voiceFromSearch,
+  voiceLinkFailure,
   voiceNow,
 } from "../src/chat-voice.js";
+import { fakeSlowHandoffClient, installFakeClock } from "../src/eval-set.js";
 import { runHandoffTurn, HandoffStore } from "../src/handoff.js";
 import { OpenHandsClient } from "../src/oh-client.js";
 import { runThreadTurn } from "../src/thread.js";
@@ -489,5 +491,122 @@ describe("chat voice", () => {
     const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
     assert.match(tokens, /没读成/);
     assert.doesNotMatch(tokens, /没在时限|再说一次/);
+  });
+
+  it("TC-DOC-009: a repo homepage is voiced as a repo, not a chapter", () => {
+    const shown = voiceFromDocument({
+      userMessage: "那这个项目 https://github.com/bojieli/ai-agent-book 讲了什么?",
+      language: "zh-CN",
+      document: {
+        title: "深入理解 AI Agent：设计原理与工程实践",
+        text:
+          "# 深入理解 AI Agent：设计原理与工程实践\n\n本书围绕 Agent = LLM + 上下文 + 工具，把智能体从原理讲到工程实战。\n",
+        url: "https://github.com/bojieli/ai-agent-book",
+        kind: "repo",
+      },
+    });
+    assert.match(shown.text, /我看过了/);
+    assert.match(shown.text, /仓库/);
+    assert.match(shown.text, /深入理解/);
+    assert.doesNotMatch(shown.text, /这一章/);
+    assert.doesNotMatch(shown.text, /模型选型可参考/);
+    const missing = voiceFromDocument({
+      userMessage: "那这个项目 https://github.com/bojieli/ai-agent-book 讲了什么?",
+      language: "zh-CN",
+      document: undefined,
+    });
+    assert.match(missing.text, /不是一份文档/);
+    assert.doesNotMatch(missing.text, /这一章|模型选型可参考/);
+  });
+
+  it("TC-VOICE-014: 这是啥? goes to the computer, not the coding canned line", async () => {
+    assert.equal(isVagueCodingAsk("这是啥?"), false);
+    assert.equal(isCodingAsk("这是啥?"), false);
+    assert.equal(needsLookup("这是啥?"), false);
+    const intro = voiceChatReply({
+      userMessage: "这是啥?",
+      remoteText: INTRO,
+      outcome: "succeeded",
+      language: "zh-CN",
+    });
+    assert.doesNotMatch(intro.text, /先不背说明书/);
+    assert.doesNotMatch(intro.text, /你具体想让这台电脑做什么/);
+    assert.doesNotMatch(intro.text, /改哪个文件/);
+    const mock = await startMockOhServer({
+      sessionKey: "voice-key",
+      replyFor: () => INTRO,
+    });
+    try {
+      const events: AgentEvent[] = [];
+      const result = await runThreadTurn("这是啥?", {
+        client: new OpenHandsClient(mock.baseUrl, "voice-key"),
+        store: new HandoffStore(),
+        emit: (e) => events.push(e),
+        forceHandoff: true,
+        pollMs: 20,
+        language: "zh-CN",
+        searchWeb: async () => {
+          throw new Error("这是啥 must not search");
+        },
+      });
+      assert.equal(result.path, "handoff");
+      assert.ok(mock.creates.length >= 1);
+      const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+      assert.doesNotMatch(tokens, /先不背说明书/);
+      assert.doesNotMatch(tokens, /你具体想让这台电脑做什么/);
+    } finally {
+      await mock.stop();
+    }
+  });
+
+  it("TC-HANDOFF-060: a fake client past 60s then finished returns remote text", async () => {
+    const clock = installFakeClock();
+    const client = fakeSlowHandoffClient({
+      conversationId: "fake-slow",
+      remoteText: "仓库已经下好了。这是一本讲智能体设计的开源书。",
+      runningPolls: 4,
+      tickMs: 20_000,
+      clock,
+    });
+    const events: AgentEvent[] = [];
+    try {
+      const last = await runHandoffTurn(
+        "https://github.com/bojieli/ai-agent-book 下载到本地，然后告诉我，这个仓库的作用",
+        {
+          client,
+          store: new HandoffStore(),
+          emit: (e) => events.push(e),
+          pollMs: 1,
+          language: "zh-CN",
+        },
+      );
+      assert.equal(last?.status, "succeeded");
+      assert.ok(clock.now() >= 1_000_000 + 80_000);
+    } finally {
+      clock.restore();
+    }
+    const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+    assert.match(tokens, /仓库已经下好了/);
+    assert.doesNotMatch(tokens, /没在时限|再说一次|did not finish in time/);
+  });
+
+  it("TC-HANDOFF-LINK: a broken SSH/HTTP link is one sentence about the link", async () => {
+    const client = {
+      async createConversation() {
+        throw new Error("ECONNREFUSED");
+      },
+    } as unknown as OpenHandsClient;
+    const events: AgentEvent[] = [];
+    await runHandoffTurn("uname -a", {
+      client,
+      store: new HandoffStore(),
+      emit: (e) => events.push(e),
+      language: "zh-CN",
+    });
+    const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+    assert.match(tokens, /连不上|连接/);
+    assert.doesNotMatch(tokens, /没在时限|再说一次/);
+    const line = voiceLinkFailure({ language: "zh-CN" });
+    assert.doesNotMatch(line.text, /没在时限/);
   });
 });

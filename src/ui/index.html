@@ -19,13 +19,17 @@
         --sans: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
       }
       * { box-sizing: border-box; }
-      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; }
       body {
         font-family: var(--sans);
-        display: grid;
-        grid-template-rows: auto 1fr auto;
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
         min-height: 100dvh;
+        overflow: hidden;
       }
+      header { flex: 0 0 auto; }
+      #banner { flex: 0 0 auto; }
       header {
         display: flex;
         justify-content: space-between;
@@ -94,18 +98,31 @@
         line-height: 1.55;
       }
       main {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 36rem;
-        align-items: start;
+        flex: 1 1 0;
         min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(18rem, 1fr);
+        grid-template-rows: minmax(0, 1fr);
+        align-items: stretch;
+        overflow: hidden;
+      }
+      .chat-col {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        height: 100%;
+        overflow: hidden;
       }
       @media (max-width: 840px) {
-        main { grid-template-columns: 1fr; }
+        main { grid-template-columns: minmax(0, 1fr); }
         aside { display: none; }
       }
       #log {
+        flex: 1 1 0;
+        min-height: 0;
         overflow: auto;
-        padding: 1.1rem 1.4rem 2rem;
+        padding: 1.1rem 1.4rem 1rem;
         display: flex;
         flex-direction: column;
         align-items: stretch;
@@ -258,16 +275,23 @@
       .approval button.yes { border-color: var(--phosphor); color: var(--phosphor); }
       .approval button.no { border-color: var(--danger); color: var(--danger); }
       aside {
-        align-self: start;
+        display: flex;
+        flex-direction: column;
+        align-self: stretch;
         position: relative;
         top: auto;
-        width: 36rem;
+        width: auto;
+        min-width: 0;
+        min-height: 0;
+        height: 100%;
         padding: 0.7rem 1.1rem 1rem 0.35rem;
-        overflow: visible;
-        background: transparent;
+        overflow: hidden;
+        background: var(--bg);
         border: none;
+        border-left: 1px solid var(--line);
       }
       aside h2 {
+        flex: 0 0 auto;
         margin: 0 0 0.45rem;
         font-size: 0.78rem;
         letter-spacing: 0.1em;
@@ -294,8 +318,10 @@
       .job strong { color: var(--phosphor); }
       .desk-wrap {
         position: relative;
+        flex: 1 1 0;
+        min-height: 0;
         width: 100%;
-        aspect-ratio: 1280 / 800;
+        height: auto;
         border: 1px solid var(--line);
         border-radius: 0;
         background: #111;
@@ -346,7 +372,9 @@
       }
       .desk-wrap.max .desk-close { display: block; }
       .desk-missing {
-        padding: 0.7rem 0.15rem;
+        position: absolute;
+        inset: 0;
+        padding: 0.7rem 0.8rem;
         color: var(--amber);
         font-size: 0.88rem;
         line-height: 1.45;
@@ -407,7 +435,9 @@
         font-size: 0.88rem;
       }
       #banner.show { display: block; }
-      footer {
+      .chat-col footer {
+        flex: 0 0 auto;
+        margin-top: auto;
         border-top: 1px solid var(--line);
         padding: 0.8rem 1.2rem 1rem;
         display: grid;
@@ -443,8 +473,14 @@
     </header>
     <div id="banner"></div>
     <main>
-      <section id="log"></section>
-      <aside>
+      <section class="chat-col" id="chat-col">
+        <section id="log"></section>
+        <footer>
+          <textarea id="box" rows="2" placeholder="发给这台电脑，直接开始对话。"></textarea>
+          <button id="send" type="button">Send</button>
+        </footer>
+      </section>
+      <aside class="desk-col" id="desk-col">
         <h2>电脑 <button type="button" id="desk-max-btn" aria-pressed="false">放大</button></h2>
         <div class="desk-wrap" id="desk-wrap">
           <button type="button" id="desk-close" class="desk-close" hidden>收起</button>
@@ -453,10 +489,6 @@
         </div>
       </aside>
     </main>
-    <footer>
-      <textarea id="box" rows="2" placeholder="发给这台电脑，直接开始对话。"></textarea>
-      <button id="send" type="button">Send</button>
-    </footer>
     <div id="settings" class="sheet">
       <form id="settings-form">
         <h2>Connect your machine</h2>

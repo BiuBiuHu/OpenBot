@@ -31,3 +31,6 @@ Cases that came from the live laptop:
 | `read-public-doc` | 把「看看 … 这个文档讲了什么」当电脑任务或用自编摘录过关 |
 | `read-public-doc-exact` | 现场原句「… 这个讲的是什么?」被搜成 HTTPS |
 | `change-code-bare` | 「改代码」回说明书甩锅 |
+| `repo-is-not-a-chapter` | 仓库首页 URL 被当成某一章，答「模型选型可参考这篇指南」 |
+| `whats-this-is-computer` | 「这是啥?」回含糊改代码套话 |
+| `handoff-waits-until-terminal` | 本地 60s 放弃，回「没在时限里跑完」，远端其实还在跑 |

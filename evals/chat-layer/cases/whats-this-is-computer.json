@@ -1,0 +1,23 @@
+{
+  "id": "whats-this-is-computer",
+  "title": "这是啥? 交给电脑，不是含糊改代码套话",
+  "userMessage": "这是啥?",
+  "remote": {
+    "status": "finished",
+    "conversationId": "eval-whats-this-is-computer",
+    "rawReply": "我是 OpenHands，一个可以操作计算机来帮你完成软件工程任务的 AI 智能体。我目前的工作目录是 workspace/project。查阅 <https://docs.openhands.dev/>。"
+  },
+  "expect": {
+    "remoteOutcome": "succeeded",
+    "shownMustNotMatch": [
+      "先不背说明书",
+      "你具体想让这台电脑做什么",
+      "改哪个文件",
+      "我是 OpenHands",
+      "workspace/project",
+      "可以操作计算机"
+    ],
+    "maxSentences": 3,
+    "maxChars": 120
+  }
+}

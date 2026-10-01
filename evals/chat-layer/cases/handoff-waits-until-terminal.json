@@ -1,0 +1,27 @@
+{
+  "id": "handoff-waits-until-terminal",
+  "title": "远端超过 60s 仍非终态、随后完成时，回远端正文而不是本地时限套话",
+  "userMessage": "https://github.com/bojieli/ai-agent-book 下载到本地，然后告诉我，这个仓库的作用",
+  "handoffWaitUntilTerminal": true,
+  "remote": {
+    "status": "finished",
+    "conversationId": "eval-handoff-waits-until-terminal",
+    "rawReply": "仓库已经下好了。这是一本讲智能体设计的开源书。"
+  },
+  "expect": {
+    "remoteOutcome": "succeeded",
+    "shownMustNotMatch": [
+      "没在时限",
+      "再说一次",
+      "did not finish in time",
+      "conversation timed out",
+      "先不背说明书"
+    ],
+    "shownMustMatch": [
+      "仓库已经下好了",
+      "智能体"
+    ],
+    "maxSentences": 3,
+    "maxChars": 160
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "id": "repo-is-not-a-chapter",
+  "title": "仓库首页 URL 不是一份 markdown，不得编出某一章",
+  "userMessage": "那这个项目 https://github.com/bojieli/ai-agent-book 讲了什么?",
+  "documentRequired": true,
+  "remote": {
+    "status": "timeout",
+    "conversationId": "eval-repo-is-not-a-chapter",
+    "rawReply": "我看过了。模型选型可参考这篇指南。"
+  },
+  "expect": {
+    "remoteOutcome": "timeout",
+    "documentRequired": true,
+    "shownMustNotMatch": [
+      "模型选型可参考",
+      "这篇指南",
+      "这一章",
+      "用户记忆和知识库",
+      "没在时限",
+      "再说一次",
+      "网上查过了",
+      "HTTPS",
+      "我是 OpenHands",
+      "workspace/project"
+    ],
+    "shownMustMatch": [
+      "仓库|不是一份文档|深入理解"
+    ],
+    "maxSentences": 4,
+    "maxChars": 400
+  }
+}

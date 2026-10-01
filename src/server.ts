@@ -318,7 +318,6 @@ export async function startControlPlane(
             oh: liveConfig.openhands,
             store: handoffs,
             emit,
-            timeoutMs: typeof body.timeout_ms === "number" ? body.timeout_ms : 60_000,
             pollMs: typeof body.poll_ms === "number" ? body.poll_ms : 250,
             threadId,
             conversationId: threadConversations.get(threadId),
@@ -395,7 +394,6 @@ export async function startControlPlane(
               emit(event);
             },
             forceHandoff: true,
-            timeoutMs: typeof body.timeout_ms === "number" ? body.timeout_ms : 60_000,
             pollMs: typeof body.poll_ms === "number" ? body.poll_ms : 250,
             threadId,
             conversationId: threadConversations.get(threadId),

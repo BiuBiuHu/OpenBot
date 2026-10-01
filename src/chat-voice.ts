@@ -10,6 +10,7 @@ import {
   extractDocumentFacts,
   extractPublicHttpUrl,
   isDocumentReadAsk,
+  isGithubRepoHome,
   type PublicDocument,
 } from "./page-read.js";
 import { decodeHtmlEntities, type SearchHit } from "./web-search.js";
@@ -194,6 +195,14 @@ function skipManualLine(zh: boolean): string {
     : "I'll skip the manual. What do you actually want this computer to do?";
 }
 
+function linkFailLine(zh: boolean): string {
+  return zh ? "这台电脑连不上。你检查一下连接再试。" : "The link to this computer failed. Check the connection and try again.";
+}
+
+function notADocumentLine(zh: boolean): string {
+  return zh ? "这个链接不是一份文档。" : "That link was not a document.";
+}
+
 function pickPart(parts: Intl.DateTimeFormatPart[], type: string): string {
   return parts.find((p) => p.type === type)?.value || "";
 }
@@ -232,6 +241,11 @@ export function voiceCodingReady(input: { language?: string } = {}): VoiceReply 
   return { text: speak(codingReadyLine(language !== "en"), language), kind: "ok" };
 }
 
+export function voiceLinkFailure(input: { language?: string } = {}): VoiceReply {
+  const language = voiceLanguage(input);
+  return { text: speak(linkFailLine(language !== "en"), language), kind: "fail" };
+}
+
 function voiceLanguage(input: { language?: string; userMessage?: string }): ChatLanguage {
   if (input.language !== undefined && input.language !== "") {
     return normalizeChatLanguage(input.language);
@@ -248,17 +262,24 @@ export function voiceFromDocument(
 ): VoiceReply {
   const language = voiceLanguage(input);
   const zh = language !== "en";
+  const href = input.document?.url || extractPublicHttpUrl(String(input.userMessage || "")) || "";
+  const repo = input.document?.kind === "repo" || (!!href && isGithubRepoHome(href));
   const text = String(input.document?.text || input.text || "");
-  const facts = extractDocumentFacts(text);
+  const facts = extractDocumentFacts(text, { repo });
   const title = facts.title || input.document?.title || input.title || "";
   if (!facts.sentences.length && !title) {
-    return { text: speak(zh ? "这个链接我没读成。" : "I could not read that page.", language), kind: "fail" };
+    return {
+      text: speak(repo ? notADocumentLine(zh) : zh ? "这个链接我没读成。" : "I could not read that page.", language),
+      kind: "fail",
+    };
   }
   if (zh) {
-    const bits = [title ? `这一章是「${title}」` : "", ...facts.sentences].filter(Boolean);
+    const lead = repo ? (title ? `这个仓库是「${title}」` : "这是一个公开仓库") : title ? `这一章是「${title}」` : "";
+    const bits = [lead, ...facts.sentences].filter(Boolean);
     return { text: speak(`我看过了。${bits.join("。")}。`.replace(/。+/g, "。"), language), kind: "ok" };
   }
-  const bits = [title, ...facts.sentences].filter(Boolean);
+  const lead = repo ? (title ? `This repo is "${title}"` : "This is a public repository") : title;
+  const bits = [lead, ...facts.sentences].filter(Boolean);
   return { text: speak(`I read it. ${bits.join(". ")}.`.replace(/\.\s*\./g, "."), language), kind: "ok" };
 }
 
@@ -364,7 +385,10 @@ export function voiceChatReply(input: VoiceInput): VoiceReply {
     if (isWhoAreYou(input.userMessage)) {
       return { text: speak(whoLine(zh), language), kind: "ok" };
     }
-    return { text: speak(skipManualLine(zh), language), kind: "ok" };
+    if (isVagueCodingAsk(input.userMessage)) {
+      return { text: speak(skipManualLine(zh), language), kind: "ok" };
+    }
+    return { text: speak(dumpLine(zh), language), kind: "ok" };
   }
 
   if (!remote) {

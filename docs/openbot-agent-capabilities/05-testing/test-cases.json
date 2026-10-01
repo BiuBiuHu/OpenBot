@@ -114,6 +114,42 @@
       "must_not": "夹具含私钥或公网 IPv4",
       "evidence": "tests/eval-set.test.ts",
       "automation": "node:test"
+    },
+    {
+      "id": "EVAL-repo-is-not-a-chapter",
+      "system": "评测",
+      "priority": "P0",
+      "req": ["REQ-DOC-005"],
+      "precondition": "仓库首页 URL + 讲了什么",
+      "steps": ["shownForCase(那这个项目 https://github.com/bojieli/ai-agent-book 讲了什么?)"],
+      "expected": "README 短答或「不是一份文档」",
+      "must_not": "模型选型可参考 / 这一章",
+      "evidence": "evals/chat-layer/cases/repo-is-not-a-chapter.json",
+      "automation": "node:test"
+    },
+    {
+      "id": "EVAL-whats-this-is-computer",
+      "system": "评测",
+      "priority": "P0",
+      "req": ["REQ-CHAT-002"],
+      "precondition": "OH 说明书夹具",
+      "steps": ["shownForCase(这是啥?)"],
+      "expected": "不走含糊改代码套话",
+      "must_not": "先不背说明书",
+      "evidence": "evals/chat-layer/cases/whats-this-is-computer.json",
+      "automation": "node:test"
+    },
+    {
+      "id": "EVAL-handoff-waits-until-terminal",
+      "system": "评测",
+      "priority": "P0",
+      "req": ["REQ-HANDOFF-001"],
+      "precondition": "假客户端：前 4 次 running，假时钟每次 +20s，然后 finished",
+      "steps": ["runHandoffTurn + fakeSlowHandoffClient"],
+      "expected": "shown 为远端正文",
+      "must_not": "没在时限里跑完；不打真 ECS",
+      "evidence": "evals/chat-layer/cases/handoff-waits-until-terminal.json",
+      "automation": "node:test"
     }
   ]
 }

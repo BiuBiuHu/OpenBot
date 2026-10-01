@@ -13,6 +13,42 @@ export interface PublicDocument {
   title: string;
   text: string;
   url: string;
+  /** Repo homepage README, not a chapter file. */
+  kind?: "document" | "repo";
+}
+
+const GITHUB_RESERVED =
+  /^(settings|marketplace|orgs|users|login|signup|explore|topics|collections|sponsors|notifications|issues|pulls|codespaces)$/i;
+
+/** github.com/owner/repo with no blob/tree/file path. Not a markdown file. */
+export function isGithubRepoHome(href: string): boolean {
+  try {
+    const u = new URL(href);
+    if (u.hostname !== "github.com" && u.hostname !== "www.github.com") return false;
+    const parts = u.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+    if (parts.length !== 2) return false;
+    if (GITHUB_RESERVED.test(parts[0])) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function githubReadmeRawUrls(href: string): string[] {
+  try {
+    const u = new URL(href);
+    const parts = u.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+    if (parts.length < 2) return [];
+    const owner = parts[0];
+    const repo = parts[1];
+    return [
+      `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/README.md`,
+      `https://raw.githubusercontent.com/${owner}/${repo}/main/README.md`,
+      `https://raw.githubusercontent.com/${owner}/${repo}/master/README.md`,
+    ];
+  } catch {
+    return [];
+  }
 }
 
 export function extractPublicHttpUrl(message: string): string | undefined {
@@ -42,6 +78,31 @@ export function readableDocumentUrl(href: string): string {
   return href;
 }
 
+async function fetchPublicText(
+  dest: string,
+  fetchFn: typeof fetch,
+  timeoutMs: number,
+): Promise<{ text: string; type: string } | undefined> {
+  try {
+    const res = await fetchFn(dest, {
+      headers: {
+        Accept: "text/markdown,text/plain,text/html;q=0.8,*/*;q=0.5",
+        "User-Agent": UA,
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(Math.max(1_000, timeoutMs)),
+    });
+    if (!res.ok) return undefined;
+    const body = await res.text();
+    if (!body.trim()) return undefined;
+    const type = String(res.headers.get("content-type") || "");
+    const text = type.includes("html") ? stripHtml(body) : body;
+    return { text, type };
+  } catch {
+    return undefined;
+  }
+}
+
 export function isDocumentReadAsk(message: string): boolean {
   const t = String(message || "").trim();
   if (!t) return false;
@@ -52,7 +113,10 @@ export function isDocumentReadAsk(message: string): boolean {
   return false;
 }
 
-export function extractDocumentFacts(text: string): { title: string; sentences: string[] } {
+export function extractDocumentFacts(
+  text: string,
+  opts: { repo?: boolean } = {},
+): { title: string; sentences: string[] } {
   const raw = String(text || "").replace(/\r/g, "");
   let title = "";
   const heading = raw.match(/^#{1,3}\s+(.+)$/m);
@@ -69,8 +133,11 @@ export function extractDocumentFacts(text: string): { title: string; sentences: 
   const all = stripHtml(clean)
     .split(/[。！？]/)
     .map((s) => s.replace(/\s+/g, " ").trim())
-    .filter((s) => s.length >= 12 && s.length <= 96);
-  const preferred = all.filter((s) => /这一章|本章|本文|这篇|本页|这一节|本节/.test(s));
+    .filter((s) => s.length >= 12 && s.length <= 96)
+    .filter((s) => !/模型选型可参考|这篇指南/.test(s));
+  const preferred = opts.repo
+    ? all.filter((s) => /本书|本仓库|开源|核心公式|Agent\s*=/.test(s))
+    : all.filter((s) => /这一章|本章|本文|这篇|本页|这一节|本节/.test(s));
   return { title, sentences: (preferred.length ? preferred : all).slice(0, 2) };
 }
 
@@ -80,25 +147,20 @@ export async function readPublicDocument(
 ): Promise<PublicDocument | undefined> {
   const href = extractPublicHttpUrl(url) || String(url || "").trim();
   if (!href) return undefined;
-  const dest = readableDocumentUrl(href);
   const fetchFn = opts.fetch ?? globalThis.fetch.bind(globalThis);
-  try {
-    const res = await fetchFn(dest, {
-      headers: {
-        Accept: "text/markdown,text/plain,text/html;q=0.8,*/*;q=0.5",
-        "User-Agent": UA,
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(Math.max(1_000, opts.timeoutMs ?? 8_000)),
-    });
-    if (!res.ok) return undefined;
-    const body = await res.text();
-    if (!body.trim()) return undefined;
-    const type = String(res.headers.get("content-type") || "");
-    const text = type.includes("html") ? stripHtml(body) : body;
-    const facts = extractDocumentFacts(text);
-    return { title: facts.title, text, url: href };
-  } catch {
+  const timeoutMs = opts.timeoutMs ?? 8_000;
+  if (isGithubRepoHome(href)) {
+    for (const dest of githubReadmeRawUrls(href)) {
+      const got = await fetchPublicText(dest, fetchFn, timeoutMs);
+      if (!got) continue;
+      const facts = extractDocumentFacts(got.text, { repo: true });
+      return { title: facts.title, text: got.text, url: href, kind: "repo" };
+    }
     return undefined;
   }
+  const dest = readableDocumentUrl(href);
+  const got = await fetchPublicText(dest, fetchFn, timeoutMs);
+  if (!got) return undefined;
+  const facts = extractDocumentFacts(got.text);
+  return { title: facts.title, text: got.text, url: href };
 }
