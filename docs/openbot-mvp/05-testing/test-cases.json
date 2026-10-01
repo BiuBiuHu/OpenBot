@@ -297,7 +297,7 @@
       "priority": "P0",
       "precondition": "本机 wrapper + 注入 CSS",
       "steps": ["injectDesktopViewer(noVNC html)", "打开 /desktop-view"],
-      "expected": "电脑栏是 16:10 小矩形；1280x800 铺满四边无黑边；默认隐藏 noVNC 工具条",
+      "expected": "电脑栏是 16:10 直角小矩形；1280x800 铺满四边含边角；无圆角黑弧；默认隐藏 noVNC 工具条",
       "forbidden_side_effects": "不得改 ECS 分辨率；不得绑定 0.0.0.0；不得写入主机 IP 或密钥",
       "evidence": "tests/desktop.test.ts",
       "mode": "automated"
