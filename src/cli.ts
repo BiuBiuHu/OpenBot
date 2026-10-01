@@ -3,7 +3,7 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { classifyCommand } from "./approval.js";
-import { defaultConfig, loadConfig, saveConfig, writeEnvExampleToHome } from "./config.js";
+import { defaultConfig, hasLocalModelKey, loadConfig, saveConfig, writeEnvExampleToHome } from "./config.js";
 import { openbotHome } from "./paths.js";
 import { startControlPlane } from "./server.js";
 import { bootstrapWorker, probeSsh, sshTarget } from "./ssh.js";
@@ -35,6 +35,7 @@ OpenHands is reached at OH_BASE_URL (default http://127.0.0.1:8000).
 Open a tunnel first: ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host
 Session key: OH_SESSION_API_KEY (header X-Session-API-Key). OPENHANDS_* aliases still work.
 Create always sends agent.llm (1.49.2). Default model is deepseek/deepseek-chat; api_key only if OH_LLM_API_KEY is set.
+Empty OPENAI_API_KEY in ~/.openbot/.env does not block the remote DeepSeek path.
 
 Config lives in ~/.openbot (never commit it). Keys go in ~/.openbot/.env or a gitignored .env.
 `;
@@ -289,7 +290,8 @@ async function cmdChat(rest: string[], flags: Record<string, string>): Promise<v
   const message = rest.join(" ").trim();
   if (!message) throw new Error("Usage: npx openbot chat 'what kernel is on my machine?'");
   const config = loadConfig();
-  const forceHandoff = flags.handoff === "true" || flags.computer === "true" || !config.llm.apiKey;
+  const forceHandoff =
+    flags.handoff === "true" || flags.computer === "true" || !hasLocalModelKey(config.llm.apiKey);
   const hasWorker = Boolean(config.host.hostname && config.worker.token);
 
   if (forceHandoff || !hasWorker) {

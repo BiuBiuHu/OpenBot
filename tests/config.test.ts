@@ -3,7 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { defaultConfig, parseEnvFile, saveConfig, configPath } from "../src/config.js";
+import { defaultConfig, hasLocalModelKey, loadConfig, parseEnvFile, saveConfig, configPath } from "../src/config.js";
+import { buildAgentLlm, DEFAULT_REMOTE_LLM_MODEL } from "../src/oh-client.js";
 
 describe("REQ-OPENBOT-007 config isolation", () => {
   const prev = process.env.OPENBOT_HOME;
@@ -96,5 +97,31 @@ describe("REQ-OPENBOT-007 config isolation", () => {
     delete process.env.OPENAI_API_KEY;
     delete process.env.OH_LLM_MODEL;
     delete process.env.OH_LLM_API_KEY;
+  });
+
+  it("TC-CFG-004: empty OPENAI_API_KEY in ~/.openbot/.env is not a local model key", () => {
+    fs.writeFileSync(
+      path.join(home, ".env"),
+      "OPENAI_MODEL=gpt-4o-mini\nOPENAI_API_KEY=\n",
+    );
+    fs.writeFileSync(
+      configPath(),
+      JSON.stringify({
+        llm: {
+          model: "gpt-4o-mini",
+          apiKey: "sk-leftover-from-init",
+          baseUrl: "https://api.openai.com/v1",
+        },
+        openhands: { llmModel: "gpt-4o-mini" },
+      }) + "\n",
+    );
+    const cfg = loadConfig();
+    assert.equal(cfg.llm.model, "gpt-4o-mini");
+    assert.equal(cfg.llm.apiKey, "");
+    assert.equal(hasLocalModelKey(cfg.llm.apiKey), false);
+    const llm = buildAgentLlm(undefined, cfg.openhands);
+    assert.equal(llm.model, DEFAULT_REMOTE_LLM_MODEL);
+    assert.equal(llm.api_key, undefined);
+    fs.unlinkSync(path.join(home, ".env"));
   });
 });

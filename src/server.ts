@@ -2,7 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { classifyCommand } from "./approval.js";
-import { loadConfig } from "./config.js";
+import { hasLocalModelKey, loadConfig } from "./config.js";
 import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "./handoff.js";
 import { conversationSnippet, OpenHandsClient } from "./oh-client.js";
 import { repoRoot } from "./paths.js";
@@ -218,12 +218,13 @@ export async function startControlPlane(
           await json(res, { ok: false, error: "message required" }, 400);
           return;
         }
+        const live = loadConfig();
         const forceHandoff =
+          !hasLocalModelKey(live.llm.apiKey) ||
           body.handoff === true ||
           body.handoff === "true" ||
           body.mode === "handoff" ||
           body.mode === "computer";
-        const live = loadConfig();
         await streamSse(req, res, async (emit) => {
           const result = await runThreadTurn(message, {
             client: oh,
@@ -371,7 +372,7 @@ async function statusPayload(config: OpenBotConfig, worker: WorkerClient | undef
     llm: {
       model: config.llm.model,
       baseUrl: config.llm.baseUrl,
-      hasKey: Boolean(config.llm.apiKey),
+      hasKey: hasLocalModelKey(config.llm.apiKey),
     },
     openhands: {
       baseUrl: config.openhands.baseUrl,

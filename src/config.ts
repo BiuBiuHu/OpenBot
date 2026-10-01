@@ -39,8 +39,32 @@ export function loadDotEnv(): Record<string, string> {
   return merged;
 }
 
+function trimValue(value: string | undefined | null): string {
+  return (value ?? "").trim();
+}
+
+/** True only for a non-empty local BYOK key. Empty/whitespace does not count. */
+export function hasLocalModelKey(apiKey?: string | null): boolean {
+  return Boolean(trimValue(apiKey));
+}
+
+/**
+ * Process env wins when the key is present (including empty).
+ * Else the dotenv file. Empty is explicit and must not fall through.
+ */
+function readEnv(env: Record<string, string>, key: string): string | undefined {
+  if (Object.hasOwn(process.env, key)) {
+    return trimValue(process.env[key]);
+  }
+  if (Object.hasOwn(env, key)) {
+    return trimValue(env[key]);
+  }
+  return undefined;
+}
+
 function pick(env: Record<string, string>, key: string, fallback = ""): string {
-  return process.env[key] || env[key] || fallback;
+  const value = readEnv(env, key);
+  return value !== undefined ? value : fallback;
 }
 
 export function configPath(): string {
@@ -69,7 +93,9 @@ export function defaultConfig(partial: Partial<OpenBotConfig> = {}): OpenBotConf
     llm: {
       baseUrl: (partial.llm?.baseUrl || pick(env, "OPENAI_BASE_URL", DEFAULT_BASE)).replace(/\/$/, ""),
       model: partial.llm?.model || pick(env, "OPENAI_MODEL", DEFAULT_MODEL),
-      apiKey: partial.llm?.apiKey || pick(env, "OPENAI_API_KEY"),
+      // Empty OPENAI_API_KEY in the process or ~/.openbot/.env / .env
+      // is explicit: do not keep a leftover key from config.json.
+      apiKey: readEnv(env, "OPENAI_API_KEY") ?? trimValue(partial.llm?.apiKey),
     },
     controlPlane: {
       port: partial.controlPlane?.port || Number(pick(env, "OPENBOT_CONTROL_PORT", "3847")),
@@ -89,20 +115,17 @@ export function defaultConfig(partial: Partial<OpenBotConfig> = {}): OpenBotConf
         partial.openhands?.workspaceDir ||
         pick(env, "OPENHANDS_WORKSPACE", "workspace/project"),
       llmModel:
-        partial.openhands?.llmModel ||
-        pick(env, "OH_LLM_MODEL") ||
-        pick(env, "OPENHANDS_LLM_MODEL") ||
-        "",
+        readEnv(env, "OH_LLM_MODEL") ??
+        readEnv(env, "OPENHANDS_LLM_MODEL") ??
+        trimValue(partial.openhands?.llmModel),
       llmApiKey:
-        pick(env, "OH_LLM_API_KEY") ||
-        pick(env, "OPENHANDS_LLM_API_KEY") ||
-        partial.openhands?.llmApiKey ||
-        "",
+        readEnv(env, "OH_LLM_API_KEY") ??
+        readEnv(env, "OPENHANDS_LLM_API_KEY") ??
+        trimValue(partial.openhands?.llmApiKey),
       llmBaseUrl: (
-        pick(env, "OH_LLM_BASE_URL") ||
-        pick(env, "OPENHANDS_LLM_BASE_URL") ||
-        partial.openhands?.llmBaseUrl ||
-        ""
+        readEnv(env, "OH_LLM_BASE_URL") ??
+        readEnv(env, "OPENHANDS_LLM_BASE_URL") ??
+        trimValue(partial.openhands?.llmBaseUrl)
       ).replace(/\/$/, ""),
     },
   };

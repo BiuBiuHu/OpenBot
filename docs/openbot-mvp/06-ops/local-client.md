@@ -32,7 +32,7 @@ OH_SESSION_API_KEY=
 
 `OPENHANDS_BASE_URL` / `OPENHANDS_API_KEY` 仍是别名。缺本机 `OPENAI_API_KEY` 没关系，闲聊会跳过，走远端交接。
 
-**不要用本机 `OPENAI_MODEL` / 空的 `OPENAI_API_KEY` 去覆盖主机已配好的 LLM。** Agent Server 1.49.2 要求请求里带 `agent.llm`：默认只发 `model=deepseek/deepseek-chat`、不带 key，让主机环境给 DeepSeek 凭证；只有 `OH_LLM_MODEL` / 非空 `OH_LLM_API_KEY` 才会改。
+**不要用本机 `OPENAI_MODEL` / 空的 `OPENAI_API_KEY` 去覆盖主机已配好的 LLM。** Agent Server 1.49.2 要求请求里带 `agent.llm`：默认只发 `model=deepseek/deepseek-chat`、不带 key，让主机环境给 DeepSeek 凭证；只有 `OH_LLM_MODEL` / 非空 `OH_LLM_API_KEY` 才会改。不必 unset 或藏起 `~/.openbot/.env`：进程或文件里空的 `OPENAI_API_KEY` 都不算本机模型已配置，默认仍走远端 DeepSeek。
 
 ## 3. 从干净 checkout 跑起来
 

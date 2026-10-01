@@ -1,4 +1,5 @@
 import { runAgentTurn, runLocalChatTurn } from "./agent.js";
+import { hasLocalModelKey } from "./config.js";
 import { runHandoffTurn, type HandoffTurnDeps } from "./handoff.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, LlmConfig } from "./types.js";
 import type { WorkerClient } from "./worker-client.js";
@@ -28,7 +29,7 @@ export interface ThreadTurnResult {
 export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Promise<ThreadTurnResult> {
   const goal = message.trim();
   if (!goal) throw new Error("message required");
-  const hasLocalKey = Boolean(deps.llm?.apiKey);
+  const hasLocalKey = hasLocalModelKey(deps.llm?.apiKey);
   const useHandoff = deps.forceHandoff || !hasLocalKey;
 
   if (useHandoff) {

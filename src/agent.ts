@@ -1,4 +1,5 @@
 import { classifyCommand } from "./approval.js";
+import { hasLocalModelKey } from "./config.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, LlmConfig, ToolCall } from "./types.js";
 import type { WorkerClient } from "./worker-client.js";
 
@@ -77,7 +78,7 @@ export interface AgentDeps {
 }
 
 export async function runAgentTurn(userText: string, deps: AgentDeps): Promise<ChatMessage[]> {
-  if (!deps.llm.apiKey) {
+  if (!hasLocalModelKey(deps.llm.apiKey)) {
     deps.emit({
       type: "error",
       message: "No OPENAI_API_KEY. Set it in ~/.openbot/.env, or use `openbot run 'uname -a'` without a model.",
@@ -143,7 +144,7 @@ export async function runLocalChatTurn(
     emit: (event: AgentEvent) => void;
   },
 ): Promise<ChatMessage[]> {
-  if (!deps.llm.apiKey) {
+  if (!hasLocalModelKey(deps.llm.apiKey)) {
     deps.emit({
       type: "error",
       message:

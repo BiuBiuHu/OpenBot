@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { defaultConfig } from "../src/config.js";
+import { defaultConfig, hasLocalModelKey, loadConfig } from "../src/config.js";
 import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "../src/handoff.js";
 import {
   conversationSnippet,
@@ -149,6 +149,76 @@ describe("OpenHandsClient against mock HTTP", () => {
     const recorded = mock.creates.find((c) => c.id === created.id);
     assert.equal(recorded?.llm?.model, "test/remote");
     assert.equal(recorded?.llm?.api_key, "remote-key");
+  });
+
+  it("TC-OH-019: .env with OPENAI_MODEL and empty OPENAI_API_KEY still sends DeepSeek", async () => {
+    const prevHome = process.env.OPENBOT_HOME;
+    const prevModel = process.env.OPENAI_MODEL;
+    const prevKey = process.env.OPENAI_API_KEY;
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "openbot-env-empty-key-"));
+    try {
+      process.env.OPENBOT_HOME = home;
+      delete process.env.OPENAI_MODEL;
+      delete process.env.OPENAI_API_KEY;
+      fs.writeFileSync(path.join(home, ".env"), "OPENAI_MODEL=gpt-4o-mini\nOPENAI_API_KEY=\n");
+      fs.writeFileSync(
+        path.join(home, "config.json"),
+        JSON.stringify({
+          llm: {
+            model: "gpt-4o-mini",
+            apiKey: "sk-leftover-from-init",
+            baseUrl: "https://api.openai.com/v1",
+          },
+          openhands: { llmModel: "gpt-4o-mini" },
+        }) + "\n",
+      );
+      const cfg = loadConfig();
+      assert.equal(cfg.llm.apiKey, "");
+      assert.equal(hasLocalModelKey(cfg.llm.apiKey), false);
+      const created = await client.createConversation({ goal: "uname from file env" }, cfg.openhands);
+      const recorded = mock.creates.find((c) => c.id === created.id);
+      assert.ok(recorded);
+      const llm = (recorded?.body.agent as { llm?: Record<string, unknown> })?.llm;
+      assert.ok(llm, "1.49.2 requires agent.llm");
+      assert.equal(llm.model, DEFAULT_REMOTE_LLM_MODEL);
+      assert.ok(!Object.hasOwn(llm, "api_key"), "empty OpenAI key must not be sent");
+
+      const events: AgentEvent[] = [];
+      const result = await runThreadTurn("uname from file env", {
+        client,
+        oh: cfg.openhands,
+        llm: cfg.llm,
+        store: new HandoffStore(),
+        emit: (e) => events.push(e),
+        waitForConfirm: async () => true,
+        timeoutMs: 2000,
+        pollMs: 20,
+      });
+      assert.equal(result.path, "handoff");
+
+      const cli = path.join(repoRoot(), "src/cli.ts");
+      const env = {
+        ...process.env,
+        OPENBOT_HOME: home,
+        OH_BASE_URL: mock.baseUrl,
+        OH_SESSION_API_KEY: "k-oh-test",
+      };
+      delete env.OPENAI_API_KEY;
+      delete env.OPENAI_MODEL;
+      const run = await runCli([cli, "chat", "uname from file env", "--timeout", "5", "--poll-ms", "20"], env);
+      assert.equal(run.code, 0, run.out);
+      const cliCreate = mock.creates.at(-1);
+      assert.equal(cliCreate?.llm?.model, DEFAULT_REMOTE_LLM_MODEL);
+      assert.equal(cliCreate?.llm?.api_key, undefined);
+    } finally {
+      if (prevHome === undefined) delete process.env.OPENBOT_HOME;
+      else process.env.OPENBOT_HOME = prevHome;
+      if (prevModel === undefined) delete process.env.OPENAI_MODEL;
+      else process.env.OPENAI_MODEL = prevModel;
+      if (prevKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = prevKey;
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 });
 
