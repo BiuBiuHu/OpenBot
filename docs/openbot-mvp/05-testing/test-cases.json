@@ -285,9 +285,33 @@
       "priority": "P0",
       "precondition": "连接时 6080 尚未起来，随后本机 noVNC 应答",
       "steps": ["GET /api/desktop", "启动 127.0.0.1 noVNC mock", "再 GET /api/desktop"],
-      "expected": "第二次 ok，viewerUrl 带 autoconnect；缺页文案不叫人再装桌面",
+      "expected": "第二次 ok，viewerUrl 为 /desktop-view；缺页文案不叫人再装桌面",
       "forbidden_side_effects": "不得把一次失败缓存成永远关闭；不得绑定 0.0.0.0；不得写入主机 IP 或密钥",
       "evidence": "tests/desktop.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-DESK-006",
+      "req": "BL-DESKTOP",
+      "system": "desktop",
+      "priority": "P0",
+      "precondition": "本机 wrapper + 注入 CSS",
+      "steps": ["injectDesktopViewer(noVNC html)", "打开 /desktop-view"],
+      "expected": "默认隐藏 noVNC 工具条；1280x800 画布按栏位缩放；点「工具条」才显示",
+      "forbidden_side_effects": "不得改 ECS 分辨率；不得绑定 0.0.0.0；不得写入主机 IP 或密钥",
+      "evidence": "tests/desktop.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-VOICE-009",
+      "req": "BL-CHAT-SEARCH",
+      "system": "chat-layer",
+      "priority": "P0",
+      "precondition": "中文「是什么」+ Bing 教程标题含 &ensp; 和省略号",
+      "steps": ["voiceFromSearch({ userMessage: 'Grok Bot 是什么', hits: [教程切片, 英文维基] })"],
+      "expected": "短中文完整句；解码实体；不截断、不回教程标题",
+      "forbidden_side_effects": "不得把检索标题或 HTML 实体当作回复",
+      "evidence": "tests/chat-voice.test.ts",
       "mode": "automated"
     }
   ]

@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { describe, it } from "node:test";
 import { defaultConfig } from "../src/config.js";
-import { desktopMissingLine, probeDesktop, refreshDesktopStatus } from "../src/desktop.js";
+import {
+  DESKTOP_EMBED_PATH,
+  desktopMissingLine,
+  injectDesktopViewer,
+  probeDesktop,
+  refreshDesktopStatus,
+} from "../src/desktop.js";
 import { startControlPlane } from "../src/server.js";
 import { freePort } from "./helpers.js";
 import { startMockOhServer } from "./oh-mock.js";
@@ -50,15 +56,25 @@ describe("desktop pane (no live host)", () => {
         missing?: string;
       };
       assert.equal(desk.ok, true);
-      assert.match(String(desk.viewerUrl), /127\.0\.0\.1/);
-      assert.match(String(desk.viewerUrl), /autoconnect=1/);
+      assert.equal(desk.viewerUrl, DESKTOP_EMBED_PATH);
       const html = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/`)).text();
       assert.match(html, /电脑/);
       assert.match(html, /id="desk"/);
+      assert.match(html, /desk-wrap/);
       assert.match(html, /allow-pointer-lock/);
       assert.match(html, /pointer-lock/);
       assert.doesNotMatch(html, /On this computer/);
       assert.doesNotMatch(html, /start a desktop/i);
+      const view = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/desktop-view`)).text();
+      assert.match(view, /1280/);
+      assert.match(view, /800/);
+      assert.match(view, /工具条/);
+      assert.match(view, /scale\(/);
+      const proxied = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/novnc/vnc.html`)).text();
+      assert.match(proxied, /openbot-desk-fit/);
+      assert.match(proxied, /noVNC_control_bar/);
+      assert.match(proxied, /display:none/);
+      assert.doesNotMatch(proxied, /\b(?!127\.0\.0\.1)(?:\d{1,3}\.){3}\d{1,3}\b/);
     } finally {
       await plane.close();
       await mock.stop();
@@ -96,7 +112,7 @@ describe("desktop pane (no live host)", () => {
         viewerUrl?: string;
       };
       assert.equal(second.ok, true);
-      assert.match(String(second.viewerUrl), /autoconnect=1/);
+      assert.equal(second.viewerUrl, DESKTOP_EMBED_PATH);
     } finally {
       await plane.close();
       await mock.stop();
@@ -133,7 +149,7 @@ describe("desktop pane (no live host)", () => {
     try {
       assert.equal(opened, 1);
       assert.equal(status.desktop.ok, true);
-      assert.match(String(status.desktop.viewerUrl), /127\.0\.0\.1/);
+      assert.equal(status.desktop.viewerUrl, DESKTOP_EMBED_PATH);
       const skipped = await refreshDesktopStatus(config, {
         sshOk: false,
         timeoutMs: 200,
@@ -152,5 +168,16 @@ describe("desktop pane (no live host)", () => {
     } finally {
       if (vnc) await new Promise<void>((resolve) => vnc.close(() => resolve()));
     }
+  });
+
+  it("TC-DESK-006: wrapper fills 1280x800 and hides the noVNC bar unless asked", () => {
+    const hidden = injectDesktopViewer("<html><head></head><body><div id='noVNC_control_bar'></div></body></html>");
+    assert.match(hidden, /openbot-desk-fit/);
+    assert.match(hidden, /#noVNC_control_bar/);
+    assert.match(hidden, /display:none/);
+    assert.match(hidden, /scaleViewport=true/);
+    assert.match(hidden, /resizeSession=false/);
+    const shown = injectDesktopViewer("<html><head></head><body></body></html>", { showBar: true });
+    assert.doesNotMatch(shown, /#noVNC_control_bar/);
   });
 });

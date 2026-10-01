@@ -152,6 +152,34 @@ describe("chat voice", () => {
     assert.match(english.text, /xAI|chatbot/i);
   });
 
+  it("TC-VOICE-009: Chinese lookup does not paste a chopped search title", () => {
+    const shown = voiceFromSearch({
+      userMessage: "Grok Bot 是什么",
+      hits: [
+        {
+          title: "Grok Bot 小白入门教程",
+          snippet:
+            "2026年8月13日&ensp; &ensp;Grok Bot 小白入门教程：下载安装、创建第一个 Bot，一篇讲明白 本文依据 Grok Bot 官方文档...",
+          url: "https://example.com/grok-bot-tutorial",
+          source: "bing",
+        },
+        {
+          title: "Grok (chatbot)",
+          snippet: "Grok is a generative artificial intelligence chatbot developed by xAI.",
+          url: "https://en.wikipedia.org/wiki/Grok_(chatbot)",
+          source: "wikipedia",
+        },
+      ],
+    });
+    assert.match(shown.text, /网上查过了/);
+    assert.match(shown.text, /对话|聊天|机器人/);
+    assert.match(shown.text, /xAI/);
+    assert.doesNotMatch(shown.text, /&ensp;|&amp;|&#/);
+    assert.doesNotMatch(shown.text, /…|\.\.\./);
+    assert.doesNotMatch(shown.text, /小白入门|一篇讲明白|本文依据|官方文档/);
+    assert.ok(/[。！？]$/.test(shown.text));
+  });
+
   it("TC-SEARCH-002: lookup skips OpenHands so a workspace dump is not search", async () => {
     const mock = await startMockOhServer({
       sessionKey: "voice-key",

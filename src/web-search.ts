@@ -234,7 +234,7 @@ export function parseBingHtml(html: string): SearchHit[] {
 }
 
 function cleanBingSnippet(value: string): string {
-  return value
+  return decodeHtmlEntities(value)
     .replace(/^[A-Z][a-z]{2}\s+\d{1,2},\s+\d{4}\s*[·.\u00b7\u2022]+\s*/u, "")
     .replace(/^\d{4}年\d{1,2}月\d{1,2}日\s*[·.\u00b7\u2022]+\s*/u, "")
     .replace(/\u00a0/g, " ")
@@ -275,15 +275,26 @@ async function getText(fetchFn: typeof fetch, url: string, timeoutMs: number, pr
   return res.text();
 }
 
-export function stripHtml(value: string): string {
+export function decodeHtmlEntities(value: string): string {
   return String(value || "")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;|&#160;|&#0183;/g, " ")
+    .replace(/&nbsp;|&ensp;|&emsp;|&thinsp;|&#160;|&#0160;|&#8194;|&#8195;|&#0183;/gi, " ")
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&")
+    .replace(/&#39;|&apos;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => {
+      const code = Number.parseInt(hex, 16);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : "";
+    })
+    .replace(/&#(\d+);/g, (_, num: string) => {
+      const code = Number(num);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : "";
+    })
+    .replace(/&amp;/g, "&");
+}
+
+export function stripHtml(value: string): string {
+  return decodeHtmlEntities(String(value || "").replace(/<[^>]+>/g, ""))
     .replace(/\s+/g, " ")
     .trim();
 }

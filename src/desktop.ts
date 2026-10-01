@@ -1,6 +1,14 @@
+import http from "node:http";
 import net from "node:net";
 import type { OpenBotConfig } from "./types.js";
 import { openLocalForward, type TunnelHandle } from "./tunnel.js";
+
+/** Same-origin wrapper. The iframe loads this, not the raw noVNC URL. */
+export const DESKTOP_EMBED_PATH = "/desktop-view";
+
+/** Default Openbox framebuffer on the host. Scale this; do not resize the ECS. */
+export const DESKTOP_FRAME_WIDTH = 1280;
+export const DESKTOP_FRAME_HEIGHT = 800;
 
 function isLoopback(hostname: string): boolean {
   return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
@@ -96,7 +104,7 @@ export async function probeDesktop(
   }
   const viewerUrl = await httpViewer(localPort, timeoutMs);
   if (viewerUrl) {
-    return { ok: true, viewerUrl, localPort, remotePort };
+    return { ok: true, viewerUrl: DESKTOP_EMBED_PATH, localPort, remotePort };
   }
   if (await tcpOpen(localPort, timeoutMs)) {
     return { ok: false, localPort, remotePort, missing: desktopMissingLine("http") };
@@ -139,6 +147,86 @@ export async function refreshDesktopStatus(
     });
   }
   return { desktop, tunnel };
+}
+
+export function injectDesktopViewer(html: string, opts: { showBar?: boolean } = {}): string {
+  const showBar = Boolean(opts.showBar);
+  const css = showBar
+    ? `html,body,#noVNC_container{width:100%!important;height:100%!important;margin:0!important;overflow:hidden!important;background:#000!important}
+       #noVNC_container{position:fixed!important;inset:0!important}`
+    : `html,body,#noVNC_container{width:100%!important;height:100%!important;margin:0!important;overflow:hidden!important;background:#000!important}
+       #noVNC_container{position:fixed!important;inset:0!important}
+       #noVNC_control_bar_anchor,#noVNC_control_bar,#noVNC_control_bar_handle,
+       #noVNC_status,#noVNC_status_bar,#noVNC_hint_anchor,#noVNC_transition,
+       .noVNC_panel{display:none!important;visibility:hidden!important}`;
+  const js = `(function(){
+    function fit(){
+      try{
+        var rfb=window.UI&&UI.rfb;
+        if(rfb){
+          rfb.scaleViewport=true;
+          rfb.clipViewport=false;
+          rfb.resizeSession=false;
+        }
+        if(window.UI&&UI.updateViewSetting){try{UI.updateViewSetting();}catch(e){}}
+        window.dispatchEvent(new Event("resize"));
+      }catch(e){}
+    }
+    window.addEventListener("load",function(){fit();setTimeout(fit,300);setTimeout(fit,1200);});
+    window.addEventListener("resize",fit);
+    setInterval(fit,2000);
+  })();`;
+  const snippet = `<style id="openbot-desk-fit">${css}</style><script id="openbot-desk-fit-js">${js}</script>`;
+  if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${snippet}</head>`);
+  return `${snippet}${html}`;
+}
+
+export function novncProxyPath(pathname: string): string {
+  const raw = decodeURIComponent(String(pathname || "").replace(/^\/novnc/, "") || "/");
+  if (raw.includes("..")) return "/";
+  return raw.startsWith("/") ? raw : `/${raw}`;
+}
+
+export async function proxyDesktopViewer(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  localPort: number,
+): Promise<void> {
+  const incoming = new URL(req.url || "/", "http://127.0.0.1");
+  const rel = novncProxyPath(incoming.pathname);
+  const dest = new URL(rel, `http://127.0.0.1:${localPort}`);
+  dest.search = incoming.search;
+  if (dest.hostname !== "127.0.0.1" && dest.hostname !== "localhost") {
+    res.writeHead(400, { "Content-Type": "text/plain" });
+    res.end("loopback only");
+    return;
+  }
+  if (/vnc[^/]*\.html$/i.test(dest.pathname) || dest.pathname === "/") {
+    dest.searchParams.set("autoconnect", dest.searchParams.get("autoconnect") || "1");
+    dest.searchParams.set("resize", dest.searchParams.get("resize") || "scale");
+    dest.searchParams.set("reconnect", dest.searchParams.get("reconnect") || "1");
+    dest.searchParams.set("encrypt", dest.searchParams.get("encrypt") || "0");
+    dest.searchParams.set("host", "127.0.0.1");
+    dest.searchParams.set("port", String(localPort));
+  }
+  const up = await fetch(dest, {
+    headers: {
+      Accept: String(req.headers.accept || "*/*"),
+      "User-Agent": String(req.headers["user-agent"] || "OpenBot-desktop"),
+    },
+    redirect: "follow",
+    signal: AbortSignal.timeout(8_000),
+  });
+  const type = up.headers.get("content-type") || "";
+  const buf = Buffer.from(await up.arrayBuffer());
+  if (type.includes("text/html")) {
+    const showBar = incoming.searchParams.get("bar") === "1";
+    res.writeHead(up.status, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(injectDesktopViewer(buf.toString("utf8"), { showBar }));
+    return;
+  }
+  res.writeHead(up.status, { "Content-Type": type || "application/octet-stream" });
+  res.end(buf);
 }
 
 export async function openDesktopForward(

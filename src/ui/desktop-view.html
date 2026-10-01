@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>电脑</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; color: #c8d2b8; font-family: ui-sans-serif, system-ui, sans-serif; }
+      body { display: flex; flex-direction: column; min-height: 100%; }
+      .chrome {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.2rem 0.35rem;
+        background: #141a12;
+        border-bottom: 1px solid #2b3526;
+        flex-shrink: 0;
+      }
+      .chrome button {
+        font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        color: #e7eedc;
+        background: #22291d;
+        border: 1px solid #2b3526;
+        padding: 0.2rem 0.45rem;
+        cursor: pointer;
+      }
+      .chrome button.on { border-color: #b6e36a; color: #b6e36a; }
+      .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #000; }
+      #vnc {
+        position: absolute;
+        top: 0;
+        left: 0;
+        border: 0;
+        background: #000;
+        transform-origin: 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chrome">
+      <button type="button" id="desk-bar" aria-pressed="false">工具条</button>
+    </div>
+    <div class="stage" id="stage">
+      <iframe
+        id="vnc"
+        title="Remote desktop"
+        tabindex="0"
+        allow="pointer-lock; fullscreen; clipboard-read; clipboard-write"
+      ></iframe>
+    </div>
+    <script>
+      const FRAME_W = 1280;
+      const FRAME_H = 800;
+      const stage = document.getElementById("stage");
+      const frame = document.getElementById("vnc");
+      const barBtn = document.getElementById("desk-bar");
+      let localPort = 6080;
+      let showBar = false;
+
+      function novncSrc() {
+        const q = new URLSearchParams({
+          autoconnect: "1",
+          resize: "scale",
+          reconnect: "1",
+          encrypt: "0",
+          host: "127.0.0.1",
+          port: String(localPort),
+          bar: showBar ? "1" : "0",
+        });
+        return "/novnc/vnc.html?" + q.toString();
+      }
+
+      function layout() {
+        const sw = stage.clientWidth || 1;
+        const sh = stage.clientHeight || 1;
+        const scale = Math.max(sw / FRAME_W, sh / FRAME_H);
+        frame.style.width = FRAME_W + "px";
+        frame.style.height = FRAME_H + "px";
+        frame.style.transform = "scale(" + scale + ")";
+        frame.style.left = (sw - FRAME_W * scale) / 2 + "px";
+        frame.style.top = (sh - FRAME_H * scale) / 2 + "px";
+      }
+
+      async function connect() {
+        try {
+          const d = await (await fetch("/api/desktop")).json();
+          if (d.localPort) localPort = Number(d.localPort) || localPort;
+        } catch {
+          /* keep default loopback port */
+        }
+        frame.src = novncSrc();
+        layout();
+      }
+
+      barBtn.onclick = () => {
+        showBar = !showBar;
+        barBtn.classList.toggle("on", showBar);
+        barBtn.setAttribute("aria-pressed", showBar ? "true" : "false");
+        frame.src = novncSrc();
+      };
+      window.addEventListener("resize", layout);
+      new ResizeObserver(layout).observe(stage);
+      connect();
+    </script>
+  </body>
+</html>

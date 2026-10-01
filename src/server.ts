@@ -13,7 +13,13 @@ import {
   upsertHomeEnv,
 } from "./config.js";
 import { connectConfiguredHost, isLoopback, type ConnectResult } from "./connect.js";
-import { openDesktopForward, refreshDesktopStatus, type DesktopStatus } from "./desktop.js";
+import {
+  desktopLocalPort,
+  openDesktopForward,
+  proxyDesktopViewer,
+  refreshDesktopStatus,
+  type DesktopStatus,
+} from "./desktop.js";
 import { appendLiveEvalRun } from "./eval-set.js";
 import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "./handoff.js";
 import { conversationSnippet, OpenHandsClient } from "./oh-client.js";
@@ -79,6 +85,7 @@ export async function startControlPlane(
 
   const uiFile = path.join(repoRoot(), "src/ui/index.html");
   const trialFile = path.join(repoRoot(), "src/ui/oh-test.html");
+  const deskViewFile = path.join(repoRoot(), "src/ui/desktop-view.html");
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
@@ -96,6 +103,15 @@ export async function startControlPlane(
       if (req.method === "GET" && (url.pathname === "/oh-test" || url.pathname === "/oh-test.html")) {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         res.end(fs.readFileSync(trialFile));
+        return;
+      }
+      if (req.method === "GET" && (url.pathname === "/desktop-view" || url.pathname === "/desktop-view.html")) {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(fs.readFileSync(deskViewFile));
+        return;
+      }
+      if (req.method === "GET" && url.pathname.startsWith("/novnc/")) {
+        await proxyDesktopViewer(req, res, desktopLocalPort(liveConfig));
         return;
       }
       if (req.method === "GET" && url.pathname === "/api/oh/health") {
@@ -134,7 +150,12 @@ export async function startControlPlane(
         desktopTunnel = refreshed.tunnel ?? desktopTunnel;
         lastDesktop = refreshed.desktop;
         const desktop = refreshed.desktop;
-        await json(res, { ok: desktop.ok, viewerUrl: desktop.viewerUrl, missing: desktop.missing });
+        await json(res, {
+          ok: desktop.ok,
+          viewerUrl: desktop.viewerUrl,
+          missing: desktop.missing,
+          localPort: desktop.localPort,
+        });
         return;
       }
       if (req.method === "GET" && url.pathname === "/api/settings") {

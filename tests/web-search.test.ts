@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import { describe, it } from "node:test";
-import { parseBingHtml, parseWikipediaArticle, searchWeb } from "../src/web-search.js";
+import { decodeHtmlEntities, parseBingHtml, parseWikipediaArticle, searchWeb, stripHtml } from "../src/web-search.js";
 import { freePort } from "./helpers.js";
 
 function rewriteFetch(port: number, seen: string[]): typeof fetch {
@@ -195,5 +195,7 @@ describe("web search", () => {
       `<h1>Grok</h1><p>Grok is a generative artificial intelligence chatbot developed by xAI.</p>`,
     );
     assert.match(wiki?.snippet || "", /xAI/);
+    assert.equal(decodeHtmlEntities("2026年8月13日&ensp; &ensp;Grok"), "2026年8月13日   Grok");
+    assert.doesNotMatch(stripHtml("2026年8月13日&ensp;&ensp;教程"), /&ensp;/);
   });
 });

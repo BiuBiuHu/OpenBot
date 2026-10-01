@@ -1,6 +1,6 @@
 /** Chat-layer voice: short, human replies. Remote dumps stay off the transcript. */
 
-import type { SearchHit } from "./web-search.js";
+import { decodeHtmlEntities, type SearchHit } from "./web-search.js";
 
 export type ChatOutcome = "succeeded" | "failed" | "timeout" | "cancelled" | "running";
 
@@ -159,16 +159,37 @@ export function voiceFromSearch(input: { userMessage: string; hits: SearchHit[] 
   return { text: linkifyReply(`I looked it up. ${text}`.replace(/\s+/g, " ").trim()), kind: "ok" };
 }
 
+const SEARCH_JUNK =
+  /小白入门|入门教程|一篇讲明白|本文依据|下载安装|创建第一个|官方文档|教程：|^\d{4}年\d{1,2}月\d{1,2}日/;
+
+function lookLikeSearchTitle(text: string): boolean {
+  const t = decodeHtmlEntities(text).replace(/\s+/g, " ").trim();
+  if (!t) return true;
+  if (SEARCH_JUNK.test(t)) return true;
+  if (/&(?:ensp|emsp|nbsp|amp|#\d+|#x[0-9a-f]+);/i.test(t)) return true;
+  return false;
+}
+
+function definitionSentence(text: string): string | undefined {
+  const cleaned = decodeHtmlEntities(text)
+    .replace(/^\d{4}年\d{1,2}月\d{1,2}日\s*/u, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned || lookLikeSearchTitle(cleaned)) return undefined;
+  const sentence = cleaned.split(/[。！？]/).map((s) => s.trim()).filter(Boolean)[0];
+  if (!sentence || lookLikeSearchTitle(sentence)) return undefined;
+  if (sentence.length > 90) return undefined;
+  if (!/是|为|指/.test(sentence) && !/机器人|智能体|聊天|对话/.test(sentence)) return undefined;
+  return /[。！？]$/.test(sentence) ? sentence : `${sentence}。`;
+}
+
 function shortChineseFromHits(subject: string, hits: SearchHit[]): string {
-  const zhBits = hits
-    .map((h) => String(h.snippet || h.title).replace(/\s+/g, " ").trim())
-    .filter((s) => preferChinese(s));
-  if (zhBits[0]) {
-    const sentence = zhBits[0].split(/[。！？]/).map((s) => s.trim()).filter(Boolean)[0] || zhBits[0];
-    const clipped = sentence.length > 80 ? `${sentence.slice(0, 78)}…` : sentence;
-    return `网上查过了。${clipped}${/[。！？…]$/.test(clipped) ? "" : "。"}`;
+  const ranked = [...hits].sort((a, b) => Number(b.source === "wikipedia") - Number(a.source === "wikipedia"));
+  for (const hit of ranked) {
+    const sentence = definitionSentence(hit.snippet) || definitionSentence(hit.title);
+    if (sentence) return `网上查过了。${sentence}`;
   }
-  const blob = hits.map((h) => `${h.title} ${h.snippet}`).join(" ");
+  const blob = decodeHtmlEntities(hits.map((h) => `${h.title} ${h.snippet}`).join(" "));
   const who = /SpaceXAI/i.test(blob) ? "SpaceXAI" : /xAI/i.test(blob) ? "xAI" : "";
   const bot = /chatbot|assistant|LLM|language model|生成式|聊天|对话|机器人/i.test(blob);
   const agent = /always-on agent|teammate|智能体|代理人/i.test(blob);
@@ -180,7 +201,7 @@ function shortChineseFromHits(subject: string, hits: SearchHit[]): string {
   }
   if (bot) return `网上查过了。${name} 是公开资料里的生成式对话机器人。`;
   if (who) return `网上查过了。${name} 和 ${who} 有关，是网上能查到的公开产品。`;
-  return `网上查过了。${name} 在公开页上有介绍，我按短句说：它是网上能查到的产品。`;
+  return `网上查过了。${name} 是网上能查到的公开产品。`;
 }
 
 export function voiceChatReply(input: VoiceInput): VoiceReply {
