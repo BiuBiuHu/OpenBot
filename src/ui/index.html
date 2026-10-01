@@ -65,6 +65,7 @@
         flex-shrink: 0;
         box-shadow: inset 0 -6px 0 rgba(16, 20, 15, 0.12);
       }
+      .avatar.person { background: #c4a15a; }
       .avatar .eyes::before,
       .avatar .eyes::after {
         content: "";
@@ -110,16 +111,33 @@
         gap: 0.7rem;
       }
       .msg {
-        max-width: min(36rem, 78%);
+        max-width: min(40rem, 92%);
         width: fit-content;
+        display: flex;
+        flex-direction: row;
+        align-items: flex-end;
+        gap: 0.5rem;
+        padding: 0;
+        border: none;
+        background: transparent;
+      }
+      .msg .bubble {
+        min-width: 0;
+        max-width: 100%;
         padding: 0.7rem 0.9rem;
         border: 1px solid var(--line);
         background: var(--panel);
         border-radius: 0.85rem;
       }
+      .msg .avatar {
+        width: 1.85rem;
+        height: 1.85rem;
+      }
       .msg.user {
         align-self: flex-end;
         margin-left: auto;
+      }
+      .msg.user .bubble {
         border-color: #3a3420;
         background: #222012;
       }
@@ -127,17 +145,14 @@
       .msg.bot {
         align-self: flex-start;
         margin-right: auto;
-        border-color: #2d3a22;
-        display: flex;
-        gap: 0.55rem;
-        align-items: flex-start;
       }
-      .msg.bot .avatar { width: 1.7rem; height: 1.7rem; }
-      .msg.bot .bubble { min-width: 0; }
+      .msg.bot .bubble { border-color: #2d3a22; }
       .msg.sys {
         align-self: center;
         max-width: min(42rem, 92%);
         width: auto;
+      }
+      .msg.sys .bubble {
         border: none;
         background: transparent;
         padding: 0.2rem 0.4rem;
@@ -219,10 +234,13 @@
         font-size: 0.82rem;
         color: #d5e8b8;
       }
-      .approval {
+      .msg.approval {
         align-self: stretch;
         max-width: none;
         width: auto;
+      }
+      .msg.approval .bubble {
+        width: 100%;
         border-color: var(--amber);
         background: #241c0e;
         border-radius: 0.5rem;
@@ -413,15 +431,17 @@
       const settingsForm = document.getElementById("settings-form");
       const settingsNext = document.getElementById("settings-next");
 
+      function faceEl(who) {
+        const av = document.createElement("div");
+        av.className = "avatar " + who;
+        av.setAttribute("aria-hidden", "true");
+        av.innerHTML = '<span class="eyes"></span>';
+        return av;
+      }
+
       function add(kind, title, body, extra) {
         const el = document.createElement("article");
         el.className = "msg " + kind;
-        if (kind === "bot") {
-          const av = document.createElement("div");
-          av.className = "avatar";
-          av.innerHTML = '<span class="eyes"></span>';
-          el.appendChild(av);
-        }
         const wrap = document.createElement("div");
         wrap.className = "bubble";
         if (title) {
@@ -439,7 +459,15 @@
         }
         wrap.appendChild(bodyEl);
         if (extra) wrap.appendChild(extra);
-        el.appendChild(wrap);
+        if (kind === "bot") {
+          el.appendChild(faceEl("assistant"));
+          el.appendChild(wrap);
+        } else if (kind === "user") {
+          el.appendChild(wrap);
+          el.appendChild(faceEl("person"));
+        } else {
+          el.appendChild(wrap);
+        }
         logEl.appendChild(el);
         logEl.scrollTop = logEl.scrollHeight;
         return el;
@@ -561,7 +589,7 @@
         add("user", "You", text);
         const out = add("bot", "Assistant", "");
         const bodyEl = out.querySelector(".md, pre");
-        const av = out.querySelector(".avatar");
+        const av = out.querySelector(".avatar.assistant");
         let quiet = out.querySelector(".quiet");
         if (!quiet) {
           quiet = document.createElement("div");

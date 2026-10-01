@@ -52,10 +52,14 @@ describe("local control plane + worker (no fake remote)", () => {
     assert.match(html, /\/api\/desktop/);
     assert.match(html, /电脑/);
     assert.match(html, /class="avatar"/);
+    assert.match(html, /avatar\.person/);
+    assert.match(html, /faceEl\("person"\)/);
+    assert.match(html, /faceEl\("assistant"\)/);
     assert.match(html, /直接开始对话/);
     assert.match(html, /Assistant/);
     assert.match(html, /\.msg\.user\s*\{[^}]*align-self:\s*flex-end/s);
     assert.match(html, /\.msg\.bot\s*\{[^}]*align-self:\s*flex-start/s);
+    assert.match(html, /\.msg \.bubble\s*\{[^}]*border:/s);
     assert.doesNotMatch(html, /<select id="mode"|Run on host|Confirm handoff|REMOTE/);
   });
 

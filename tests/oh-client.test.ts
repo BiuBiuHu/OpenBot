@@ -402,11 +402,15 @@ describe("web → OpenHands (no worker)", () => {
     assert.match(html, /Assistant/);
     assert.match(html, /"You"/);
     assert.match(html, /class="avatar"/);
+    assert.match(html, /avatar\.person/);
+    assert.match(html, /faceEl\("person"\)/);
+    assert.match(html, /faceEl\("assistant"\)/);
     assert.match(html, /wait-bob/);
     assert.match(html, /电脑/);
     assert.doesNotMatch(html, /On this computer/);
     assert.match(html, /\.msg\.user\s*\{[^}]*align-self:\s*flex-end/s);
     assert.match(html, /\.msg\.bot\s*\{[^}]*align-self:\s*flex-start/s);
+    assert.match(html, /\.msg \.bubble\s*\{[^}]*border:/s);
     assert.match(html, /type="module"/);
     assert.match(html, /\/chat-ui\.js/);
     assert.match(html, /shouldSendOnEnter/);
