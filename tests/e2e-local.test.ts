@@ -51,6 +51,8 @@ describe("local control plane + worker (no fake remote)", () => {
     assert.match(html, /This computer/);
     assert.match(html, /直接开始对话/);
     assert.match(html, /Assistant/);
+    assert.match(html, /\.msg\.user\s*\{[^}]*align-self:\s*flex-end/s);
+    assert.match(html, /\.msg\.bot\s*\{[^}]*align-self:\s*flex-start/s);
     assert.doesNotMatch(html, /Confirm handoff|REMOTE/);
   });
 

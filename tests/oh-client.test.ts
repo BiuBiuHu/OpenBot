@@ -399,6 +399,8 @@ describe("web → OpenHands (no worker)", () => {
     assert.match(html, /直接开始对话/);
     assert.match(html, /Assistant/);
     assert.match(html, /: "You"/);
+    assert.match(html, /\.msg\.user\s*\{[^}]*align-self:\s*flex-end/s);
+    assert.match(html, /\.msg\.bot\s*\{[^}]*align-self:\s*flex-start/s);
     assert.doesNotMatch(html, /Confirm handoff|Not now|REMOTE/);
     const status = (await (await fetch(`http://127.0.0.1:${port}/api/status`)).json()) as {
       ok?: boolean;

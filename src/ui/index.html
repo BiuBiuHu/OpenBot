@@ -77,17 +77,40 @@
         padding: 1.1rem 1.4rem 2rem;
         display: flex;
         flex-direction: column;
-        gap: 0.85rem;
+        align-items: stretch;
+        gap: 0.7rem;
       }
       .msg {
-        max-width: 46rem;
-        padding: 0.75rem 0.9rem;
+        max-width: min(36rem, 78%);
+        width: fit-content;
+        padding: 0.7rem 0.9rem;
         border: 1px solid var(--line);
         background: var(--panel);
+        border-radius: 0.85rem;
       }
-      .msg.user { border-left: 3px solid var(--amber); }
-      .msg.bot { border-left: 3px solid var(--phosphor); }
-      .msg.sys { color: var(--muted); font-family: var(--mono); font-size: 0.8rem; }
+      .msg.user {
+        align-self: flex-end;
+        margin-left: auto;
+        border-color: #3a3420;
+        background: #222012;
+      }
+      .msg.user h3 { text-align: right; }
+      .msg.bot {
+        align-self: flex-start;
+        margin-right: auto;
+        border-color: #2d3a22;
+      }
+      .msg.sys {
+        align-self: center;
+        max-width: min(42rem, 92%);
+        width: auto;
+        border: none;
+        background: transparent;
+        padding: 0.2rem 0.4rem;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.8rem;
+      }
       .msg h3 {
         margin: 0 0 0.35rem;
         font-family: var(--sans);
@@ -122,8 +145,12 @@
         color: #d5e8b8;
       }
       .approval {
+        align-self: stretch;
+        max-width: none;
+        width: auto;
         border-color: var(--amber);
         background: #241c0e;
+        border-radius: 0.5rem;
       }
       .approval button, footer button, footer select {
         font-family: var(--mono);
