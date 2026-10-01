@@ -25,10 +25,10 @@
 
 | ID | 任务 | 影响模块 | 优先级 | 状态 | 退出条件 |
 |----|------|----------|--------|------|----------|
-| TASK-DOC-001 | 写全套 feature 文档 | `docs/openbot-agent-capabilities/` | P0 | in_progress | 模板章节齐全、中文 |
-| TASK-DOC-002 | 实现 page-read + thread 路径 | `src/page-read.ts` 等 | P0 | in_progress | 测试绿、不创建 OH 会话 |
-| TASK-DOC-003 | eval `read-public-doc` | `evals/` `eval-set` | P0 | pending | suite 含该 id 且通过 |
-| TASK-DOC-004 | phases 替代声明 | `docs/phases/README.md` | P0 | pending | 写明决策源已迁移 |
+| TASK-DOC-001 | 写全套 feature 文档 | `docs/openbot-agent-capabilities/` | P0 | done | 模板章节齐全、中文 |
+| TASK-DOC-002 | 实现 page-read + thread 路径 | `src/page-read.ts` 等 | P0 | done | 测试绿、不创建 OH 会话 |
+| TASK-DOC-003 | eval `read-public-doc` | `evals/` `eval-set` | P0 | done | suite 含该 id 且通过 |
+| TASK-DOC-004 | phases 替代声明 | `docs/phases/README.md` | P0 | done | 写明决策源已迁移 |
 | TASK-CODE-001 | 具名改文件分发与评测 | thread / evals | P1 | pending | 另开从 main 拉的分支 |
 | TASK-WSDOC-001 | 工作区 notes.md 起草 | 未定 | P1 | pending | 先把验收写进本目录新版本 |
 | TASK-DESK-001 | 桌面回归（无工具条/放大） | desktop | P2 | pending | 不在本 PR 改代码 |

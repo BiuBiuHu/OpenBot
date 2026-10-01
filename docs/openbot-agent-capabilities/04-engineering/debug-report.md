@@ -12,7 +12,7 @@
 - 影响环境：本机 OpenBot 页 + 已配置的 ECS 交接（具体主机不入库）。
 - 影响用户/角色：本机使用者。
 - 严重级别：P0。文档能力看起来完全不可用。
-- 当前状态：修复中（本 feature）。
+- 当前状态：已修复并本地验证。
 
 ## 2. 复现信息
 
@@ -55,9 +55,9 @@
 
 | 验证项 | 命令/步骤 | 结果 | 证据 |
 |--------|-----------|------|------|
-| 原 bug | eval `read-public-doc` + thread 单测 | 实施后回填 | test-report |
-| 相邻路径 | 旧 chat-layer 全套 | 实施后回填 | eval-set 测试 |
-| 失败路径 | 空 fetch → 读不成，不是超时套话 | 单测 | tests |
+| 原 bug | eval `read-public-doc` + thread 单测 + `/api/chat` 现场句 | 通过 | test-report v0.2 |
+| 相邻路径 | 旧 chat-layer 全套随 `npm test` | 通过 | 94 pass |
+| 失败路径 | 空 fetch → 读不成，不是超时套话 | 通过 | TC-DOC-005 |
 | 预发/线上差异 | 无共享环境 | 不适用 | — |
 | 运行时/环境/DB 健康 | 无 DB | 不适用 | — |
 
