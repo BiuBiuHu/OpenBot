@@ -794,6 +794,7 @@
       window.addEventListener("message", (e) => {
         if (e.origin !== location.origin) return;
         if (e.data && e.data.type === "openbot-desk-toggle") setDeskMax(!deskMaximized());
+        if (e.data && e.data.type === "openbot-desk-close") setDeskMax(false);
       });
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && deskMaximized()) setDeskMax(false);

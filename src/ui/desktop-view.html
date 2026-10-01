@@ -43,12 +43,16 @@
       const params = new URLSearchParams(location.search);
       let port = Number(params.get("port") || 0) || 0;
 
-      function toggleMax() {
+      function tellParent(type) {
         try {
-          parent.postMessage({ type: "openbot-desk-toggle" }, location.origin);
+          parent.postMessage({ type }, location.origin);
         } catch {
           /* top-level */
         }
+      }
+
+      function toggleMax() {
+        tellParent("openbot-desk-toggle");
       }
 
       const screen = document.getElementById("screen");
@@ -56,6 +60,9 @@
       screen.addEventListener("dblclick", (e) => {
         e.preventDefault();
         toggleMax();
+      });
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") tellParent("openbot-desk-close");
       });
 
       async function resolvePort() {

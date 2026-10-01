@@ -74,6 +74,7 @@ describe("desktop pane (no live host)", () => {
       assert.match(html, /放大/);
       assert.match(html, /收起/);
       assert.match(html, /openbot-desk-toggle/);
+      assert.match(html, /openbot-desk-close/);
       assert.match(html, /allow-pointer-lock/);
       assert.match(html, /pointer-lock/);
       assert.doesNotMatch(html, /On this computer/);
@@ -84,6 +85,7 @@ describe("desktop pane (no live host)", () => {
       const view = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/desktop-view`)).text();
       assert.match(view, /\/novnc\/core\/rfb\.js/);
       assert.match(view, /openbot-desk-toggle/);
+      assert.match(view, /openbot-desk-close/);
       assert.match(view, /clip-path:\s*inset\(0\)/);
       assert.doesNotMatch(view, /<iframe/);
       assert.doesNotMatch(view, /noVNC_control_bar/);
