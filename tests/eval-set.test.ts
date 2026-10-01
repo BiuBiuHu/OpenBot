@@ -31,8 +31,10 @@ describe("chat-layer eval set", () => {
     const ids = cases.map((c) => c.id).sort();
     assert.deepEqual(ids, [
       "analyze-other-product",
+      "change-code",
       "links-render",
       "timeout-is-short",
+      "todays-time",
       "what-is-grok-bot",
       "who-are-you",
     ]);

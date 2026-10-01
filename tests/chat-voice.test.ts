@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  isClockAsk,
+  isCodingAsk,
+  isVagueCodingAsk,
   looksLikeOpenHandsIntro,
-  needsLookup,
   lookupQuery,
+  needsLookup,
   voiceChatReply,
+  voiceCodingReady,
   voiceFromSearch,
+  voiceNow,
 } from "../src/chat-voice.js";
 import { runHandoffTurn, HandoffStore } from "../src/handoff.js";
 import { OpenHandsClient } from "../src/oh-client.js";
@@ -92,6 +97,80 @@ describe("chat voice", () => {
     assert.equal(needsLookup("你是谁"), false);
     assert.equal(needsLookup("帮我分析下 grokbot 的架构"), false);
     assert.equal(needsLookup("在工作区写一份 uname 记录"), false);
+    assert.equal(needsLookup("今天的时间是什么时候"), false);
+    assert.equal(needsLookup("你能帮我改代码吗"), false);
+    assert.equal(needsLookup("改代码"), false);
+  });
+
+  it("TC-VOICE-011: a clock ask is the Shanghai time, not a search dump", () => {
+    assert.equal(isClockAsk("今天的时间是什么时候"), true);
+    assert.equal(isClockAsk("我是说今天的时间，你这回答是啥意思"), true);
+    assert.equal(isClockAsk("现在几点"), true);
+    assert.equal(isClockAsk("Grok Bot 是什么"), false);
+    const shown = voiceNow({
+      language: "zh-CN",
+      now: new Date("2026-10-01T20:41:00+08:00"),
+    });
+    assert.match(shown.text, /现在是/);
+    assert.match(shown.text, /2026年10月1日/);
+    assert.match(shown.text, /20:41/);
+    assert.match(shown.text, /上海/);
+    assert.ok(shown.text.split(/[。！？]/).filter(Boolean).length <= 2);
+    assert.doesNotMatch(shown.text, /网上查过了|今天開始|CST|没有访问|没访问|实时时钟|系统时间/);
+  });
+
+  it("TC-VOICE-012: 改代码 is a coding request, not the canned computer line", async () => {
+    assert.equal(isCodingAsk("你能帮我改代码吗"), true);
+    assert.equal(isCodingAsk("改代码"), true);
+    assert.equal(isVagueCodingAsk("改代码"), true);
+    assert.equal(isVagueCodingAsk("把 src/foo.ts 的 bar 改成 1"), false);
+    const intro = voiceChatReply({
+      userMessage: "你能帮我改代码吗",
+      remoteText: INTRO,
+      outcome: "succeeded",
+      language: "zh-CN",
+    });
+    assert.match(intro.text, /可以/);
+    assert.match(intro.text, /文件/);
+    assert.doesNotMatch(intro.text, /先不背说明书/);
+    assert.doesNotMatch(intro.text, /你具体想让这台电脑做什么/);
+    const follow = voiceCodingReady({ language: "zh-CN" });
+    assert.match(follow.text, /可以/);
+    assert.doesNotMatch(follow.text, /先不背说明书/);
+    const events: AgentEvent[] = [];
+    const result = await runThreadTurn("改代码", {
+      client: new OpenHandsClient("http://127.0.0.1:9", "x"),
+      store: new HandoffStore(),
+      emit: (e) => events.push(e),
+      forceHandoff: true,
+      language: "zh-CN",
+      searchWeb: async () => {
+        throw new Error("clock/coding must not search");
+      },
+    });
+    assert.equal(result.path, "coding");
+    const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+    assert.match(tokens, /可以/);
+    assert.doesNotMatch(tokens, /先不背说明书/);
+  });
+
+  it("TC-VOICE-013: 今天的时间 does not call search", async () => {
+    const events: AgentEvent[] = [];
+    const result = await runThreadTurn("今天的时间是什么时候", {
+      client: new OpenHandsClient("http://127.0.0.1:9", "x"),
+      store: new HandoffStore(),
+      emit: (e) => events.push(e),
+      forceHandoff: true,
+      language: "zh-CN",
+      searchWeb: async () => {
+        throw new Error("clock must not search");
+      },
+    });
+    assert.equal(result.path, "clock");
+    const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+    assert.match(tokens, /现在是/);
+    assert.match(tokens, /上海/);
+    assert.doesNotMatch(tokens, /网上查过了|CST|今天開始/);
   });
 
   it("TC-VOICE-007: search hits become a few sentences, not the intro or I don't know", () => {

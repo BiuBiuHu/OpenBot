@@ -1,6 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
-import { looksLikeOpenHandsIntro, voiceChatReply, voiceFromSearch, type ChatOutcome } from "./chat-voice.js";
+import {
+  isClockAsk,
+  looksLikeOpenHandsIntro,
+  voiceChatReply,
+  voiceFromSearch,
+  voiceNow,
+  type ChatOutcome,
+} from "./chat-voice.js";
 import { ensureDir, openbotHome, repoRoot } from "./paths.js";
 import type { SearchHit } from "./web-search.js";
 
@@ -96,6 +103,9 @@ function mapFixtureOutcome(status: EvalRemoteFixture["status"]): ChatOutcome {
 }
 
 export function shownForCase(c: EvalCase): string {
+  if (isClockAsk(c.userMessage)) {
+    return voiceNow({ language: "zh-CN" }).text;
+  }
   if (c.lookupRequired || c.search) {
     return voiceFromSearch({
       userMessage: c.userMessage,

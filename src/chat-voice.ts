@@ -29,8 +29,17 @@ const WHO_ARE_YOU = /你是谁|你谁啊|你叫什么|who are you|what are you/i
 
 const LOOKUP_ASK = /是什么|什么是|介绍一下|what(?:['’]s| is| are)\b|who is\b/i;
 
+const CLOCK_ASK =
+  /现在几点|几点了|几点钟|当前时间|现在的时间|今天的时间|系统时间|现在是几点|what time is it|what(?:['’]s| is) the time\b|current time\b|date and time/i;
+
+const CODING_ASK =
+  /改代码|写代码|修代码|改程式|写程式|修\s*bug|改个?(函数|接口)|帮我改代码|帮我写代码|你能帮我改|change (the )?code|fix (the )?code|edit (the )?code|write (some )?code|help me (change|fix|edit|write).{0,12}code/i;
+
 const COMPUTER_TASK =
   /uname|workspace|工作区|文件|目录|终端|\bshell\b|\bls\b|\bcat\b|mkdir|chmod|写一份|写一个|帮我(改|写|跑|修|部署|分析)|在(电脑|主机)上|运行命令|summarize uname/i;
+
+/** Wall clock the chat layer answers locally. Not a search. */
+export const CHAT_TIME_ZONE = "Asia/Shanghai";
 
 const OTHER_PRODUCT = /grok\s*bot|grokbot|openclaw|chatgpt|claude\b|devin\b|cursor\b/i;
 
@@ -51,11 +60,34 @@ export function isComputerTask(message: string): boolean {
   return COMPUTER_TASK.test(String(message || ""));
 }
 
+export function isClockAsk(message: string): boolean {
+  const t = String(message || "").trim();
+  if (!t) return false;
+  if (CLOCK_ASK.test(t)) return true;
+  if (/(今天|现在|当前).{0,8}(时间|几点)/.test(t) && !/会议|开会|发布|上线|截止/.test(t)) return true;
+  if (/我是说.{0,16}(今天|现在).{0,8}时间/.test(t)) return true;
+  return false;
+}
+
+export function isCodingAsk(message: string): boolean {
+  return CODING_ASK.test(String(message || ""));
+}
+
+/** Capability / follow-up with no file or concrete edit. Answer locally. */
+export function isVagueCodingAsk(message: string): boolean {
+  const t = String(message || "").trim();
+  if (!isCodingAsk(t)) return false;
+  if (/\.[a-z0-9]{1,8}\b|[/\\][\w.-]+\.[a-z0-9]+|\bsrc\/|\btests\/|把\S{1,40}改成/i.test(t)) return false;
+  return true;
+}
+
 /** Unknown-fact questions the chat layer should look up instead of asking OpenHands. */
 export function needsLookup(message: string): boolean {
   const t = String(message || "").trim();
   if (!t) return false;
   if (isWhoAreYou(t)) return false;
+  if (isClockAsk(t)) return false;
+  if (isCodingAsk(t)) return false;
   if (isComputerTask(t)) return false;
   return LOOKUP_ASK.test(t);
 }
@@ -137,6 +169,56 @@ function dumpLine(zh: boolean): string {
   return zh
     ? "电脑上查过了。这边一句话：还没有能直接用的结论。"
     : "I looked on the computer. Short version: nothing I can hand you as a conclusion yet.";
+}
+
+function codingReadyLine(zh: boolean): string {
+  return zh
+    ? "可以。说一下改哪个文件、想改成什么样。"
+    : "Yes. Tell me which file and what you want changed.";
+}
+
+function skipManualLine(zh: boolean): string {
+  return zh
+    ? "先不背说明书。你具体想让这台电脑做什么？"
+    : "I'll skip the manual. What do you actually want this computer to do?";
+}
+
+function pickPart(parts: Intl.DateTimeFormatPart[], type: string): string {
+  return parts.find((p) => p.type === type)?.value || "";
+}
+
+export function formatShanghaiClock(now = new Date(), language?: string): string {
+  const lang = normalizeChatLanguage(language);
+  const zh = lang !== "en";
+  const parts = new Intl.DateTimeFormat(zh ? "zh-CN" : "en-US", {
+    timeZone: CHAT_TIME_ZONE,
+    year: "numeric",
+    month: zh ? "numeric" : "long",
+    day: "numeric",
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const hour = pickPart(parts, "hour").padStart(2, "0");
+  const minute = pickPart(parts, "minute").padStart(2, "0");
+  if (!zh) {
+    return `${pickPart(parts, "weekday")}, ${pickPart(parts, "month")} ${pickPart(parts, "day")}, ${pickPart(parts, "year")} ${hour}:${minute} in Shanghai`;
+  }
+  return `${pickPart(parts, "year")}年${pickPart(parts, "month")}月${pickPart(parts, "day")}日${pickPart(parts, "weekday")} ${hour}:${minute}（上海）`;
+}
+
+export function voiceNow(input: { language?: string; now?: Date } = {}): VoiceReply {
+  const language = voiceLanguage(input);
+  const zh = language !== "en";
+  const clock = formatShanghaiClock(input.now ?? new Date(), language);
+  const text = zh ? `现在是 ${clock}。` : `It's ${clock}.`;
+  return { text: speak(text, language), kind: "ok" };
+}
+
+export function voiceCodingReady(input: { language?: string } = {}): VoiceReply {
+  const language = voiceLanguage(input);
+  return { text: speak(codingReadyLine(language !== "en"), language), kind: "ok" };
 }
 
 function voiceLanguage(input: { language?: string; userMessage?: string }): ChatLanguage {
@@ -240,19 +322,19 @@ export function voiceChatReply(input: VoiceInput): VoiceReply {
   }
 
   if (looksLikeOpenHandsIntro(remote)) {
+    if (isClockAsk(input.userMessage)) {
+      return voiceNow({ language, now: new Date() });
+    }
+    if (isCodingAsk(input.userMessage)) {
+      return { text: speak(codingReadyLine(zh), language), kind: "ok" };
+    }
     if (mentionsOtherProduct(input.userMessage)) {
       return { text: speak(otherProductLine(zh, input.userMessage), language), kind: "ok" };
     }
     if (isWhoAreYou(input.userMessage)) {
       return { text: speak(whoLine(zh), language), kind: "ok" };
     }
-    return {
-      text: speak(
-        zh ? "先不背说明书。你具体想让这台电脑做什么？" : "I'll skip the manual. What do you actually want this computer to do?",
-        language,
-      ),
-      kind: "ok",
-    };
+    return { text: speak(skipManualLine(zh), language), kind: "ok" };
   }
 
   if (!remote) {

@@ -1,5 +1,13 @@
 import { runAgentTurn, runLocalChatTurn } from "./agent.js";
-import { needsLookup, lookupQuery, voiceFromSearch } from "./chat-voice.js";
+import {
+  isClockAsk,
+  isVagueCodingAsk,
+  lookupQuery,
+  needsLookup,
+  voiceCodingReady,
+  voiceFromSearch,
+  voiceNow,
+} from "./chat-voice.js";
 import { DEFAULT_CHAT_LANGUAGE, normalizeChatLanguage, prefersChineseSearch } from "./language.js";
 import { hasLocalModelKey } from "./config.js";
 import { runHandoffTurn, type HandoffTurnDeps } from "./handoff.js";
@@ -25,7 +33,7 @@ export interface ThreadTurnDeps extends HandoffTurnDeps {
 }
 
 export interface ThreadTurnResult {
-  path: "handoff" | "local" | "worker" | "lookup";
+  path: "handoff" | "local" | "worker" | "lookup" | "clock" | "coding";
   conversation?: OhConversation;
   history: ChatMessage[];
 }
@@ -41,6 +49,20 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
   if (!goal) throw new Error("message required");
 
   const language = normalizeChatLanguage(deps.language ?? DEFAULT_CHAT_LANGUAGE);
+
+  if (isClockAsk(goal)) {
+    deps.emit({ type: "status", text: "thinking" });
+    deps.emit({ type: "token", text: voiceNow({ language }).text });
+    deps.emit({ type: "done" });
+    return { path: "clock", history: deps.history ?? [] };
+  }
+
+  if (isVagueCodingAsk(goal)) {
+    deps.emit({ type: "status", text: "thinking" });
+    deps.emit({ type: "token", text: voiceCodingReady({ language }).text });
+    deps.emit({ type: "done" });
+    return { path: "coding", history: deps.history ?? [] };
+  }
 
   if (needsLookup(goal)) {
     deps.emit({ type: "status", text: "thinking" });

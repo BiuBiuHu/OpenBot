@@ -1,0 +1,29 @@
+{
+  "id": "todays-time",
+  "title": "「今天的时间是什么时候」 is the clock, not a search snippet",
+  "userMessage": "今天的时间是什么时候",
+  "remote": {
+    "status": "finished",
+    "conversationId": "eval-todays-time",
+    "rawReply": "网上查过了。今天開始是人類。\n抱歉，我没有访问外部网络的实时时钟。系统时间为 CST。"
+  },
+  "expect": {
+    "remoteOutcome": "succeeded",
+    "shownMustNotMatch": [
+      "网上查过了",
+      "今天開始",
+      "CST",
+      "没有访问",
+      "没访问",
+      "实时时钟",
+      "系统时间",
+      "先不背说明书"
+    ],
+    "shownMustMatch": [
+      "现在是",
+      "上海"
+    ],
+    "maxSentences": 2,
+    "maxChars": 80
+  }
+}
