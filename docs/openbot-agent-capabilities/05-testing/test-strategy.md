@@ -16,12 +16,13 @@
 
 | 需求 ID | 验收标准 | 测试用例 ID | 证据 | 状态 |
 |---------|----------|-------------|------|------|
-| REQ-DOC-001 | 现场原句走 document 并短答 | TC-DOC-001 TC-DOC-004 EVAL-read-public-doc | 测试报告 | 待测 |
+| REQ-DOC-001 | 看看…讲了什么 真抓短答 | TC-DOC-001 EVAL-read-public-doc | 测试报告 | 待测 |
+| REQ-DOC-004 | 这个讲的是什么 真抓，不搜 HTTPS | TC-DOC-007 EVAL-read-public-doc-exact | 测试报告 | 待测 |
 | REQ-DOC-002 | 无超时套话、无 OH 说明书 | TC-DOC-005 EVAL-read-public-doc | eval | 待测 |
 | REQ-DOC-003 | blob→raw | TC-DOC-002 | 单测 | 待测 |
-| REQ-CAP-004 | 简体短答 | TC-DOC-003 EVAL-read-public-doc | 单测 | 待测 |
-| REQ-CHAT-001 | 旧用例仍绿 | TC-EVAL-001 及 TC-VOICE-* | eval-set | 待测 |
-| REQ-CAP-001 | 无新 mode | TC-DOC-004 仍 POST 原 API | 代码+测试 | 待测 |
+| REQ-CAP-004 | 简体短答，禁繁体 | TC-EVAL-003 what-is-grok-bot | 单测 | 待测 |
+| REQ-CHAT-001 | 你是谁 / 超时 / 链接 | who-are-you timeout-is-short links-render | eval-set | 待测 |
+| REQ-CAP-001 | 无新 mode | TC-UI 单输入 | 代码+测试 | 待测 |
 
 ## 3. 测试范围
 

@@ -1,7 +1,7 @@
 {
   "id": "who-are-you",
-  "title": "「你是谁」 must not return the canned OpenHands self-introduction",
-  "userMessage": "你是谁",
+  "title": "你是谁? 答 OpenBot，不念 OpenHands 说明书",
+  "userMessage": "你是谁?",
   "remote": {
     "status": "finished",
     "conversationId": "eval-who-are-you",

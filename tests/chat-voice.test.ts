@@ -105,6 +105,10 @@ describe("chat voice", () => {
       needsLookup("看看 https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个文档讲了什么?"),
       false,
     );
+    assert.equal(
+      needsLookup("https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个讲的是什么?"),
+      false,
+    );
   });
 
   it("TC-VOICE-011: a clock ask is the Shanghai time, not a search dump", () => {
@@ -378,6 +382,8 @@ describe("chat voice", () => {
 
   const DOC_ASK =
     "看看 https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个文档讲了什么?";
+  const DOC_ASK_EXACT =
+    "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个讲的是什么?";
   const DOC_TEXT =
     "# 用户记忆和知识库\n\n这一章讲用户记忆和共享知识库的差别，以及检索增强生成怎么把外部知识接到对话里。\n用户记忆是针对单个人长期保存的偏好和事实，知识库则是多人可复用的材料。\n";
 
@@ -429,6 +435,41 @@ describe("chat voice", () => {
       assert.match(tokens, /用户记忆/);
       assert.doesNotMatch(tokens, /没在时限|再说一次|我是 OpenHands|网上查过了/);
       assert.ok(!events.some((e) => e.type === "tool_start"));
+    } finally {
+      await mock.stop();
+    }
+  });
+
+  it("TC-DOC-007: the exact live sentence fetches the document and never searches HTTPS", async () => {
+    const mock = await startMockOhServer({
+      sessionKey: "voice-key",
+      replyFor: () => INTRO,
+    });
+    try {
+      const events: AgentEvent[] = [];
+      const result = await runThreadTurn(DOC_ASK_EXACT, {
+        client: new OpenHandsClient(mock.baseUrl, "voice-key"),
+        store: new HandoffStore(),
+        emit: (e) => events.push(e),
+        forceHandoff: true,
+        timeoutMs: 2000,
+        pollMs: 20,
+        language: "zh-CN",
+        searchWeb: async (query) => {
+          throw new Error(`document ask must not search: ${query}`);
+        },
+        readPublicDocument: async () => ({
+          title: "用户记忆和知识库",
+          text: DOC_TEXT,
+          url: "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md",
+        }),
+      });
+      assert.equal(result.path, "document");
+      assert.equal(mock.creates.length, 0);
+      const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+      assert.match(tokens, /我看过了/);
+      assert.match(tokens, /用户记忆/);
+      assert.doesNotMatch(tokens, /HTTPS|网上查过了|没在时限/);
     } finally {
       await mock.stop();
     }

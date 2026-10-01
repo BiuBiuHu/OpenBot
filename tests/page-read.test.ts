@@ -12,17 +12,25 @@ import { needsLookup } from "../src/chat-voice.js";
 
 const LIVE =
   "看看 https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个文档讲了什么?";
+const LIVE_EXACT =
+  "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个讲的是什么?";
 
 describe("page-read", () => {
   it("TC-DOC-001: the live document question is a document ask, not a lookup", () => {
     assert.equal(isDocumentReadAsk(LIVE), true);
     assert.equal(needsLookup(LIVE), false);
+    assert.equal(isDocumentReadAsk(LIVE_EXACT), true);
+    assert.equal(needsLookup(LIVE_EXACT), false);
     assert.equal(
       extractPublicHttpUrl(LIVE),
       "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md",
     );
     assert.equal(isDocumentReadAsk("Grok Bot 是什么"), false);
     assert.equal(isDocumentReadAsk("https://example.com/page"), false);
+    assert.equal(
+      isDocumentReadAsk("https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个讲的是什么?"),
+      true,
+    );
   });
 
   it("TC-DOC-002: GitHub blob pages rewrite to raw.githubusercontent.com", () => {

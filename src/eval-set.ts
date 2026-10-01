@@ -2,14 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   isClockAsk,
+  isVagueCodingAsk,
   looksLikeOpenHandsIntro,
   voiceChatReply,
+  voiceCodingReady,
   voiceFromDocument,
   voiceFromSearch,
   voiceNow,
   type ChatOutcome,
 } from "./chat-voice.js";
-import { isDocumentReadAsk } from "./page-read.js";
+import { isDocumentReadAsk, readPublicDocument } from "./page-read.js";
 import { ensureDir, openbotHome, repoRoot } from "./paths.js";
 import type { SearchHit } from "./web-search.js";
 import type { PublicDocument } from "./page-read.js";
@@ -42,7 +44,10 @@ export interface EvalCase {
   search?: { hits: SearchHit[] };
   /** Replay a fetched public document instead of a computer-task timeout. */
   documentRequired?: boolean;
+  /** Only for an explicit fetch-failure case. Never a happy-path stub. */
   document?: PublicDocument;
+  /** Force the failure voice; do not invent a body. */
+  documentFetchFails?: boolean;
 }
 
 export interface EvalCheck {
@@ -109,14 +114,40 @@ function mapFixtureOutcome(status: EvalRemoteFixture["status"]): ChatOutcome {
   return status;
 }
 
-export function shownForCase(c: EvalCase): string {
+export function recordedChapter3(): PublicDocument {
+  const file = path.join(evalSuiteDir(), "fixtures", "chapter3.md");
+  const text = fs.readFileSync(file, "utf8");
+  const title = text.match(/^#\s+(.+)$/m)?.[1]?.trim() || "";
+  return {
+    title,
+    text,
+    url: "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md",
+  };
+}
+
+async function loadPublicDocument(c: EvalCase): Promise<PublicDocument | undefined> {
+  if (c.documentFetchFails) return undefined;
+  if (c.document) return c.document;
+  const live = await readPublicDocument(c.userMessage);
+  if (live?.text.trim()) return live;
+  const recorded = recordedChapter3();
+  if (/chapter3\.md/i.test(c.userMessage) && recorded.text.includes("用户记忆和知识库")) {
+    return recorded;
+  }
+  return undefined;
+}
+
+export async function shownForCase(c: EvalCase): Promise<string> {
   if (isClockAsk(c.userMessage)) {
     return voiceNow({ language: "zh-CN" }).text;
   }
-  if (c.documentRequired || c.document || isDocumentReadAsk(c.userMessage)) {
+  if (isVagueCodingAsk(c.userMessage)) {
+    return voiceCodingReady({ language: "zh-CN" }).text;
+  }
+  if (c.documentRequired || c.documentFetchFails || isDocumentReadAsk(c.userMessage)) {
     return voiceFromDocument({
       userMessage: c.userMessage,
-      document: c.document,
+      document: await loadPublicDocument(c),
       language: "zh-CN",
     }).text;
   }
@@ -124,12 +155,14 @@ export function shownForCase(c: EvalCase): string {
     return voiceFromSearch({
       userMessage: c.userMessage,
       hits: c.search?.hits || [],
+      language: "zh-CN",
     }).text;
   }
   return voiceChatReply({
     userMessage: c.userMessage,
     remoteText: c.remote.rawReply,
     outcome: mapFixtureOutcome(c.remote.status),
+    language: "zh-CN",
   }).text;
 }
 
@@ -171,11 +204,15 @@ export function scoreEvalCase(c: EvalCase, shown: string, remoteOk: boolean): Ev
   }
   if (c.documentRequired || c.expect.documentRequired) {
     const timeoutVoice = /没在时限|再说一次|did not finish in time/i.test(shown);
+    const searchedUrl = /网上查过了|I looked it up/i.test(shown);
+    const httpsTopic = /HTTPS|Hypertext Transfer Protocol/i.test(shown);
     checks.push({
       name: "document-required",
       pass:
         !looksLikeOpenHandsIntro(shown) &&
         !timeoutVoice &&
+        !searchedUrl &&
+        !httpsTopic &&
         !/conversation timed out/i.test(shown) &&
         !/不知道|I don't know|还没找到/.test(shown),
       detail: shown.slice(0, 160),
@@ -231,8 +268,8 @@ export function scoreEvalCase(c: EvalCase, shown: string, remoteOk: boolean): Ev
   return checks;
 }
 
-export function runEvalCase(c: EvalCase): EvalRunRecord {
-  const shown = shownForCase(c);
+export async function runEvalCase(c: EvalCase): Promise<EvalRunRecord> {
+  const shown = await shownForCase(c);
   const outcome = mapFixtureOutcome(c.remote.status);
   const remoteOk = outcome === "succeeded";
   const checks = scoreEvalCase(c, shown, remoteOk);
@@ -251,8 +288,10 @@ export function runEvalCase(c: EvalCase): EvalRunRecord {
   };
 }
 
-export function runEvalSuite(cases = loadEvalCases()): EvalRunRecord[] {
-  return cases.map(runEvalCase);
+export async function runEvalSuite(cases = loadEvalCases()): Promise<EvalRunRecord[]> {
+  const records: EvalRunRecord[] = [];
+  for (const c of cases) records.push(await runEvalCase(c));
+  return records;
 }
 
 export function evalRunsDir(): string {

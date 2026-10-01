@@ -26,14 +26,16 @@ describe("chat-layer eval set", () => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
-  it("TC-EVAL-001: suite includes the live failures plus lookup and all pass", () => {
+  it("TC-EVAL-001: suite includes the live failures plus lookup and all pass", async () => {
     const cases = loadEvalCases();
     const ids = cases.map((c) => c.id).sort();
     assert.deepEqual(ids, [
       "analyze-other-product",
       "change-code",
+      "change-code-bare",
       "links-render",
       "read-public-doc",
+      "read-public-doc-exact",
       "timeout-is-short",
       "todays-time",
       "what-is-grok-bot",
@@ -42,7 +44,19 @@ describe("chat-layer eval set", () => {
     const dumped = JSON.stringify(cases);
     assert.doesNotMatch(dumped, /BEGIN [A-Z0-9 ]*PRIVATE KEY/);
     assert.doesNotMatch(dumped, /\b(?:\d{1,3}\.){3}\d{1,3}\b/);
-    const records = runEvalSuite(cases);
+    const exact = cases.find((c) => c.id === "read-public-doc-exact");
+    const older = cases.find((c) => c.id === "read-public-doc");
+    assert.equal(
+      exact?.userMessage,
+      "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个讲的是什么?",
+    );
+    assert.equal(
+      older?.userMessage,
+      "看看 https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个文档讲了什么?",
+    );
+    assert.equal(exact?.document, undefined);
+    assert.equal(older?.document, undefined);
+    const records = await runEvalSuite(cases);
     for (const r of records) {
       assert.equal(r.pass, true, `${r.caseId}: ${JSON.stringify(r.checks)}`);
       assert.ok(r.userMessage);
@@ -51,8 +65,8 @@ describe("chat-layer eval set", () => {
     }
   });
 
-  it("TC-EVAL-002: writing a run stays under ~/.openbot and redacts hosts", () => {
-    const records = runEvalSuite();
+  it("TC-EVAL-002: writing a run stays under ~/.openbot and redacts hosts", async () => {
+    const records = await runEvalSuite();
     const file = writeEvalSuiteRun(records);
     assert.ok(file.startsWith(home));
     assert.equal(fs.statSync(file).mode & 0o777, 0o600);
@@ -61,11 +75,11 @@ describe("chat-layer eval set", () => {
     assert.equal(redactEvalText("ssh root@14.1.2.3"), "ssh root@[host]");
   });
 
-  it("TC-EVAL-003: what-is-grok-bot fails on the OpenHands intro or a bare I don't know", () => {
+  it("TC-EVAL-003: what-is-grok-bot fails on the OpenHands intro or a bare I don't know", async () => {
     const c = loadEvalCases().find((x) => x.id === "what-is-grok-bot");
     assert.ok(c);
     assert.equal(c.lookupRequired, true);
-    const shown = shownForCase(c);
+    const shown = await shownForCase(c);
     assert.match(shown, /网上查过了/);
     assert.match(shown, /xAI/);
     assert.doesNotMatch(shown, /我是 OpenHands/);
@@ -89,16 +103,33 @@ describe("chat-layer eval set", () => {
     );
   });
 
-  it("TC-EVAL-004: read-public-doc must not voice the computer-task timeout", () => {
+  it("TC-EVAL-004: read-public-doc must not voice the computer-task timeout", async () => {
     const c = loadEvalCases().find((x) => x.id === "read-public-doc");
     assert.ok(c);
     assert.equal(c.documentRequired, true);
-    const shown = shownForCase(c);
+    const shown = await shownForCase(c);
     assert.match(shown, /我看过了/);
     assert.match(shown, /用户记忆/);
     assert.match(shown, /知识库/);
-    assert.doesNotMatch(shown, /没在时限|再说一次|我是 OpenHands|网上查过了/);
+    assert.doesNotMatch(shown, /没在时限|再说一次|我是 OpenHands|网上查过了|HTTPS/);
     assert.ok(scoreEvalCase(c, shown, false).every((x) => x.pass), JSON.stringify(scoreEvalCase(c, shown, false)));
     assert.ok(scoreEvalCase(c, "这台电脑这轮没在时限里跑完。你再说一次就行。", false).some((x) => !x.pass));
+  });
+
+  it("TC-EVAL-005: the exact live sentence must not be scored as an HTTPS lookup", async () => {
+    const c = loadEvalCases().find((x) => x.id === "read-public-doc-exact");
+    assert.ok(c);
+    const shown = await shownForCase(c);
+    assert.match(shown, /我看过了/);
+    assert.match(shown, /用户记忆/);
+    assert.match(shown, /知识库/);
+    assert.doesNotMatch(shown, /HTTPS|Hypertext Transfer Protocol|网上查过了|没在时限/);
+    assert.ok(
+      scoreEvalCase(
+        c,
+        "网上查过了。HTTPS （全称：Hypertext Transfer Protocol Secure），是以安全为目标的 HTTP 通道，在HTTP的基础上通过传输 …。",
+        false,
+      ).some((x) => !x.pass),
+    );
   });
 });

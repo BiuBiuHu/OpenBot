@@ -1,10 +1,10 @@
 {
-  "id": "change-code",
-  "title": "你能帮我改代码吗? 是改代码请求，不是说明书甩锅",
-  "userMessage": "你能帮我改代码吗?",
+  "id": "change-code-bare",
+  "title": "改代码 与带问号的那句同一条能力",
+  "userMessage": "改代码",
   "remote": {
     "status": "finished",
-    "conversationId": "eval-change-code",
+    "conversationId": "eval-change-code-bare",
     "rawReply": "先不背说明书。你具体想让这台电脑做什么？"
   },
   "expect": {
@@ -14,8 +14,7 @@
       "你具体想让这台电脑做什么",
       "我是 OpenHands",
       "workspace/project",
-      "排查过程",
-      "tool_start"
+      "排查过程"
     ],
     "shownMustMatch": [
       "可以",
