@@ -151,11 +151,13 @@ export async function refreshDesktopStatus(
 
 export function injectDesktopViewer(html: string, opts: { showBar?: boolean } = {}): string {
   const showBar = Boolean(opts.showBar);
+  const fill =
+    `html,body,#noVNC_container{width:100%!important;height:100%!important;margin:0!important;overflow:visible!important;background:#111!important;border-radius:0!important}
+     #noVNC_container{position:fixed!important;inset:0!important}
+     #noVNC_container canvas{border-radius:0!important}`;
   const css = showBar
-    ? `html,body,#noVNC_container{width:100%!important;height:100%!important;margin:0!important;overflow:hidden!important;background:#000!important}
-       #noVNC_container{position:fixed!important;inset:0!important}`
-    : `html,body,#noVNC_container{width:100%!important;height:100%!important;margin:0!important;overflow:hidden!important;background:#000!important}
-       #noVNC_container{position:fixed!important;inset:0!important}
+    ? fill
+    : `${fill}
        #noVNC_control_bar_anchor,#noVNC_control_bar,#noVNC_control_bar_handle,
        #noVNC_status,#noVNC_status_bar,#noVNC_hint_anchor,#noVNC_transition,
        .noVNC_panel{display:none!important;visibility:hidden!important}`;
