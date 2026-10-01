@@ -286,10 +286,11 @@ export function nextStepForConnect(state: {
   hasSessionKey: boolean;
   sshError?: string;
 }): { ready: boolean; nextStep: string } {
-  if (state.ohOk && state.hasSessionKey) {
+  const hostConfirmed = !state.hasHost || state.sshOk;
+  if (state.ohOk && state.hasSessionKey && hostConfirmed) {
     return { ready: true, nextStep: "Ready. Messages go to OpenHands on your machine." };
   }
-  if (state.ohOk && !state.hasSessionKey) {
+  if (state.ohOk && !state.hasSessionKey && hostConfirmed) {
     return {
       ready: false,
       nextStep:

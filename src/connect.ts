@@ -15,7 +15,7 @@ export interface ConnectResult {
   nextStep: string;
 }
 
-function isLoopback(hostname: string): boolean {
+export function isLoopback(hostname: string): boolean {
   return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
 }
 
@@ -49,7 +49,12 @@ export async function connectConfiguredHost(
 
   const client = OpenHandsClient.fromConfig(config);
   let ohProbe = await client.health();
-  if (!ohProbe.ok && hasHost && !isLoopback(config.host.hostname) && !opts.skipTunnel) {
+  if (hasHost && !isLoopback(config.host.hostname) && !ssh.ok) {
+    ohProbe = {
+      ok: false,
+      raw: { error: ssh.error || "SSH is down; not using a leftover local OpenHands" },
+    };
+  } else if (!ohProbe.ok && hasHost && !isLoopback(config.host.hostname) && !opts.skipTunnel) {
     try {
       if (tunnel) await tunnel.stop();
       tunnel = await openLocalForward(config, {
@@ -77,7 +82,7 @@ export async function connectConfiguredHost(
     hasHost,
     identityFile: config.host.identityFile,
     identityMissing: identityFileMissing(config),
-    sshOk: ssh.ok || openhands.ok,
+    sshOk: ssh.ok,
     ohOk: openhands.ok,
     hasSessionKey: Boolean(config.openhands.sessionApiKey),
     sshError: ssh.error,

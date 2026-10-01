@@ -12,7 +12,7 @@ import {
   saveConfig,
   upsertHomeEnv,
 } from "./config.js";
-import { connectConfiguredHost, type ConnectResult } from "./connect.js";
+import { connectConfiguredHost, isLoopback, type ConnectResult } from "./connect.js";
 import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "./handoff.js";
 import { conversationSnippet, OpenHandsClient } from "./oh-client.js";
 import { repoRoot } from "./paths.js";
@@ -305,7 +305,7 @@ export async function startControlPlane(
           return;
         }
         if (!worker) {
-          await json(res, { ok: false, error: "worker not bound — use This computer (OH handoff) or `openbot bind`" }, 400);
+          await json(res, { ok: false, error: "worker not bound — use Settings + chat, or `openbot bind`" }, 400);
           return;
         }
         const boundWorker = worker;
@@ -455,20 +455,24 @@ async function statusPayload(
     error = "worker not reachable — is the SSH tunnel up? run `npx openbot bind` then `npx openbot serve`.";
   }
   const ohProbe = await oh.health();
+  const hostname = config.host.hostname || "";
+  const remote = Boolean(hostname) && !isLoopback(hostname);
+  const sshOk = lastConnect ? lastConnect.ssh.ok : !remote;
+  const ohOk = remote && !sshOk ? false : ohProbe.ok;
   const guide = nextStepForConnect({
-    hasHost: Boolean(config.host.hostname),
+    hasHost: Boolean(hostname),
     identityFile: config.host.identityFile,
     identityMissing: identityFileMissing(config),
-    sshOk: Boolean(lastConnect?.ssh.ok) || ohProbe.ok,
-    ohOk: ohProbe.ok,
+    sshOk,
+    ohOk,
     hasSessionKey: Boolean(config.openhands.sessionApiKey),
     sshError: lastConnect?.ssh.error,
   });
-  if (!ohProbe.ok && !healthy) {
+  if (!ohOk && !healthy) {
     error = error || guide.nextStep;
   }
   return {
-    ok: ohProbe.ok || healthy,
+    ok: ohOk || healthy,
     ready: guide.ready,
     nextStep: guide.nextStep,
     slogan: "SSH your own machine. The agent gets a computer — you keep the keys.",
@@ -487,9 +491,9 @@ async function statusPayload(
     },
     openhands: {
       baseUrl: config.openhands.baseUrl,
-      ok: ohProbe.ok,
+      ok: ohOk,
       hasSessionKey: Boolean(config.openhands.sessionApiKey),
-      error: ohProbe.ok ? undefined : ((ohProbe.raw as { error?: string })?.error || "not reachable"),
+      error: ohOk ? undefined : (lastConnect?.openhands.error || (ohProbe.raw as { error?: string })?.error || "not reachable"),
     },
     info,
     error,

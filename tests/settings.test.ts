@@ -13,6 +13,7 @@ import {
   saveConfig,
   upsertHomeEnv,
 } from "../src/config.js";
+import { connectConfiguredHost } from "../src/connect.js";
 import { startControlPlane } from "../src/server.js";
 import { openHandsLocalPort } from "../src/tunnel.js";
 import { freePort } from "./helpers.js";
@@ -114,6 +115,14 @@ describe("host settings (no live SSH)", () => {
       hasSessionKey: false,
     });
     assert.match(noFile.nextStep, /not found/);
+    const leftover = nextStepForConnect({
+      hasHost: true,
+      sshOk: false,
+      ohOk: true,
+      hasSessionKey: true,
+    });
+    assert.equal(leftover.ready, false);
+    assert.match(leftover.nextStep, /SSH did not connect/);
   });
 
   it("TC-SET-005: OpenHands local forward port comes from baseUrl", () => {
@@ -207,6 +216,48 @@ describe("settings HTTP (mocked OH, no live host)", { concurrency: false }, () =
     assert.doesNotMatch(dumped, /BEGIN /);
     const envBody = fs.readFileSync(path.join(home, ".env"), "utf8");
     assert.match(envBody, /OH_SESSION_API_KEY=new-session/);
+  });
+
+  it("TC-SET-007: leftover local OpenHands is not ready when SSH to the saved host fails", async () => {
+    const config = defaultConfig();
+    config.host.hostname = "192.0.2.1";
+    config.host.user = "demo";
+    config.openhands.baseUrl = mock.baseUrl;
+    config.openhands.sessionApiKey = "set-key";
+    const result = await connectConfiguredHost(config, { timeoutMs: 400, skipTunnel: true });
+    assert.equal(result.ssh.ok, false);
+    assert.equal(result.openhands.ok, false);
+    assert.equal(result.ready, false);
+    assert.match(result.nextStep, /SSH did not connect/);
+  });
+
+  it("TC-SET-008: /api/status does not call leftover local OpenHands ready after a remote host is saved", async () => {
+    process.env.OPENBOT_HOME = home;
+    const origin = `http://127.0.0.1:${plane.config.controlPlane.port}`;
+    const keyPath = path.join(home, "dummy-id");
+    fs.writeFileSync(keyPath, "not-a-secret\n", { mode: 0o600 });
+    const saved = (await (
+      await fetch(`${origin}/api/settings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hostname: "192.0.2.9",
+          user: "demo",
+          port: 22,
+          identityFile: keyPath,
+          connect: false,
+        }),
+      })
+    ).json()) as { ok?: boolean };
+    assert.equal(saved.ok, true);
+    const status = (await (await fetch(`${origin}/api/status`)).json()) as {
+      ready?: boolean;
+      nextStep?: string;
+      openhands?: { ok?: boolean };
+    };
+    assert.equal(status.ready, false);
+    assert.equal(status.openhands?.ok, false);
+    assert.match(String(status.nextStep || ""), /SSH did not connect/);
   });
 });
 });
