@@ -1,12 +1,12 @@
 {
-  "id": "read-public-doc",
-  "title": "看看 blob URL 这个文档讲了什么 — 真抓 raw，不得用自编摘录过关",
-  "userMessage": "看看 https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个文档讲了什么?",
+  "id": "read-public-doc-exact",
+  "title": "现场原句：blob URL + 这个讲的是什么，必须读正文，不得搜 HTTPS",
+  "userMessage": "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个讲的是什么?",
   "documentRequired": true,
   "remote": {
     "status": "timeout",
-    "conversationId": "eval-read-public-doc",
-    "rawReply": "client gave up after 50s with no token"
+    "conversationId": "eval-read-public-doc-exact",
+    "rawReply": "网上查过了。HTTPS （全称：Hypertext Transfer Protocol Secure），是以安全为目标的 HTTP 通道，在HTTP的基础上通过传输 …。"
   },
   "expect": {
     "remoteOutcome": "timeout",

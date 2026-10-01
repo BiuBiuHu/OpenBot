@@ -5,7 +5,9 @@ import { stripHtml } from "./web-search.js";
 const UA = "Mozilla/5.0 (compatible; OpenBot/0.1; +https://github.com/BiuBiuHu/OpenBot)";
 
 const DOC_ASK =
-  /看看|读一下|读读|看一下|讲了什么|讲什么|说了什么|说什么|这个文档|这篇|这一章|这章|总结|summarize|what does|about this (doc|page|chapter)|this (doc|page|chapter)/i;
+  /看看|读一下|读读|看一下|讲了什么|讲的是什么|这个讲的是什么|讲什么|说了什么|说的是什么|说什么|这个文档|这篇|这一章|这章|总结|summarize|what does|about this (doc|page|chapter)|this (doc|page|chapter)/i;
+
+const GITHUB_BLOB = /(?:https?:\/\/)?(?:www\.)?github\.com\/[^/\s]+\/[^/\s]+\/blob\//i;
 
 export interface PublicDocument {
   title: string;
@@ -43,8 +45,11 @@ export function readableDocumentUrl(href: string): string {
 export function isDocumentReadAsk(message: string): boolean {
   const t = String(message || "").trim();
   if (!t) return false;
-  if (!extractPublicHttpUrl(t)) return false;
-  return DOC_ASK.test(t) || /\.md(?:\b|$)/i.test(t);
+  const href = extractPublicHttpUrl(t);
+  if (!href) return false;
+  if (DOC_ASK.test(t) || /\.md(?:\b|$)/i.test(t)) return true;
+  if (GITHUB_BLOB.test(t) && /什么|讲|说|总结|summarize|what|about/i.test(t)) return true;
+  return false;
 }
 
 export function extractDocumentFacts(text: string): { title: string; sentences: string[] } {

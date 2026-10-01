@@ -6,7 +6,12 @@ import {
   normalizeChatLanguage,
   type ChatLanguage,
 } from "./language.js";
-import { extractDocumentFacts, isDocumentReadAsk, type PublicDocument } from "./page-read.js";
+import {
+  extractDocumentFacts,
+  extractPublicHttpUrl,
+  isDocumentReadAsk,
+  type PublicDocument,
+} from "./page-read.js";
 import { decodeHtmlEntities, type SearchHit } from "./web-search.js";
 
 export { isDocumentReadAsk } from "./page-read.js";
@@ -93,11 +98,13 @@ export function needsLookup(message: string): boolean {
   if (isCodingAsk(t)) return false;
   if (isComputerTask(t)) return false;
   if (isDocumentReadAsk(t)) return false;
+  if (extractPublicHttpUrl(t)) return false;
   return LOOKUP_ASK.test(t);
 }
 
 export function lookupQuery(message: string): string {
   let q = String(message || "").trim();
+  q = q.replace(/https?:\/\/[^\s<>"'）)】]+/gi, " ");
   q = q.replace(/^[请帮我,，\s]*介绍一下\s*/i, "");
   q = q.replace(/^(?:what(?:['’]s| is| are)|who is)\s+/i, "");
   q = q.replace(/^什么是\s*/i, "");

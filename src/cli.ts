@@ -363,7 +363,7 @@ async function main(): Promise<void> {
       await cmdChat(rest, flags);
       break;
     case "eval": {
-      const records = runEvalSuite(loadEvalCases());
+      const records = await runEvalSuite(loadEvalCases());
       const file = writeEvalSuiteRun(records);
       const failed = records.filter((r) => !r.pass);
       for (const r of records) {

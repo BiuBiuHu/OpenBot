@@ -33,6 +33,7 @@
 | REQ-CAP-003 | 笔记本页、ECS、不是产品的东西必须分开说 | 评审/文档 | 文案与评测 | P0 |
 | REQ-CAP-004 | Settings 语言即回复语言，默认 zh-CN，写入 `~/.openbot`；只记私钥路径 | 使用者 | 设置与每条回复 | P0 |
 | REQ-DOC-001 | 带公开 URL 的文档问句由本机 HTTP 抓取并短答 | 使用者 | 「看看 &lt;url&gt; 这个文档讲了什么」 | P0 |
+| REQ-DOC-004 | 现场原句「&lt;blob&gt; 这个讲的是什么?」同样抓 raw 短答，不得搜 HTTPS | 使用者 | 2026-10-01 活页失败 | P0 |
 | REQ-DOC-002 | 该问句不得走交接超时套话，也不得用 OH 说明书顶替 | 使用者 | 现场失败回归 | P0 |
 | REQ-DOC-003 | GitHub blob 读 raw 文件，不读仓库 HTML 壳 | 使用者 | GitHub `.md` | P0 |
 | REQ-CHAT-001 | 回来之后仍丢掉 OH 说明书、超时原文、工具轨迹；链接可点 | 使用者 | 交接成功/失败 | P0 |
@@ -78,6 +79,7 @@
 | REQ-DOC-001 | 现场原句 `path=document`，shown 含「我看过了」和章节要点 | 测试/eval | 研发/QA | 交接、搜索「网上查过了」当正文 |
 | REQ-DOC-002 | shown 不含超时套话、不含 OH 说明书 | eval | QA | 「这台电脑这轮没在时限里跑完」 |
 | REQ-DOC-003 | blob URL 实际请求 raw.githubusercontent.com | 测试 | 研发 | 去抓 GitHub HTML 壳 |
+| REQ-DOC-004 | 现场原句走 document，shown 含用户记忆/知识库，无 HTTPS | eval/测试 | QA | 「网上查过了。HTTPS…」 |
 | REQ-CAP-004 | 中文问句中文答；Settings 语言仍默认 zh-CN | 测试 | QA | 整段英文源文粘贴 |
 | REQ-CHAT-001 | 旧 chat-layer 用例仍绿 | eval | QA | who-are-you 等回退 |
 | REQ-CODE-001 | 本增量不交付 | backlog | — | 声称改代码能力已完成 |
