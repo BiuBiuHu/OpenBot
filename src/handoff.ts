@@ -112,7 +112,7 @@ export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promi
     last = delivery.conversation;
     id = last.id;
   }
-  if (!id) {
+  if (!id || !last) {
     deps.emit({ type: "error", message: "OpenHands created a conversation without an id" });
     deps.emit({ type: "done" });
     return last;
