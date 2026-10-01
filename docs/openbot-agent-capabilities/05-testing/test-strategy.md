@@ -5,6 +5,7 @@
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-10-01 | 首版。最小充分集=文档路径+旧聊天评测 | 风险在分流误判与超时套话，不在全仓无关模块 | 默认不跑发布级全环境；`npm test` 为门禁 |
+| v0.2 | 2026-10-01 | 加仓库 URL / 这是啥 / 交接等到终态；分栏回归 | 活页三处 | 假客户端，不打真 ECS |
 
 ## 1. 当前决策
 
@@ -23,6 +24,10 @@
 | REQ-CAP-004 | 简体短答，禁繁体 | TC-EVAL-003 what-is-grok-bot | 单测 | 待测 |
 | REQ-CHAT-001 | 你是谁 / 超时 / 链接 | who-are-you timeout-is-short links-render | eval-set | 待测 |
 | REQ-CAP-001 | 无新 mode | TC-UI 单输入 | 代码+测试 | 待测 |
+| REQ-DOC-005 | 仓库 URL 不编章 | EVAL-repo-is-not-a-chapter | eval | 待测 |
+| REQ-CHAT-002 | 这是啥? 走电脑 | EVAL-whats-this-is-computer | eval | 待测 |
+| REQ-HANDOFF-001 | 过 60s 仍等终态 | EVAL-handoff-waits-until-terminal | 假客户端 | 待测 |
+| REQ-DESK-002 | 分栏独立铺满 | TC-DESK-003 | 页面 HTML 断言 | 待测 |
 
 ## 3. 测试范围
 

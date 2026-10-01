@@ -33,12 +33,15 @@ describe("chat-layer eval set", () => {
       "analyze-other-product",
       "change-code",
       "change-code-bare",
+      "handoff-waits-until-terminal",
       "links-render",
       "read-public-doc",
       "read-public-doc-exact",
+      "repo-is-not-a-chapter",
       "timeout-is-short",
       "todays-time",
       "what-is-grok-bot",
+      "whats-this-is-computer",
       "who-are-you",
     ]);
     const dumped = JSON.stringify(cases);
@@ -131,5 +134,27 @@ describe("chat-layer eval set", () => {
         false,
       ).some((x) => !x.pass),
     );
+  });
+
+  it("TC-EVAL-006: live misses fail the old voices and pass the repaired ones", async () => {
+    const cases = loadEvalCases();
+    const repo = cases.find((x) => x.id === "repo-is-not-a-chapter");
+    const what = cases.find((x) => x.id === "whats-this-is-computer");
+    const slow = cases.find((x) => x.id === "handoff-waits-until-terminal");
+    assert.ok(repo && what && slow);
+    assert.equal(repo.userMessage, "那这个项目 https://github.com/bojieli/ai-agent-book 讲了什么?");
+    assert.equal(what.userMessage, "这是啥?");
+    assert.equal(slow.handoffWaitUntilTerminal, true);
+    const repoShown = await shownForCase(repo);
+    assert.match(repoShown, /仓库|不是一份文档|深入理解/);
+    assert.doesNotMatch(repoShown, /模型选型可参考|这一章/);
+    assert.ok(scoreEvalCase(repo, "我看过了。模型选型可参考这篇指南。", false).some((x) => !x.pass));
+    const whatShown = await shownForCase(what);
+    assert.doesNotMatch(whatShown, /先不背说明书|你具体想让这台电脑做什么/);
+    assert.ok(scoreEvalCase(what, "先不背说明书。你具体想让这台电脑做什么？", true).some((x) => !x.pass));
+    const slowShown = await shownForCase(slow);
+    assert.match(slowShown, /仓库已经下好了/);
+    assert.doesNotMatch(slowShown, /没在时限|再说一次/);
+    assert.ok(scoreEvalCase(slow, "这台电脑这轮没在时限里跑完。你再说一次就行。", true).some((x) => !x.pass));
   });
 });

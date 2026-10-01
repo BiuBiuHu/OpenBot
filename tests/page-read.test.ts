@@ -4,7 +4,9 @@ import { describe, it } from "node:test";
 import {
   extractDocumentFacts,
   extractPublicHttpUrl,
+  githubReadmeRawUrls,
   isDocumentReadAsk,
+  isGithubRepoHome,
   readableDocumentUrl,
   readPublicDocument,
 } from "../src/page-read.js";
@@ -31,6 +33,16 @@ describe("page-read", () => {
       isDocumentReadAsk("https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个讲的是什么?"),
       true,
     );
+    assert.equal(
+      isDocumentReadAsk("那这个项目 https://github.com/bojieli/ai-agent-book 讲了什么?"),
+      true,
+    );
+    assert.equal(isGithubRepoHome("https://github.com/bojieli/ai-agent-book"), true);
+    assert.equal(isGithubRepoHome("https://github.com/bojieli/ai-agent-book/"), true);
+    assert.equal(
+      isGithubRepoHome("https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md"),
+      false,
+    );
   });
 
   it("TC-DOC-002: GitHub blob pages rewrite to raw.githubusercontent.com", () => {
@@ -39,6 +51,11 @@ describe("page-read", () => {
       "https://raw.githubusercontent.com/bojieli/ai-agent-book/main/book/chapter3.md",
     );
     assert.equal(readableDocumentUrl("https://example.com/notes.md"), "https://example.com/notes.md");
+    assert.deepEqual(githubReadmeRawUrls("https://github.com/bojieli/ai-agent-book"), [
+      "https://raw.githubusercontent.com/bojieli/ai-agent-book/HEAD/README.md",
+      "https://raw.githubusercontent.com/bojieli/ai-agent-book/main/README.md",
+      "https://raw.githubusercontent.com/bojieli/ai-agent-book/master/README.md",
+    ]);
   });
 
   it("TC-DOC-006: readPublicDocument fetches the raw URL and keeps the original href", async () => {
@@ -56,6 +73,30 @@ describe("page-read", () => {
     assert.deepEqual(requested, [
       "https://raw.githubusercontent.com/bojieli/ai-agent-book/main/book/chapter3.md",
     ]);
+  });
+
+  it("TC-DOC-008: a GitHub repo URL reads README raw, not the HTML shell", async () => {
+    const requested: string[] = [];
+    const readme =
+      "# 深入理解 AI Agent：设计原理与工程实践\n\n本书围绕 Agent = LLM + 上下文 + 工具，把智能体从原理讲到工程实战。\n";
+    const doc = await readPublicDocument("那这个项目 https://github.com/bojieli/ai-agent-book 讲了什么?", {
+      fetch: async (input) => {
+        requested.push(String(input));
+        if (String(input).includes("raw.githubusercontent.com") && /README\.md$/i.test(String(input))) {
+          return new Response(readme, { status: 200, headers: { "content-type": "text/markdown" } });
+        }
+        return new Response("<html>模型选型可参考这篇指南</html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        });
+      },
+    });
+    assert.ok(doc);
+    assert.equal(doc.kind, "repo");
+    assert.equal(doc.title, "深入理解 AI Agent：设计原理与工程实践");
+    assert.doesNotMatch(doc.text, /模型选型可参考/);
+    assert.ok(requested.some((u) => /raw\.githubusercontent\.com\/bojieli\/ai-agent-book\/.+\/README\.md/.test(u)));
+    assert.ok(!requested.includes("https://github.com/bojieli/ai-agent-book"));
   });
 
   it("extracts a heading and a 本章/本文 sentence without chapter-specific keywords", () => {

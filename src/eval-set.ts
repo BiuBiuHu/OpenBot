@@ -11,8 +11,16 @@ import {
   voiceNow,
   type ChatOutcome,
 } from "./chat-voice.js";
-import { isDocumentReadAsk, readPublicDocument } from "./page-read.js";
+import { runHandoffTurn, HandoffStore } from "./handoff.js";
+import { OpenHandsClient, type OhConversation } from "./oh-client.js";
+import {
+  extractPublicHttpUrl,
+  isDocumentReadAsk,
+  isGithubRepoHome,
+  readPublicDocument,
+} from "./page-read.js";
 import { ensureDir, openbotHome, repoRoot } from "./paths.js";
+import type { AgentEvent } from "./types.js";
 import type { SearchHit } from "./web-search.js";
 import type { PublicDocument } from "./page-read.js";
 
@@ -48,6 +56,11 @@ export interface EvalCase {
   document?: PublicDocument;
   /** Force the failure voice; do not invent a body. */
   documentFetchFails?: boolean;
+  /**
+   * Replay a fake OpenHands client that stays non-terminal past 60s, then finishes.
+   * Does not call a real host.
+   */
+  handoffWaitUntilTerminal?: boolean;
 }
 
 export interface EvalCheck {
@@ -125,11 +138,28 @@ export function recordedChapter3(): PublicDocument {
   };
 }
 
+export function recordedRepoReadme(): PublicDocument {
+  const file = path.join(evalSuiteDir(), "fixtures", "ai-agent-book-readme.md");
+  const text = fs.readFileSync(file, "utf8");
+  const title = text.match(/^#\s+(.+)$/m)?.[1]?.trim() || "";
+  return {
+    title,
+    text,
+    url: "https://github.com/bojieli/ai-agent-book",
+    kind: "repo",
+  };
+}
+
 async function loadPublicDocument(c: EvalCase): Promise<PublicDocument | undefined> {
   if (c.documentFetchFails) return undefined;
   if (c.document) return c.document;
   const live = await readPublicDocument(c.userMessage);
   if (live?.text.trim()) return live;
+  const href = extractPublicHttpUrl(c.userMessage);
+  if (href && isGithubRepoHome(href)) {
+    const recorded = recordedRepoReadme();
+    if (recorded.text.includes("深入理解 AI Agent")) return recorded;
+  }
   const recorded = recordedChapter3();
   if (/chapter3\.md/i.test(c.userMessage) && recorded.text.includes("用户记忆和知识库")) {
     return recorded;
@@ -137,7 +167,97 @@ async function loadPublicDocument(c: EvalCase): Promise<PublicDocument | undefin
   return undefined;
 }
 
+export function installFakeClock(start = 1_000_000): { now: () => number; tick: (ms: number) => void; restore: () => void } {
+  let current = start;
+  const realNow = Date.now;
+  Date.now = () => current;
+  return {
+    now: () => current,
+    tick: (ms: number) => {
+      current += Math.max(0, ms);
+    },
+    restore: () => {
+      Date.now = realNow;
+    },
+  };
+}
+
+export function fakeSlowHandoffClient(input: {
+  conversationId: string;
+  remoteText: string;
+  runningPolls?: number;
+  tickMs?: number;
+  clock?: { tick: (ms: number) => void };
+}): OpenHandsClient {
+  const runningPolls = input.runningPolls ?? 4;
+  const tickMs = input.tickMs ?? 20_000;
+  let polls = 0;
+  const conv = (status: OhConversation["executionStatus"], mapped: OhConversation["status"]): OhConversation => ({
+    id: input.conversationId,
+    executionStatus: status,
+    status: mapped,
+    raw: {},
+  });
+  const client = {
+    async createConversation() {
+      return conv("running", "running");
+    },
+    async getConversation() {
+      polls += 1;
+      input.clock?.tick(tickMs);
+      if (polls <= runningPolls) return conv("running", "running");
+      return conv("finished", "succeeded");
+    },
+    async sendMessage() {
+      return undefined;
+    },
+    async searchEvents() {
+      return {
+        items: [
+          {
+            event_type: "MessageEvent",
+            source: "agent",
+            llm_message: { content: input.remoteText },
+          },
+        ],
+        raw: {},
+      };
+    },
+  };
+  return client as unknown as OpenHandsClient;
+}
+
+export async function shownFromHandoffUntilTerminal(c: EvalCase): Promise<string> {
+  const clock = installFakeClock();
+  const client = fakeSlowHandoffClient({
+    conversationId: c.remote.conversationId,
+    remoteText: c.remote.rawReply,
+    runningPolls: 4,
+    tickMs: 20_000,
+    clock,
+  });
+  const events: AgentEvent[] = [];
+  try {
+    await runHandoffTurn(c.userMessage, {
+      client,
+      store: new HandoffStore(),
+      emit: (e) => events.push(e),
+      pollMs: 1,
+      language: "zh-CN",
+    });
+  } finally {
+    clock.restore();
+  }
+  return events
+    .filter((e) => e.type === "token")
+    .map((e) => String(e.text || ""))
+    .join("");
+}
+
 export async function shownForCase(c: EvalCase): Promise<string> {
+  if (c.handoffWaitUntilTerminal) {
+    return shownFromHandoffUntilTerminal(c);
+  }
   if (isClockAsk(c.userMessage)) {
     return voiceNow({ language: "zh-CN" }).text;
   }
