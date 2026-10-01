@@ -45,7 +45,7 @@ npx openbot serve
 ```
 
 - 探活：`npx openbot oh health` 应打印 `OpenHands http://127.0.0.1:8000 ok`。
-- UI：打开 `http://127.0.0.1:3847/`。顶栏看 OH 绿灯。输入任务就会直接发给 OpenHands，同一线程里是 You / Assistant，气泡里只显示最终答复，不堆 remote 状态卡。
+- UI：打开 `http://127.0.0.1:3847/`。Settings 里填自己的主机 / 用户 / 端口 / 本机私钥路径（不要把钥匙贴进仓库）。保存后写入 `~/.openbot` 并尝试开隧道。主机还没装 OpenHands 时页面会告诉你下一步（试装笔记），不会假装能聊。聊天没有 This computer / Run on host 开关，发出去就是远端对话。
 - 试连页：`http://127.0.0.1:3847/oh-test`。
 - CLI 同一路径：`npx openbot chat '在工作区写一份 uname 记录'`（`oh run` 仍是已确认交接）。
 

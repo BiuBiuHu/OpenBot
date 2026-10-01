@@ -3,7 +3,7 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { classifyCommand } from "./approval.js";
-import { defaultConfig, hasLocalModelKey, loadConfig, saveConfig, writeEnvExampleToHome } from "./config.js";
+import { applyHostSettings, defaultConfig, hasLocalModelKey, loadConfig, saveConfig, writeEnvExampleToHome } from "./config.js";
 import { openbotHome } from "./paths.js";
 import { startControlPlane } from "./server.js";
 import { bootstrapWorker, probeSsh, sshTarget } from "./ssh.js";
@@ -65,22 +65,23 @@ function parseArgs(argv: string[]): { cmd: string; flags: Record<string, string>
 
 async function cmdInit(flags: Record<string, string>): Promise<void> {
   const current = loadConfig();
-  const next = defaultConfig({
-    ...current,
-    host: {
-      ...current.host,
-      hostname: flags.host || current.host.hostname,
-      user: flags.user || current.host.user,
-      port: flags.port ? Number(flags.port) : current.host.port,
-      identityFile: flags.identity || current.host.identityFile,
-      name: flags.name || current.host.name,
+  const next = applyHostSettings(
+    defaultConfig({
+      ...current,
+      llm: {
+        ...current.llm,
+        model: flags.model || current.llm.model,
+        baseUrl: flags["base-url"] || current.llm.baseUrl,
+      },
+    }),
+    {
+      hostname: flags.host,
+      user: flags.user,
+      port: flags.port,
+      identityFile: flags.identity,
+      name: flags.name,
     },
-    llm: {
-      ...current.llm,
-      model: flags.model || current.llm.model,
-      baseUrl: flags["base-url"] || current.llm.baseUrl,
-    },
-  });
+  );
   const file = saveConfig(next);
   const envFile = writeEnvExampleToHome();
   console.log(`Wrote ${file}`);
@@ -89,7 +90,7 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
     console.log("Still missing --host. Example:");
     console.log("  npx openbot init --host 203.0.113.10 --user ubuntu --identity ~/.ssh/id_ed25519");
   } else {
-    console.log(`Host ${sshTarget(next)} — next: npx openbot bind`);
+    console.log(`Host ${sshTarget(next)} — next: open Settings in the UI or start OpenHands on that machine`);
   }
 }
 
@@ -157,7 +158,7 @@ async function cmdServe(flags: Record<string, string>): Promise<void> {
   console.log(`Local client  ${url}`);
   console.log(`Laptop trial  ${url}/oh-test`);
   console.log(`OpenHands     ${config.openhands.baseUrl}  (${config.openhands.sessionApiKey ? "session-key=set" : "session-key=unset"})`);
-  console.log("Tunnel first: ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host");
+  console.log("Settings in the UI save host/user/key-path to ~/.openbot and open the tunnel.");
   if (hasWorker) {
     console.log(`Worker tunnel 127.0.0.1:${config.worker.localPort} → ${sshTarget(config)}:${config.worker.remotePort}`);
     console.log(`Persist on host: ${config.worker.persist}`);

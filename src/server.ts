@@ -2,7 +2,17 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { classifyCommand } from "./approval.js";
-import { hasLocalModelKey, loadConfig } from "./config.js";
+import {
+  applyHostSettings,
+  hasLocalModelKey,
+  identityFileMissing,
+  loadConfig,
+  nextStepForConnect,
+  publicSettings,
+  saveConfig,
+  upsertHomeEnv,
+} from "./config.js";
+import { connectConfiguredHost, type ConnectResult } from "./connect.js";
 import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "./handoff.js";
 import { conversationSnippet, OpenHandsClient } from "./oh-client.js";
 import { repoRoot } from "./paths.js";
@@ -45,8 +55,21 @@ export async function startControlPlane(
   const handoffs = new HandoffStore();
   const handoffWaiters = new Map<string, (allow: boolean) => void>();
   const threadConversations = new Map<string, string>();
-  const oh = OpenHandsClient.fromConfig(config);
+  let liveConfig = config;
+  let oh = OpenHandsClient.fromConfig(liveConfig);
+  let ohTunnel: TunnelHandle | undefined;
+  let lastConnect: ConnectResult | undefined;
   let history: ChatMessage[] = [];
+
+  if (liveConfig.host.hostname) {
+    try {
+      lastConnect = await connectConfiguredHost(liveConfig, { timeoutMs: 3_000 });
+      ohTunnel = lastConnect.tunnel;
+      oh = OpenHandsClient.fromConfig(liveConfig);
+    } catch {
+      /* UI still serves; Settings shows the next step */
+    }
+  }
 
   const uiFile = path.join(repoRoot(), "src/ui/index.html");
   const trialFile = path.join(repoRoot(), "src/ui/oh-test.html");
@@ -83,7 +106,76 @@ export async function startControlPlane(
         return;
       }
       if (req.method === "GET" && url.pathname === "/api/status") {
-        await json(res, await statusPayload(config, worker, oh));
+        await json(res, await statusPayload(liveConfig, worker, oh, lastConnect));
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/api/settings") {
+        await json(res, {
+          ok: true,
+          ...publicSettings(loadConfig()),
+          connect: lastConnect
+            ? {
+                ready: lastConnect.ready,
+                nextStep: lastConnect.nextStep,
+                ssh: { ok: lastConnect.ssh.ok, uname: lastConnect.ssh.uname, error: lastConnect.ssh.error },
+                openhands: lastConnect.openhands,
+              }
+            : undefined,
+        });
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/api/settings") {
+        const body = await readJson(req);
+        try {
+          const saved = applyHostSettings(loadConfig(), {
+            hostname: body.hostname !== undefined ? String(body.hostname) : undefined,
+            user: body.user !== undefined ? String(body.user) : undefined,
+            port: body.port !== undefined ? (body.port as number | string) : undefined,
+            identityFile: body.identityFile !== undefined ? String(body.identityFile) : undefined,
+            name: body.name !== undefined ? String(body.name) : undefined,
+          });
+          saveConfig(saved);
+          const sessionApiKey = body.sessionApiKey !== undefined ? String(body.sessionApiKey).trim() : "";
+          if (sessionApiKey) {
+            upsertHomeEnv({ OH_SESSION_API_KEY: sessionApiKey });
+          }
+          liveConfig = loadConfig();
+          oh = OpenHandsClient.fromConfig(liveConfig);
+          const shouldConnect = body.connect !== false && body.connect !== "false";
+          if (shouldConnect) {
+            const timeoutMs = typeof body.timeout_ms === "number" ? body.timeout_ms : 4_000;
+            if (ohTunnel) {
+              await ohTunnel.stop();
+              ohTunnel = undefined;
+            }
+            lastConnect = await connectConfiguredHost(liveConfig, { timeoutMs });
+            ohTunnel = lastConnect.tunnel;
+            oh = OpenHandsClient.fromConfig(liveConfig);
+          }
+          const published = publicSettings(liveConfig);
+          await json(res, {
+            ok: true,
+            saved: true,
+            ...published,
+            connect: lastConnect
+              ? {
+                  ready: lastConnect.ready,
+                  nextStep: lastConnect.nextStep,
+                  ssh: { ok: lastConnect.ssh.ok, uname: lastConnect.ssh.uname, error: lastConnect.ssh.error },
+                  openhands: lastConnect.openhands,
+                }
+              : { ready: false, nextStep: nextStepForConnect({
+                  hasHost: Boolean(liveConfig.host.hostname),
+                  identityFile: liveConfig.host.identityFile,
+                  identityMissing: identityFileMissing(liveConfig),
+                  sshOk: false,
+                  ohOk: false,
+                  hasSessionKey: Boolean(liveConfig.openhands.sessionApiKey),
+                }).nextStep },
+          });
+        } catch (err) {
+          await json(res, { ok: false, error: err instanceof Error ? err.message : String(err) }, 400);
+        }
         return;
       }
       if (req.method === "GET" && url.pathname === "/api/jobs") {
@@ -162,7 +254,7 @@ export async function startControlPlane(
         await streamSse(req, res, async (emit) => {
           const conversation = await runHandoffTurn(goal, {
             client: oh,
-            oh: config.openhands,
+            oh: liveConfig.openhands,
             store: handoffs,
             emit,
             timeoutMs: typeof body.timeout_ms === "number" ? body.timeout_ms : 60_000,
@@ -176,14 +268,14 @@ export async function startControlPlane(
       }
       if (req.method === "POST" && url.pathname === "/api/handoffs") {
         const body = await readJson(req);
-        const result = await handleHandoff(body, undefined, handoffs, oh, config, handoffWaiters);
+        const result = await handleHandoff(body, undefined, handoffs, oh, liveConfig, handoffWaiters);
         await json(res, result, result.ok ? 200 : 400);
         return;
       }
       if (req.method === "POST" && url.pathname.startsWith("/api/handoffs/")) {
         const id = url.pathname.split("/")[3];
         const body = await readJson(req);
-        const result = await handleHandoff(body, id, handoffs, oh, config, handoffWaiters);
+        const result = await handleHandoff(body, id, handoffs, oh, liveConfig, handoffWaiters);
         await json(res, result, result.ok ? 200 : 400);
         return;
       }
@@ -225,13 +317,9 @@ export async function startControlPlane(
           return;
         }
         const live = loadConfig();
-        const forceHandoff =
-          !hasLocalModelKey(live.llm.apiKey) ||
-          body.handoff === true ||
-          body.handoff === "true" ||
-          body.mode === "handoff" ||
-          body.mode === "computer";
-        const threadId = String(body.thread_id || body.threadId || "chat_default");
+        liveConfig = live;
+        oh = OpenHandsClient.fromConfig(live);
+          const threadId = String(body.thread_id || body.threadId || "chat_default");
         await streamSse(req, res, async (emit) => {
           const result = await runThreadTurn(message, {
             client: oh,
@@ -241,7 +329,7 @@ export async function startControlPlane(
             store: handoffs,
             history,
             emit,
-            forceHandoff,
+            forceHandoff: true,
             timeoutMs: typeof body.timeout_ms === "number" ? body.timeout_ms : 60_000,
             pollMs: typeof body.poll_ms === "number" ? body.poll_ms : 250,
             threadId,
@@ -280,6 +368,7 @@ export async function startControlPlane(
     close: async () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await tunnel?.stop();
+      await ohTunnel?.stop();
     },
   };
 }
@@ -344,7 +433,12 @@ async function handleHandoff(
   return { ok: true, needs_confirm: true, proposal };
 }
 
-async function statusPayload(config: OpenBotConfig, worker: WorkerClient | undefined, oh: OpenHandsClient) {
+async function statusPayload(
+  config: OpenBotConfig,
+  worker: WorkerClient | undefined,
+  oh: OpenHandsClient,
+  lastConnect?: ConnectResult,
+) {
   const healthy = worker ? await worker.health() : false;
   let info = null;
   let error: string | undefined;
@@ -358,20 +452,29 @@ async function statusPayload(config: OpenBotConfig, worker: WorkerClient | undef
     error = "worker not reachable — is the SSH tunnel up? run `npx openbot bind` then `npx openbot serve`.";
   }
   const ohProbe = await oh.health();
+  const guide = nextStepForConnect({
+    hasHost: Boolean(config.host.hostname),
+    identityFile: config.host.identityFile,
+    identityMissing: identityFileMissing(config),
+    sshOk: Boolean(lastConnect?.ssh.ok) || ohProbe.ok,
+    ohOk: ohProbe.ok,
+    hasSessionKey: Boolean(config.openhands.sessionApiKey),
+    sshError: lastConnect?.ssh.error,
+  });
   if (!ohProbe.ok && !healthy) {
-    error =
-      error ||
-      ((ohProbe.raw as { error?: string })?.error ||
-        "OpenHands not reachable — ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host then retry. Worker bind is optional for this path.");
+    error = error || guide.nextStep;
   }
   return {
     ok: ohProbe.ok || healthy,
+    ready: guide.ready,
+    nextStep: guide.nextStep,
     slogan: "SSH your own machine. The agent gets a computer — you keep the keys.",
     host: {
       name: config.host.name,
       hostname: config.host.hostname,
       user: config.host.user,
       port: config.host.port,
+      identityFile: config.host.identityFile || "",
     },
     persist: config.worker.persist,
     llm: {

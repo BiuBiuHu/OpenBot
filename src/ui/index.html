@@ -193,7 +193,7 @@
         background: #241c0e;
         border-radius: 0.5rem;
       }
-      .approval button, footer button, footer select {
+      .approval button {
         font-family: var(--mono);
         font-size: 0.78rem;
         border: 1px solid var(--line);
@@ -226,11 +226,66 @@
         margin-bottom: 0.5rem;
       }
       .job strong { color: var(--phosphor); }
+      header .actions { display: flex; gap: 0.5rem; align-items: flex-start; }
+      header button, .sheet button, footer button {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        border: 1px solid var(--line);
+        background: #22291d;
+        color: var(--ink);
+        padding: 0.45rem 0.7rem;
+        cursor: pointer;
+      }
+      .sheet {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(8, 10, 7, 0.72);
+        z-index: 20;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 2.5rem 1rem 1rem;
+      }
+      .sheet.open { display: flex; }
+      .sheet form {
+        width: min(32rem, 100%);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        padding: 1rem 1.1rem 1.1rem;
+      }
+      .sheet h2 { margin: 0 0 0.35rem; font-size: 1.05rem; }
+      .sheet p.help { margin: 0 0 0.8rem; color: var(--muted); font-size: 0.88rem; }
+      .sheet label { display: block; margin: 0.45rem 0 0.2rem; color: var(--muted); font-size: 0.82rem; }
+      .sheet input {
+        width: 100%;
+        background: #0e120d;
+        color: var(--ink);
+        border: 1px solid var(--line);
+        padding: 0.45rem 0.55rem;
+        font-family: var(--mono);
+        font-size: 0.82rem;
+      }
+      .sheet .row { display: flex; gap: 0.5rem; margin-top: 0.9rem; }
+      .sheet .next {
+        margin-top: 0.8rem;
+        font-size: 0.85rem;
+        color: var(--amber);
+        white-space: pre-wrap;
+      }
+      #banner {
+        display: none;
+        margin: 0 1.4rem;
+        padding: 0.55rem 0.7rem;
+        border: 1px solid #3a3420;
+        color: var(--amber);
+        font-size: 0.88rem;
+      }
+      #banner.show { display: block; }
       footer {
         border-top: 1px solid var(--line);
         padding: 0.8rem 1.2rem 1rem;
         display: grid;
-        grid-template-columns: auto 1fr auto;
+        grid-template-columns: 1fr auto;
         gap: 0.5rem;
         background: #141a12;
       }
@@ -255,8 +310,12 @@
         <h1><span id="lamp" class="lamp"></span>OpenBot</h1>
         <p>SSH your own machine. The agent gets a computer — you keep the keys. <a href="/oh-test" style="color:var(--phosphor)">本机试连</a></p>
       </div>
-      <div class="meta" id="meta">connecting…</div>
+      <div class="actions">
+        <button id="open-settings" type="button">Settings</button>
+        <div class="meta" id="meta">connecting…</div>
+      </div>
     </header>
+    <div id="banner"></div>
     <main>
       <section id="log"></section>
       <aside>
@@ -265,23 +324,44 @@
       </aside>
     </main>
     <footer>
-      <select id="mode" aria-label="Input mode">
-        <option value="handoff">This computer</option>
-        <option value="run">Run on host</option>
-      </select>
       <textarea id="box" rows="2" placeholder="发给这台电脑，直接开始对话。"></textarea>
       <button id="send" type="button">Send</button>
     </footer>
+    <div id="settings" class="sheet">
+      <form id="settings-form">
+        <h2>Connect your machine</h2>
+        <p class="help">Saved under ~/.openbot on this laptop (mode 0600). Point at a private key file — do not paste the key, and do not put it in git. Saving opens an SSH tunnel to OpenHands on that host.</p>
+        <label for="set-host">Host</label>
+        <input id="set-host" name="hostname" autocomplete="off" placeholder="hostname or IP" />
+        <label for="set-user">User</label>
+        <input id="set-user" name="user" autocomplete="off" placeholder="ubuntu" />
+        <label for="set-port">Port</label>
+        <input id="set-port" name="port" type="number" min="1" max="65535" value="22" />
+        <label for="set-identity">Identity file path</label>
+        <input id="set-identity" name="identityFile" autocomplete="off" placeholder="~/.ssh/id_ed25519" />
+        <label for="set-session">OpenHands session key (optional)</label>
+        <input id="set-session" name="sessionApiKey" type="password" autocomplete="off" placeholder="leave blank to keep" />
+        <p class="help">Writes OH_SESSION_API_KEY to ~/.openbot/.env only. Never committed.</p>
+        <div class="row">
+          <button id="save-settings" type="submit">Save and connect</button>
+          <button id="close-settings" type="button">Close</button>
+        </div>
+        <div class="next" id="settings-next"></div>
+      </form>
+    </div>
     <script type="module">
       import { createComposeGuard, renderMarkdown, shouldSendOnEnter } from "/chat-ui.js";
 
       const logEl = document.getElementById("log");
       const jobsEl = document.getElementById("jobs");
       const box = document.getElementById("box");
-      const mode = document.getElementById("mode");
       const sendBtn = document.getElementById("send");
       const meta = document.getElementById("meta");
       const lamp = document.getElementById("lamp");
+      const banner = document.getElementById("banner");
+      const settingsEl = document.getElementById("settings");
+      const settingsForm = document.getElementById("settings-form");
+      const settingsNext = document.getElementById("settings-next");
 
       function add(kind, title, body, extra) {
         const el = document.createElement("article");
@@ -310,10 +390,9 @@
         try {
           const s = await (await fetch("/api/status")).json();
           const ohOk = !!(s.openhands && s.openhands.ok);
-          lamp.classList.toggle("ok", ohOk || !!s.ok);
+          lamp.classList.toggle("ok", ohOk && !!s.ready);
           const host = s.host || {};
-          const info = s.info;
-          const hostLine = host.hostname ? host.user + "@" + host.hostname : "no SSH bind (OH-only is ok)";
+          const hostLine = host.hostname ? host.user + "@" + host.hostname : "no host yet — open Settings";
           meta.innerHTML =
             escapeHtml(hostLine) +
             (s.openhands
@@ -321,11 +400,16 @@
                 (ohOk ? "ok" : "down") +
                 " " +
                 escapeHtml(s.openhands.baseUrl || "") +
-                (s.openhands.hasSessionKey ? "" : " · set OH_SESSION_API_KEY")
+                (s.openhands.hasSessionKey ? "" : " · set session key")
               : "<br>OH not configured") +
-            "<br>persist " + escapeHtml(s.persist || "unknown") +
-            (info ? "<br>" + escapeHtml(info.uname.string) : "") +
-            (s.error && !ohOk ? "<br class='err'>" + escapeHtml(s.error) : "");
+            (s.nextStep && !s.ready ? "<br class='err'>" + escapeHtml(s.nextStep) : "");
+          if (s.nextStep && !s.ready) {
+            banner.textContent = s.nextStep;
+            banner.classList.add("show");
+          } else {
+            banner.textContent = "";
+            banner.classList.remove("show");
+          }
         } catch (err) {
           lamp.classList.remove("ok");
           meta.textContent = String(err);
@@ -437,9 +521,8 @@
         const text = box.value.trim();
         if (!text) return;
         box.value = "";
-        const isRun = mode.value === "run";
-        add("user", isRun ? "Run on host" : "You", text);
-        const out = add("bot", isRun ? "Host" : "Assistant", "");
+        add("user", "You", text);
+        const out = add("bot", "Assistant", "");
         const bodyEl = out.querySelector(".md, pre");
         let quiet = out.querySelector(".quiet");
         if (!quiet) {
@@ -449,29 +532,7 @@
         }
         sendBtn.disabled = true;
         try {
-          const url = isRun ? "/api/run" : "/api/chat";
-          const payload = isRun ? { command: text } : { message: text, handoff: true };
-          await consumeSse(url, payload, (ev) => {
-            if (isRun) {
-              if (ev.type === "token" || ev.type === "thought" || ev.type === "output") {
-                if (bodyEl.textContent) bodyEl.textContent += "\n";
-                bodyEl.textContent += ev.text || ev.chunk || "";
-                logEl.scrollTop = logEl.scrollHeight;
-              } else if (ev.type === "status") {
-                add("sys", "host", ev.text);
-              } else if (ev.type === "tool_start") {
-                add("sys", "tool", ev.name + " " + JSON.stringify(ev.args));
-              } else if (ev.type === "tool_result") {
-                add("sys", "host", ev.name + "\n" + (ev.result || ""));
-              } else if (ev.type === "approval") {
-                decideCard(ev, ev.reason + "\n" + ev.command);
-              } else if (ev.type === "error") {
-                add("sys err", "error", ev.message);
-              } else if (ev.type === "done") {
-                refreshJobs();
-              }
-              return;
-            }
+          await consumeSse("/api/chat", { message: text, handoff: true }, (ev) => {
             if (ev.type === "token") {
               bodyEl.innerHTML = renderMarkdown(ev.text || "");
               quiet.textContent = "";
@@ -493,6 +554,58 @@
         }
       }
 
+      async function loadSettingsForm() {
+        const s = await (await fetch("/api/settings")).json();
+        const host = s.host || {};
+        settingsForm.hostname.value = host.hostname || "";
+        settingsForm.user.value = host.user || "";
+        settingsForm.port.value = host.port || 22;
+        settingsForm.identityFile.value = host.identityFile || "";
+        settingsForm.sessionApiKey.value = "";
+        settingsForm.sessionApiKey.placeholder = s.openhands && s.openhands.hasSessionKey ? "set — leave blank to keep" : "leave blank to keep";
+        settingsNext.textContent = (s.connect && s.connect.nextStep) || "";
+      }
+
+      document.getElementById("open-settings").onclick = async () => {
+        await loadSettingsForm();
+        settingsEl.classList.add("open");
+        settingsForm.hostname.focus();
+      };
+      document.getElementById("close-settings").onclick = () => settingsEl.classList.remove("open");
+      settingsEl.addEventListener("click", (e) => {
+        if (e.target === settingsEl) settingsEl.classList.remove("open");
+      });
+      settingsForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const saveBtn = document.getElementById("save-settings");
+        saveBtn.disabled = true;
+        settingsNext.textContent = "Saving…";
+        try {
+          const payload = {
+            hostname: settingsForm.hostname.value.trim(),
+            user: settingsForm.user.value.trim(),
+            port: Number(settingsForm.port.value || 22),
+            identityFile: settingsForm.identityFile.value.trim(),
+            sessionApiKey: settingsForm.sessionApiKey.value,
+            connect: true,
+          };
+          const res = await fetch("/api/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || res.status);
+          settingsForm.sessionApiKey.value = "";
+          settingsNext.textContent = (data.connect && data.connect.nextStep) || "Saved to ~/.openbot.";
+          await refreshStatus();
+        } catch (err) {
+          settingsNext.textContent = String(err);
+        } finally {
+          saveBtn.disabled = false;
+        }
+      });
+
       sendBtn.onclick = send;
       const compose = createComposeGuard();
       box.addEventListener("compositionstart", () => compose.onCompositionStart());
@@ -509,7 +622,7 @@
       add(
         "sys",
         "",
-        "发给这台电脑就会直接对话。先开隧道：ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host",
+        "发给这台电脑就会直接对话。先在 Settings 里填你自己的主机和本机私钥路径；密钥只留在 ~/.openbot，不会进 git。",
       );
     </script>
   </body>

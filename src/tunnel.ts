@@ -41,9 +41,31 @@ export async function ensureWorkerAccess(config: OpenBotConfig): Promise<{
   throw new Error("Tunnel is up but the worker did not answer /health. Re-run bind.");
 }
 
+export function openHandsLocalPort(baseUrl: string, fallback = 8000): number {
+  try {
+    const parsed = new URL(baseUrl);
+    if (parsed.port) return Number(parsed.port);
+    if (parsed.protocol === "https:") return 443;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function openTunnel(config: OpenBotConfig): Promise<TunnelHandle> {
-  const localPort = config.worker.localPort;
-  const remotePort = config.worker.remotePort;
+  return openLocalForward(config, {
+    localPort: config.worker.localPort,
+    remotePort: config.worker.remotePort,
+  });
+}
+
+/** ssh -L 127.0.0.1:local:127.0.0.1:remote using the saved host + identity path. */
+export async function openLocalForward(
+  config: OpenBotConfig,
+  spec: { localPort: number; remotePort: number; connectTimeoutSec?: number },
+): Promise<TunnelHandle> {
+  const localPort = spec.localPort;
+  const remotePort = spec.remotePort;
   const args = [
     "-N",
     "-L",
@@ -59,7 +81,7 @@ export async function openTunnel(config: OpenBotConfig): Promise<TunnelHandle> {
     "-o",
     "StrictHostKeyChecking=accept-new",
     "-o",
-    "ConnectTimeout=20",
+    `ConnectTimeout=${spec.connectTimeoutSec ?? 20}`,
     "-p",
     String(config.host.port || 22),
   ];

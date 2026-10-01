@@ -12,14 +12,18 @@ export interface RunResult {
   stderr: string;
 }
 
-function sshBaseArgs(config: OpenBotConfig, extras: string[] = []): string[] {
+export function sshBaseArgs(
+  config: OpenBotConfig,
+  extras: string[] = [],
+  opts: { connectTimeoutSec?: number } = {},
+): string[] {
   const args = [
     "-o",
     "BatchMode=yes",
     "-o",
     "StrictHostKeyChecking=accept-new",
     "-o",
-    "ConnectTimeout=20",
+    `ConnectTimeout=${opts.connectTimeoutSec ?? 20}`,
     "-p",
     String(config.host.port || 22),
     ...extras,
@@ -69,9 +73,13 @@ export function runCommand(
   });
 }
 
-export async function sshExec(config: OpenBotConfig, remoteCommand: string): Promise<RunResult> {
-  const args = [...sshBaseArgs(config), sshTarget(config), remoteCommand];
-  return runCommand("ssh", args);
+export async function sshExec(
+  config: OpenBotConfig,
+  remoteCommand: string,
+  opts: { timeoutMs?: number; connectTimeoutSec?: number } = {},
+): Promise<RunResult> {
+  const args = [...sshBaseArgs(config, [], { connectTimeoutSec: opts.connectTimeoutSec }), sshTarget(config), remoteCommand];
+  return runCommand("ssh", args, { timeoutMs: opts.timeoutMs });
 }
 
 export async function scpToRemote(
@@ -86,8 +94,11 @@ export async function scpToRemote(
   return runCommand("ssh", args, { input: body });
 }
 
-export async function probeSsh(config: OpenBotConfig): Promise<string> {
-  const result = await sshExec(config, "uname -a && echo OPENBOT_SSH_OK");
+export async function probeSsh(
+  config: OpenBotConfig,
+  opts: { timeoutMs?: number; connectTimeoutSec?: number } = {},
+): Promise<string> {
+  const result = await sshExec(config, "uname -a && echo OPENBOT_SSH_OK", opts);
   if (result.code !== 0 || !result.stdout.includes("OPENBOT_SSH_OK")) {
     throw new Error(
       `SSH failed (${result.code}): ${result.stderr || result.stdout || "no output"}`.trim(),
@@ -167,5 +178,3 @@ function pickLine(stdout: string, prefix: string): string {
 export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
-
-export { sshBaseArgs };

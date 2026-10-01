@@ -57,7 +57,7 @@ npx openbot serve
 # 打开 http://127.0.0.1:3847/
 ```
 
-默认输入是 **This computer**：发一条消息就 `POST /api/chat` 创建或续上 OH conversation，同一线程画成普通对话（You / Assistant），只显示最终答复，不标 REMOTE、不把 `ConversationStateUpdateEvent` / running / finished 当成气泡。`/api/handoffs/stream` 同样直发。`Run on host` 仍是 PR#1 worker 直执逃生口。无本机模型 key 时 `/api/chat` 也会走这条路径。本机规划 Agent 仍属 Phase 2。
+聊天没有模式开关：发一条消息就 `POST /api/chat` 创建或续上 OH conversation。Settings 保存主机 / 用户 / 私钥路径到 `~/.openbot` 并尝试开隧道。同一线程是 You / Assistant，只显示最终答复。`/api/handoffs/stream` 同样直发。`/api/run` 仍是 PR#1 worker 逃生口，主 UI 不再露出。本机规划 Agent 仍属 Phase 2。
 
 ## 4. 代码位置
 

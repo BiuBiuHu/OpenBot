@@ -394,8 +394,9 @@ describe("web → OpenHands (no worker)", () => {
   it("TC-OH-008: serve without bind; page is This computer; status.ok follows OH", async () => {
     const port = plane.config.controlPlane.port;
     const html = await (await fetch(`http://127.0.0.1:${port}/`)).text();
-    assert.match(html, /This computer/);
+    assert.match(html, /Settings/);
     assert.match(html, /\/api\/chat/);
+    assert.match(html, /\/api\/settings/);
     assert.match(html, /直接开始对话/);
     assert.match(html, /Assistant/);
     assert.match(html, /: "You"/);
@@ -405,7 +406,7 @@ describe("web → OpenHands (no worker)", () => {
     assert.match(html, /\/chat-ui\.js/);
     assert.match(html, /shouldSendOnEnter/);
     assert.match(html, /renderMarkdown/);
-    assert.doesNotMatch(html, /Confirm handoff|Not now|REMOTE/);
+    assert.doesNotMatch(html, /<select id="mode"|Run on host|Confirm handoff|Not now|REMOTE/);
     const uiJs = await (await fetch(`http://127.0.0.1:${port}/chat-ui.js`)).text();
     assert.match(uiJs, /isComposing/);
     assert.match(uiJs, /229/);
