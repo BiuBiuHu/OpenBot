@@ -13,6 +13,8 @@ import {
   OpenHandsError,
   remoteConversationFailed,
   remoteLlmOverride,
+  buildAgentLlm,
+  DEFAULT_REMOTE_LLM_MODEL,
 } from "../src/oh-client.js";
 import { agentEventsFromOh, normalizeOhEvent } from "../src/oh-events.js";
 import { repoRoot } from "../src/paths.js";
@@ -116,45 +118,31 @@ describe("OpenHandsClient against mock HTTP", () => {
     assert.equal(mock.conversations.get(delivery.conversation.id)?.goal, "list /tmp");
   });
 
-  it("TC-OH-016: empty local OPENAI key does not become the remote agent model", async () => {
+  it("TC-OH-016: create payload has agent.llm and no empty OpenAI api_key", async () => {
+    const fromLocalOpenAi = buildAgentLlm({ model: "gpt-4o-mini", apiKey: "" });
+    assert.equal(fromLocalOpenAi.model, DEFAULT_REMOTE_LLM_MODEL);
+    assert.equal(fromLocalOpenAi.api_key, undefined);
     assert.equal(remoteLlmOverride({ model: "gpt-4o-mini", apiKey: "" }), undefined);
-    assert.equal(
-      remoteLlmOverride(undefined, {
-        baseUrl: mock.baseUrl,
-        sessionApiKey: "k-oh-test",
-        workspaceDir: "workspace/project",
-        llmModel: "gpt-4o-mini",
-        llmApiKey: "",
-      }),
-      undefined,
-    );
-    const created = await deliverConfirmedHandoff(
-      client,
-      { goal: "do not send local openai" },
-      {
-        baseUrl: mock.baseUrl,
-        sessionApiKey: "k-oh-test",
-        workspaceDir: "workspace/project",
-        llmModel: "gpt-4o-mini",
-        llmApiKey: "",
-      },
-    );
-    const recorded = mock.creates.find((c) => c.id === created.conversation.id);
+    const created = await client.createConversation({ goal: "do not send local openai" });
+    const recorded = mock.creates.find((c) => c.id === created.id);
     assert.ok(recorded);
-    assert.equal(recorded?.llm, undefined);
-    const agent = recorded?.body.agent as { llm?: unknown } | undefined;
-    assert.equal(agent?.llm, undefined);
+    const llm = (recorded?.body.agent as { llm?: Record<string, unknown> })?.llm;
+    assert.ok(llm, "1.49.2 requires agent.llm");
+    assert.equal(llm.model, DEFAULT_REMOTE_LLM_MODEL);
+    assert.ok(!Object.hasOwn(llm, "api_key"), "empty OpenAI key must not be sent");
+    assert.equal(recorded?.llm?.model, DEFAULT_REMOTE_LLM_MODEL);
+    assert.equal(recorded?.llm?.api_key, undefined);
   });
 
   it("TC-OH-017: explicit remote model+key is sent on create", async () => {
-    const override = remoteLlmOverride(undefined, {
+    const llm = buildAgentLlm(undefined, {
       baseUrl: mock.baseUrl,
       sessionApiKey: "k-oh-test",
       workspaceDir: "workspace/project",
       llmModel: "test/remote",
       llmApiKey: "remote-key",
     });
-    assert.deepEqual(override, { model: "test/remote", apiKey: "remote-key" });
+    assert.deepEqual(llm, { model: "test/remote", api_key: "remote-key" });
     const created = await client.createConversation(
       { goal: "use host override", model: "test/remote", apiKey: "remote-key" },
     );

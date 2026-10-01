@@ -34,7 +34,7 @@ Usage:
 OpenHands is reached at OH_BASE_URL (default http://127.0.0.1:8000).
 Open a tunnel first: ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host
 Session key: OH_SESSION_API_KEY (header X-Session-API-Key). OPENHANDS_* aliases still work.
-Remote LLM stays on the host unless BOTH OH_LLM_MODEL and OH_LLM_API_KEY are set.
+Create always sends agent.llm (1.49.2). Default model is deepseek/deepseek-chat; api_key only if OH_LLM_API_KEY is set.
 
 Config lives in ~/.openbot (never commit it). Keys go in ~/.openbot/.env or a gitignored .env.
 `;

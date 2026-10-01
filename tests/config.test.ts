@@ -18,6 +18,7 @@ describe("REQ-OPENBOT-007 config isolation", () => {
     OH_LLM_API_KEY: process.env.OH_LLM_API_KEY,
     OPENHANDS_LLM_MODEL: process.env.OPENHANDS_LLM_MODEL,
     OPENHANDS_LLM_API_KEY: process.env.OPENHANDS_LLM_API_KEY,
+    OH_LLM_BASE_URL: process.env.OH_LLM_BASE_URL,
   };
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "openbot-home-"));
 
@@ -33,6 +34,7 @@ describe("REQ-OPENBOT-007 config isolation", () => {
     delete process.env.OH_LLM_API_KEY;
     delete process.env.OPENHANDS_LLM_MODEL;
     delete process.env.OPENHANDS_LLM_API_KEY;
+    delete process.env.OH_LLM_BASE_URL;
   });
 
   after(() => {
@@ -84,6 +86,7 @@ describe("REQ-OPENBOT-007 config isolation", () => {
     assert.equal(cfg.llm.model, "gpt-4o-mini");
     assert.equal(cfg.openhands.llmModel, "");
     assert.equal(cfg.openhands.llmApiKey, "");
+    assert.equal(cfg.openhands.llmBaseUrl || "", "");
     process.env.OH_LLM_MODEL = "test/remote";
     process.env.OH_LLM_API_KEY = "remote-key";
     const overridden = defaultConfig();

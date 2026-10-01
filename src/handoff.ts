@@ -69,6 +69,7 @@ export async function deliverConfirmedHandoff(
     workspaceDir: oh?.workspaceDir,
     model: oh?.llmModel || undefined,
     apiKey: oh?.llmApiKey || undefined,
+    baseUrl: oh?.llmBaseUrl || undefined,
   };
   const conversation = await client.createConversation(input, oh);
   return { proposal: normalized, conversation };

@@ -98,6 +98,12 @@ export function defaultConfig(partial: Partial<OpenBotConfig> = {}): OpenBotConf
         pick(env, "OPENHANDS_LLM_API_KEY") ||
         partial.openhands?.llmApiKey ||
         "",
+      llmBaseUrl: (
+        pick(env, "OH_LLM_BASE_URL") ||
+        pick(env, "OPENHANDS_LLM_BASE_URL") ||
+        partial.openhands?.llmBaseUrl ||
+        ""
+      ).replace(/\/$/, ""),
     },
   };
 }

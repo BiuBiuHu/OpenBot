@@ -34,12 +34,14 @@ export interface OpenHandsConfig {
   /** OH LocalWorkspace.working_dir. Not a public path. */
   workspaceDir: string;
   /**
-   * Optional remote-loop model. Only sent with a non-empty llmApiKey.
-   * From OH_LLM_MODEL / OPENHANDS_LLM_MODEL — never OPENAI_MODEL.
+   * Optional remote-loop model (OH_LLM_MODEL / OPENHANDS_LLM_MODEL).
+   * Empty → payload uses deepseek/deepseek-chat. Never OPENAI_MODEL.
    */
   llmModel: string;
-  /** Optional remote-loop key (OH_LLM_API_KEY). Never commit. Never use OPENAI_API_KEY. */
+  /** Optional remote-loop key (OH_LLM_API_KEY). Omitted from payload when empty. */
   llmApiKey: string;
+  /** Optional remote-loop base URL (OH_LLM_BASE_URL). Omitted when empty. */
+  llmBaseUrl?: string;
 }
 
 export interface OpenBotConfig {

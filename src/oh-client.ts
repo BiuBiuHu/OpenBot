@@ -59,6 +59,7 @@ export interface CreateConversationInput {
   workspaceDir?: string;
   model?: string;
   apiKey?: string;
+  baseUrl?: string;
   maxIterations?: number;
   run?: boolean;
   threadId?: string;
@@ -110,18 +111,44 @@ export function isTerminalStatus(status: string | undefined, stopOnApproval = tr
 }
 
 /**
- * Only override the host Agent Server LLM when BOTH a model id and a
- * non-empty provider key are explicit. Local OPENAI_MODEL / empty
- * OPENAI_API_KEY must never become the remote agent.llm.
+ * Agent Server 1.49.2 requires `agent.llm`. LLM.model only defaults
+ * (gpt-5.6) when the llm object is present — omitting llm is a 422.
+ * The server does not merge host LLM_API_KEY into the request; litellm
+ * reads provider env from the model prefix. Default model is the host
+ * DeepSeek id so an empty local OPENAI_API_KEY is never sent.
  */
+export const DEFAULT_REMOTE_LLM_MODEL = "deepseek/deepseek-chat";
+
+function isOpenAiShapedModel(model: string): boolean {
+  const m = model.toLowerCase();
+  return m.startsWith("gpt-") || m.startsWith("openai/") || m === "openhands/default";
+}
+
+/** @deprecated use buildAgentLlm — kept so older tests can see the gate. */
 export function remoteLlmOverride(
   input?: { model?: string; apiKey?: string },
   cfg?: OpenHandsConfig,
 ): { model: string; apiKey: string } | undefined {
-  const model = (input?.model || cfg?.llmModel || "").trim();
+  const llm = buildAgentLlm(input, cfg);
+  if (!llm.api_key) return undefined;
+  return { model: llm.model, apiKey: llm.api_key };
+}
+
+export function buildAgentLlm(
+  input?: { model?: string; apiKey?: string; baseUrl?: string },
+  cfg?: OpenHandsConfig,
+): { model: string; api_key?: string; base_url?: string } {
+  const requested = (input?.model || cfg?.llmModel || "").trim();
   const apiKey = (input?.apiKey || cfg?.llmApiKey || "").trim();
-  if (!model || !apiKey) return undefined;
-  return { model, apiKey };
+  const baseUrl = (input?.baseUrl || cfg?.llmBaseUrl || "").trim();
+  const model =
+    requested && !(isOpenAiShapedModel(requested) && !apiKey)
+      ? requested
+      : DEFAULT_REMOTE_LLM_MODEL;
+  const llm: { model: string; api_key?: string; base_url?: string } = { model };
+  if (apiKey) llm.api_key = apiKey;
+  if (baseUrl) llm.base_url = baseUrl;
+  return llm;
 }
 
 export function remoteConversationFailed(conv?: { status?: string; executionStatus?: string }): boolean {
@@ -235,13 +262,10 @@ export class OpenHandsClient {
   async createConversation(input: CreateConversationInput, cfg?: OpenHandsConfig): Promise<OhConversation> {
     const workspaceDir = input.workspaceDir || cfg?.workspaceDir || "workspace/project";
     const run = input.run !== false;
-    const remoteLlm = remoteLlmOverride(input, cfg);
     const payload: Record<string, unknown> = {
       agent: {
         kind: "Agent",
-        ...(remoteLlm
-          ? { llm: { model: remoteLlm.model, api_key: remoteLlm.apiKey } }
-          : {}),
+        llm: buildAgentLlm(input, cfg),
         tools: DEFAULT_TOOLS,
       },
       workspace: {
