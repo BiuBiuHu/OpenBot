@@ -44,6 +44,7 @@ export async function startControlPlane(
   const approvals = new Map<string, PendingApproval>();
   const handoffs = new HandoffStore();
   const handoffWaiters = new Map<string, (allow: boolean) => void>();
+  const threadConversations = new Map<string, string>();
   const oh = OpenHandsClient.fromConfig(config);
   let history: ChatMessage[] = [];
 
@@ -152,19 +153,19 @@ export async function startControlPlane(
           await json(res, { ok: false, error: "goal required" }, 400);
           return;
         }
+        const threadId = String(body.thread_id || body.threadId || "chat_default");
         await streamSse(req, res, async (emit) => {
-          await runHandoffTurn(goal, {
+          const conversation = await runHandoffTurn(goal, {
             client: oh,
             oh: config.openhands,
             store: handoffs,
             emit,
             timeoutMs: typeof body.timeout_ms === "number" ? body.timeout_ms : 60_000,
             pollMs: typeof body.poll_ms === "number" ? body.poll_ms : 250,
-            waitForConfirm: (proposal: HandoffProposal) =>
-              new Promise<boolean>((resolve) => {
-                handoffWaiters.set(proposal.id, resolve);
-              }),
+            threadId,
+            conversationId: threadConversations.get(threadId),
           });
+          if (conversation?.id) threadConversations.set(threadId, conversation.id);
         });
         return;
       }
@@ -225,6 +226,7 @@ export async function startControlPlane(
           body.handoff === "true" ||
           body.mode === "handoff" ||
           body.mode === "computer";
+        const threadId = String(body.thread_id || body.threadId || "chat_default");
         await streamSse(req, res, async (emit) => {
           const result = await runThreadTurn(message, {
             client: oh,
@@ -237,17 +239,15 @@ export async function startControlPlane(
             forceHandoff,
             timeoutMs: typeof body.timeout_ms === "number" ? body.timeout_ms : 60_000,
             pollMs: typeof body.poll_ms === "number" ? body.poll_ms : 250,
-            threadId: String(body.thread_id || body.threadId || "chat_default"),
-            waitForConfirm: (proposal: HandoffProposal) =>
-              new Promise<boolean>((resolve) => {
-                handoffWaiters.set(proposal.id, resolve);
-              }),
+            threadId,
+            conversationId: threadConversations.get(threadId),
             waitForApproval: (req) =>
               new Promise<boolean>((resolve) => {
                 approvals.set(req.id, { req, resolve });
               }),
           });
           history = result.history.slice(-40);
+          if (result.conversation?.id) threadConversations.set(threadId, result.conversation.id);
         });
         return;
       }

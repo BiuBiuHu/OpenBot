@@ -1,7 +1,6 @@
 import { agentReplyText, emitUnseenOhEvents } from "./oh-events.js";
 import {
   OpenHandsClient,
-  conversationSnippet,
   isTerminalStatus,
   type CreateConversationInput,
   type OhConversation,
@@ -79,67 +78,65 @@ export interface HandoffTurnDeps {
   client: OpenHandsClient;
   oh?: OpenHandsConfig;
   store: HandoffStore;
-  waitForConfirm: (proposal: HandoffProposal) => Promise<boolean>;
+  waitForConfirm?: (proposal: HandoffProposal) => Promise<boolean>;
   emit: (event: AgentEvent) => void;
   pollMs?: number;
   timeoutMs?: number;
   threadId?: string;
+  /** Existing OpenHands conversation on this thread — continue instead of create. */
+  conversationId?: string;
 }
 
 /**
- * Same-thread handoff: emit a confirm card, then create an OH conversation
- * and poll events back as `thought` / `status`. Does not call the local LLM.
+ * This computer → OpenHands immediately. No confirm card.
+ * Creates a conversation, or continues one already on this thread.
  */
 export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promise<OhConversation | undefined> {
   const proposal = deps.store.propose({ goal, threadId: deps.threadId });
-  deps.emit({
-    type: "handoff_proposal",
-    id: proposal.id,
-    goal: proposal.goal,
-    reason: proposal.reason,
-  });
-  const allowed = await deps.waitForConfirm(proposal);
-  if (!allowed) {
-    deps.store.deny(proposal.id);
-    deps.emit({ type: "error", message: "Handoff denied — nothing sent to the computer." });
-    deps.emit({ type: "done" });
-    return undefined;
-  }
   deps.store.take(proposal.id);
-  deps.emit({ type: "status", text: `handoff ${proposal.id} → OpenHands` });
-  const delivery = await deliverConfirmedHandoff(deps.client, proposal, deps.oh);
-  const id = delivery.conversation.id;
-  deps.emit({
-    type: "status",
-    text: `remote conversation ${id} ${delivery.conversation.executionStatus}`,
-  });
+  deps.emit({ type: "status", text: "thinking" });
+
+  let last: OhConversation | undefined;
+  let id = (deps.conversationId || "").trim();
+  if (id) {
+    try {
+      last = await deps.client.getConversation(id);
+      await deps.client.sendMessage(id, goal);
+    } catch {
+      id = "";
+      last = undefined;
+    }
+  }
+  if (!id) {
+    const delivery = await deliverConfirmedHandoff(deps.client, proposal, deps.oh);
+    last = delivery.conversation;
+    id = last.id;
+  }
   if (!id) {
     deps.emit({ type: "error", message: "OpenHands created a conversation without an id" });
     deps.emit({ type: "done" });
-    return delivery.conversation;
+    return last;
   }
 
   const seen = new Set<string>();
   const timeoutMs = deps.timeoutMs ?? 60_000;
   const pollMs = deps.pollMs ?? 250;
   const deadline = Date.now() + timeoutMs;
-  let last = delivery.conversation;
   let timedOut = false;
   let mappedContent = 0;
   let lastItems: unknown[] = [];
   while (Date.now() < deadline) {
     last = await deps.client.getConversation(id);
-    deps.emit({ type: "status", text: `remote ${last.executionStatus} (${last.status})` });
     try {
       const page = await deps.client.searchEvents(id, { limit: 80 });
       lastItems = page.items;
       const emitted = emitUnseenOhEvents(page.items, seen, deps.emit);
       mappedContent += emitted.content;
       if (!mappedContent) {
-        const snippet = conversationSnippet(page);
-        if (snippet && !seen.has(`snippet:${snippet}`)) {
-          seen.add(`snippet:${snippet}`);
-          deps.emit({ type: "thought", text: snippet });
+        const reply = agentReplyText(page.items);
+        if (reply && !seen.has(`answer:${reply}`)) {
+          seen.add(`answer:${reply}`);
+          deps.emit({ type: "token", text: reply });
           mappedContent += 1;
         }
       }
@@ -159,18 +156,18 @@ export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promi
   if (timedOut) {
     deps.emit({
       type: "error",
-      message: `remote conversation ${id} timed out while ${last.executionStatus} (${last.status})`,
+      message: `conversation timed out while ${last.executionStatus}`,
     });
   } else if (last.status === "failed" || last.status === "timeout") {
     deps.emit({
       type: "error",
-      message: `remote conversation ${id} ${last.executionStatus} (${last.status})`,
+      message: `conversation ${last.executionStatus}`,
     });
   } else if (last.status === "cancelled") {
-    deps.emit({ type: "error", message: `remote conversation ${id} cancelled` });
+    deps.emit({ type: "error", message: "conversation cancelled" });
   } else if (!mappedContent) {
     const reply = agentReplyText(lastItems);
-    if (reply) deps.emit({ type: "thought", text: reply });
+    if (reply) deps.emit({ type: "token", text: reply });
   }
   deps.emit({ type: "done" });
   return last;

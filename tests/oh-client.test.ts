@@ -396,6 +396,10 @@ describe("web → OpenHands (no worker)", () => {
     const html = await (await fetch(`http://127.0.0.1:${port}/`)).text();
     assert.match(html, /This computer/);
     assert.match(html, /\/api\/chat/);
+    assert.match(html, /直接开始对话/);
+    assert.match(html, /Assistant/);
+    assert.match(html, /: "You"/);
+    assert.doesNotMatch(html, /Confirm handoff|Not now|REMOTE/);
     const status = (await (await fetch(`http://127.0.0.1:${port}/api/status`)).json()) as {
       ok?: boolean;
       openhands?: { ok?: boolean };
@@ -404,51 +408,20 @@ describe("web → OpenHands (no worker)", () => {
     assert.equal(status.ok, true);
   });
 
-  it("TC-OH-009: stream proposes handoff; confirm creates conversation and returns snippet", async () => {
+  it("TC-OH-009: stream sends immediately and returns the final answer", async () => {
     const port = plane.config.controlPlane.port;
-    const res = await fetch(`http://127.0.0.1:${port}/api/handoffs/stream`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ goal: "list workspace", timeout_ms: 3000, poll_ms: 20 }),
+    const events = await readSse(`http://127.0.0.1:${port}/api/handoffs/stream`, {
+      goal: "list workspace",
+      timeout_ms: 3000,
+      poll_ms: 20,
     });
-    assert.equal(res.status, 200);
-    assert.ok(res.body);
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    const events: Array<Record<string, unknown>> = [];
-    let buf = "";
-    let confirmed = false;
-    const deadline = Date.now() + 8000;
-    while (Date.now() < deadline) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const parts = buf.split("\n\n");
-      buf = parts.pop() || "";
-      for (const part of parts) {
-        const line = part.split("\n").find((l) => l.startsWith("data: "));
-        if (!line) continue;
-        const ev = JSON.parse(line.slice(6)) as Record<string, unknown>;
-        events.push(ev);
-        if (ev.type === "handoff_proposal" && !confirmed) {
-          confirmed = true;
-          const allow = await fetch(`http://127.0.0.1:${port}/api/handoffs/${ev.id}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ allow: true }),
-          });
-          assert.equal(allow.status, 200);
-        }
-      }
-      if (events.some((e) => e.type === "done")) break;
-    }
-    assert.ok(events.some((e) => e.type === "handoff_proposal"));
-    assert.ok(events.some((e) => e.type === "thought"));
+    assert.ok(!events.some((e) => e.type === "handoff_proposal"));
+    assert.ok(!events.some((e) => e.type === "status" && /ConversationStateUpdateEvent|running|finished/.test(String(e.text))));
     assert.ok(events.some((e) => e.type === "done"));
-    const thoughts = events.filter((e) => e.type === "thought").map((e) => String(e.text || ""));
+    const answers = events.filter((e) => e.type === "token").map((e) => String(e.text || ""));
     assert.ok(
-      thoughts.some((t) => /list workspace/.test(t)),
-      `expected a reply mentioning the goal, got ${JSON.stringify(thoughts)}`,
+      answers.some((t) => /list workspace/.test(t)),
+      `expected a reply mentioning the goal, got ${JSON.stringify(answers)}`,
     );
     const listed = (await (await fetch(`http://127.0.0.1:${port}/api/conversations`)).json()) as {
       conversations: Array<{ id: string }>;
@@ -456,48 +429,50 @@ describe("web → OpenHands (no worker)", () => {
     assert.ok(listed.conversations.length >= 1);
   });
 
-  it("TC-OH-011: /api/chat without worker streams the same-thread handoff", async () => {
+  it("TC-OH-011: /api/chat without worker streams the same-thread reply", async () => {
     const port = plane.config.controlPlane.port;
-    const res = await fetch(`http://127.0.0.1:${port}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: "uname and summarize", handoff: true, timeout_ms: 3000, poll_ms: 20 }),
+    const events = await readSse(`http://127.0.0.1:${port}/api/chat`, {
+      message: "uname and summarize",
+      handoff: true,
+      timeout_ms: 3000,
+      poll_ms: 20,
     });
-    assert.equal(res.status, 200);
-    assert.ok(res.body);
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    const events: Array<Record<string, unknown>> = [];
-    let buf = "";
-    let confirmed = false;
-    const deadline = Date.now() + 8000;
-    while (Date.now() < deadline) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const parts = buf.split("\n\n");
-      buf = parts.pop() || "";
-      for (const part of parts) {
-        const line = part.split("\n").find((l) => l.startsWith("data: "));
-        if (!line) continue;
-        const ev = JSON.parse(line.slice(6)) as Record<string, unknown>;
-        events.push(ev);
-        if (ev.type === "handoff_proposal" && !confirmed) {
-          confirmed = true;
-          const allow = await fetch(`http://127.0.0.1:${port}/api/handoffs/${ev.id}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ allow: true }),
-          });
-          assert.equal(allow.status, 200);
-        }
-      }
-      if (events.some((e) => e.type === "done")) break;
-    }
-    assert.ok(events.some((e) => e.type === "handoff_proposal"));
-    assert.ok(events.some((e) => e.type === "thought" || e.type === "tool_start" || e.type === "tool_result"));
+    assert.ok(!events.some((e) => e.type === "handoff_proposal"));
+    assert.ok(events.some((e) => e.type === "token" && /uname and summarize/.test(String(e.text || ""))));
     assert.ok(events.some((e) => e.type === "done"));
     assert.ok(!events.some((e) => e.type === "error" && String(e.message || "").includes("worker not bound")));
+  });
+
+  it("TC-OH-021: second chat message continues the same conversation", async () => {
+    const port = plane.config.controlPlane.port;
+    const beforeCreates = mock.creates.length;
+    const threadId = "chat_continue";
+    const first = await readSse(`http://127.0.0.1:${port}/api/chat`, {
+      message: "first turn",
+      handoff: true,
+      thread_id: threadId,
+      timeout_ms: 3000,
+      poll_ms: 20,
+    });
+    assert.ok(!first.some((e) => e.type === "handoff_proposal"));
+    assert.ok(first.some((e) => e.type === "token" && /done: first turn/.test(String(e.text || ""))));
+    assert.ok(first.some((e) => e.type === "done"));
+    assert.equal(mock.creates.length, beforeCreates + 1);
+    const convId = mock.creates[mock.creates.length - 1]?.id;
+    assert.ok(convId);
+
+    const second = await readSse(`http://127.0.0.1:${port}/api/chat`, {
+      message: "second turn",
+      handoff: true,
+      thread_id: threadId,
+      timeout_ms: 3000,
+      poll_ms: 20,
+    });
+    assert.equal(mock.creates.length, beforeCreates + 1);
+    assert.ok(mock.messages.some((m) => m.id === convId && m.text === "second turn"));
+    assert.ok(!second.some((e) => e.type === "handoff_proposal"));
+    assert.ok(second.some((e) => e.type === "token" && /done: second turn/.test(String(e.text || ""))));
+    assert.ok(second.some((e) => e.type === "done"));
   });
 });
 
@@ -526,11 +501,26 @@ describe("OH event mapping", () => {
     const obsEv = agentEventsFromOh(obs);
     assert.equal(obsEv[0]?.type, "tool_result");
     assert.match((obsEv[0] as { result?: string }).result || "", /Linux box/);
-    const thought = normalizeOhEvent(
+    const answer = normalizeOhEvent(
       { id: "t1", kind: "MessageEvent", source: "agent", content: [{ text: "all done" }] },
       3,
     );
-    assert.equal(agentEventsFromOh(thought)[0]?.type, "thought");
+    const mappedAnswer = agentEventsFromOh(answer);
+    assert.equal(mappedAnswer[0]?.type, "token");
+    assert.equal(mappedAnswer[0] && "text" in mappedAnswer[0] ? mappedAnswer[0].text : "", "all done");
+    const monologue = normalizeOhEvent(
+      {
+        id: "t2",
+        kind: "ActionEvent",
+        source: "agent",
+        thought: [{ type: "text", text: "I will look around." }],
+        action: { kind: "CmdRunAction", command: "ls" },
+      },
+      4,
+    );
+    const monoEv = agentEventsFromOh(monologue);
+    assert.equal(monoEv[0]?.type, "thought");
+    assert.equal(monoEv[1]?.type, "tool_start");
   });
 
   it("TC-OH-020: 1.49.2 finished conversation shows agent reply, not only state kinds", () => {
@@ -590,11 +580,13 @@ describe("OH event mapping", () => {
     assert.ok(!replies.some((t) => /ConversationStateUpdateEvent/.test(t)));
     assert.equal(agentReplyText(fixture), "我是 OpenHands 助手，跑在你的主机上。");
     const state = normalizeOhEvent(fixture[2], 2);
-    const mappedState = agentEventsFromOh(state);
-    assert.equal(mappedState[0]?.type, "status");
-    assert.match(String(mappedState[0] && "text" in mappedState[0] ? mappedState[0].text : ""), /running/);
+    assert.deepEqual(agentEventsFromOh(state), []);
+    const finished = normalizeOhEvent(fixture[5], 5);
+    assert.deepEqual(agentEventsFromOh(finished), []);
     const user = normalizeOhEvent(fixture[1], 1);
     assert.deepEqual(agentEventsFromOh(user), []);
+    const agent = normalizeOhEvent(fixture[4], 4);
+    assert.equal(agentEventsFromOh(agent)[0]?.type, "token");
   });
 });
 
@@ -668,7 +660,8 @@ describe("handoff error and chat CLI against mock", () => {
       pollMs: 20,
     });
     assert.equal(result.path, "handoff");
-    assert.ok(events.some((e) => e.type === "status" && /no local model key/.test(e.text)));
+    assert.ok(!events.some((e) => e.type === "handoff_proposal"));
+    assert.ok(!events.some((e) => e.type === "status" && /no local model key/.test(e.text)));
   });
 
   it("TC-OH-018: openbot chat exits non-zero when remote conversation fails", async () => {
@@ -706,6 +699,39 @@ describe("HandoffStore", () => {
     assert.equal(store.get(q.id), undefined);
   });
 });
+
+async function readSse(
+  url: string,
+  payload: Record<string, unknown>,
+  timeoutMs = 8000,
+): Promise<Array<Record<string, unknown>>> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  assert.equal(res.status, 200);
+  assert.ok(res.body);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  const events: Array<Record<string, unknown>> = [];
+  let buf = "";
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const parts = buf.split("\n\n");
+    buf = parts.pop() || "";
+    for (const part of parts) {
+      const line = part.split("\n").find((l) => l.startsWith("data: "));
+      if (!line) continue;
+      events.push(JSON.parse(line.slice(6)) as Record<string, unknown>);
+    }
+    if (events.some((e) => e.type === "done")) break;
+  }
+  return events;
+}
 
 async function runCli(
   argv: string[],

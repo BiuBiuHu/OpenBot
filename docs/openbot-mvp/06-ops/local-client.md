@@ -1,6 +1,6 @@
 # 本机客户端对接已运行的 OpenHands
 
-远端 **OpenHands Agent Server 已经在你的主机上跑着**（systemd `openhands-agent-server`，本机环回探活 `{"status":"ok"}`）。本仓库只提供本机壳：一条聊天线程，确认后把任务交给远端电脑，事件回流到同一窗口。
+远端 **OpenHands Agent Server 已经在你的主机上跑着**（systemd `openhands-agent-server`，本机环回探活 `{"status":"ok"}`）。本仓库只提供本机壳：一条聊天线程，发给这台电脑就直接对话，最终答复回流到同一窗口。
 
 不要把公网 IP、SSH 私钥、session key、模型 key 写进仓库或 PR。
 
@@ -45,9 +45,9 @@ npx openbot serve
 ```
 
 - 探活：`npx openbot oh health` 应打印 `OpenHands http://127.0.0.1:8000 ok`。
-- UI：打开 `http://127.0.0.1:3847/`。顶栏看 OH 绿灯。输入任务 → 确认交接卡 → 同一线程里看远端 thought / tool / 终态或 error。
+- UI：打开 `http://127.0.0.1:3847/`。顶栏看 OH 绿灯。输入任务就会直接发给 OpenHands，同一线程里是 You / Assistant，气泡里只显示最终答复，不堆 remote 状态卡。
 - 试连页：`http://127.0.0.1:3847/oh-test`。
-- CLI 同一路径：`npx openbot chat '在工作区写一份 uname 记录'`（无 TTY 视为已确认；`oh run` 仍是已确认交接）。
+- CLI 同一路径：`npx openbot chat '在工作区写一份 uname 记录'`（`oh run` 仍是已确认交接）。
 
 不必 `openbot bind`。PR#1 worker 仍在，只是这条路径用不到。
 
@@ -55,7 +55,7 @@ npx openbot serve
 
 | 这边已经测过 | 还需要你在自己笔记本 + ECS 上做 |
 |--------------|----------------------------------|
-| mock HTTP：health、建会话、事件映射、确认交接、`/api/chat` SSE、CLI `oh health` / `chat` | 真隧道打到已部署的 Agent Server |
+| mock HTTP：health、建会话、事件映射、直发对话、`/api/chat` SSE、CLI `oh health` / `chat` | 真隧道打到已部署的 Agent Server |
 | `npx tsc --noEmit` 与 `npm test` | 真 session key、真远端模型循环、任务跑到 finished |
 
 没有真实 ECS 的 CI。不要把 live 测试标绿。

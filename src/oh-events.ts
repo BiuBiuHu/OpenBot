@@ -27,12 +27,8 @@ function collectContentParts(content: unknown, out: string[]): void {
   }
 }
 
-/**
- * Conversational text on an OH event.
- * Agent Server 1.49.2 MessageEvent stores the reply on `llm_message.content`
- * (TextContent[]), not top-level `content`.
- */
-export function messageTextsFromEvent(ev: unknown): string[] {
+/** Final-answer text. 1.49.2 MessageEvent stores it on `llm_message.content`. */
+export function answerTextsFromEvent(ev: unknown): string[] {
   if (!isRecord(ev)) return typeof ev === "string" && ev.trim() ? [ev] : [];
   const out: string[] = [];
   const llmMessage = isRecord(ev.llm_message) ? ev.llm_message : undefined;
@@ -40,9 +36,17 @@ export function messageTextsFromEvent(ev: unknown): string[] {
   collectContentParts(ev.content, out);
   collectContentParts(message?.content, out);
   collectContentParts(llmMessage?.content, out);
-  collectContentParts(ev.extended_content, out);
-  collectContentParts(ev.thought, out);
   if (typeof ev.text === "string" && ev.text.trim()) out.push(ev.text);
+  return out;
+}
+
+/** Internal monologue (ActionEvent.thought / reasoning_content). Not the reply. */
+export function monologueTextsFromEvent(ev: unknown): string[] {
+  if (!isRecord(ev)) return [];
+  const out: string[] = [];
+  const llmMessage = isRecord(ev.llm_message) ? ev.llm_message : undefined;
+  collectContentParts(ev.thought, out);
+  collectContentParts(ev.extended_content, out);
   if (typeof llmMessage?.reasoning_content === "string" && llmMessage.reasoning_content.trim()) {
     out.push(llmMessage.reasoning_content);
   }
@@ -50,6 +54,14 @@ export function messageTextsFromEvent(ev: unknown): string[] {
     out.push(ev.reasoning_content);
   }
   return out;
+}
+
+/**
+ * Conversational text on an OH event (answer + monologue).
+ * Prefer `answerTextsFromEvent` for what the chat bubble should show.
+ */
+export function messageTextsFromEvent(ev: unknown): string[] {
+  return [...answerTextsFromEvent(ev), ...monologueTextsFromEvent(ev)];
 }
 
 export function textsFromEvent(ev: unknown): string[] {
@@ -125,21 +137,11 @@ export function agentEventsFromOh(ev: NormalizedOhEvent): AgentEvent[] {
     return [{ type: "error", message: errorText || "remote error" }];
   }
   if (isStateKind(kind) || (kind.includes("status") && !kind.includes("message"))) {
-    const key = typeof ev.raw.key === "string" ? ev.raw.key : "";
-    const value =
-      typeof ev.raw.value === "string"
-        ? ev.raw.value
-        : typeof ev.raw.execution_status === "string"
-          ? ev.raw.execution_status
-          : typeof ev.raw.status === "string"
-            ? ev.raw.status
-            : "";
-    const status = value || key || ev.kind;
-    return [{ type: "status", text: `remote ${status}` }];
+    return [];
   }
   if (kind.includes("action") || action) {
     const mapped: AgentEvent[] = [];
-    const thought = messageTextsFromEvent(ev.raw).map((t) => t.trim()).filter(Boolean).join("\n");
+    const thought = monologueTextsFromEvent(ev.raw).map((t) => t.trim()).filter(Boolean).join("\n");
     if (thought) mapped.push({ type: "thought", text: thought });
     const name = String(action?.kind || action?.name || action?.tool || ev.kind || "action");
     const args = action ? { ...action } : { text: ev.text };
@@ -150,9 +152,13 @@ export function agentEventsFromOh(ev: NormalizedOhEvent): AgentEvent[] {
     const name = String(observation?.kind || observation?.name || ev.kind || "observation");
     return [{ type: "tool_result", name, result: ev.text || "(empty)" }];
   }
-  const reply = messageTextsFromEvent(ev.raw).map((t) => t.trim()).filter(Boolean).join("\n") || ev.text;
-  if (reply) {
-    return [{ type: "thought", text: reply }];
+  const answer = answerTextsFromEvent(ev.raw).map((t) => t.trim()).filter(Boolean).join("\n");
+  if (answer) {
+    return [{ type: "token", text: answer }];
+  }
+  const monologue = monologueTextsFromEvent(ev.raw).map((t) => t.trim()).filter(Boolean).join("\n");
+  if (monologue) {
+    return [{ type: "thought", text: monologue }];
   }
   return [];
 }
@@ -176,18 +182,18 @@ export function emitUnseenOhEvents(
   return { mapped, content };
 }
 
-/** Reply text the same-thread UI would show (thought/token), from a finished event list. */
+/** Final-answer texts the chat UI would show (`token`), not monologue. */
 export function clientVisibleReplyTexts(items: unknown[]): string[] {
   const out: string[] = [];
   for (const ev of unseenOhEvents(items, new Set())) {
     for (const mapped of agentEventsFromOh(ev)) {
-      if (mapped.type === "thought" || mapped.type === "token") out.push(mapped.text);
+      if (mapped.type === "token") out.push(mapped.text);
     }
   }
   return out;
 }
 
-/** Last agent MessageEvent text — used when a conversation succeeded but nothing was shown. */
+/** Last agent MessageEvent answer — used when a conversation succeeded but nothing was shown. */
 export function agentReplyText(items: unknown[]): string {
   const replies: string[] = [];
   for (const item of items) {
@@ -197,7 +203,7 @@ export function agentReplyText(items: unknown[]): string {
     if (source === "user" || source === "human") continue;
     if (isStateKind(kind) || kind.includes("systemprompt") || kind.includes("condensation")) continue;
     if (kind.includes("action") || kind.includes("observation") || kind.includes("error")) continue;
-    const text = messageTextsFromEvent(item).map((t) => t.trim()).filter(Boolean).join("\n");
+    const text = answerTextsFromEvent(item).map((t) => t.trim()).filter(Boolean).join("\n");
     if (text) replies.push(text);
   }
   return replies.join("\n").trim();

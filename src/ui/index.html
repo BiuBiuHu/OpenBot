@@ -90,10 +90,27 @@
       .msg.sys { color: var(--muted); font-family: var(--mono); font-size: 0.8rem; }
       .msg h3 {
         margin: 0 0 0.35rem;
+        font-family: var(--sans);
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--muted);
+      }
+      .msg.bot pre {
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 1rem;
+      }
+      .msg.user pre {
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 1rem;
+      }
+      .quiet {
+        margin-top: 0.35rem;
         font-family: var(--mono);
-        font-size: 0.7rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+        font-size: 0.72rem;
         color: var(--muted);
       }
       .msg pre, .out {
@@ -184,7 +201,7 @@
         <option value="handoff">This computer</option>
         <option value="run">Run on host</option>
       </select>
-      <textarea id="box" rows="2" placeholder="同一条线程：发给这台电脑。确认后远端事件会回流到这里。"></textarea>
+      <textarea id="box" rows="2" placeholder="发给这台电脑，直接开始对话。"></textarea>
       <button id="send" type="button">Send</button>
     </footer>
     <script>
@@ -199,9 +216,11 @@
       function add(kind, title, body, extra) {
         const el = document.createElement("article");
         el.className = "msg " + kind;
-        const h = document.createElement("h3");
-        h.textContent = title;
-        el.appendChild(h);
+        if (title) {
+          const h = document.createElement("h3");
+          h.textContent = title;
+          el.appendChild(h);
+        }
         const pre = document.createElement(kind === "sys" ? "div" : "pre");
         pre.textContent = body || "";
         el.appendChild(pre);
@@ -259,7 +278,7 @@
           const data = await (await fetch("/api/jobs")).json();
           const jobs = data.jobs || [];
           if (!jobs.length) {
-            jobsEl.textContent = "No remote conversations yet. Confirm a handoff to start one.";
+            jobsEl.textContent = "No conversations yet. Send a message to start one.";
             return;
           }
           jobsEl.innerHTML = jobs
@@ -315,36 +334,24 @@
         }
       }
 
-      function decideCard(kind, ev, extraLines) {
+      function decideCard(ev, extraLines) {
         const actions = document.createElement("div");
         const yes = document.createElement("button");
         yes.className = "yes";
-        yes.textContent = kind === "handoff" ? "Confirm handoff" : "Approve";
+        yes.textContent = "Approve";
         const no = document.createElement("button");
         no.className = "no";
-        no.textContent = kind === "handoff" ? "Not now" : "Deny";
+        no.textContent = "Deny";
         actions.append(yes, no);
-        const card = add(
-          "approval",
-          kind === "handoff" ? "handoff to this computer" : "approval gate",
-          extraLines,
-          actions,
-        );
+        const card = add("approval", "approval gate", extraLines, actions);
         const decide = async (allow) => {
           yes.disabled = no.disabled = true;
-          const url = kind === "handoff" ? "/api/handoffs/" + ev.id : "/api/approve";
-          await fetch(url, {
+          await fetch("/api/approve", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: ev.id, allow }),
           });
-          card.querySelector("h3").textContent = allow
-            ? kind === "handoff"
-              ? "handoff confirmed"
-              : "approved"
-            : kind === "handoff"
-              ? "handoff denied"
-              : "denied";
+          card.querySelector("h3").textContent = allow ? "approved" : "denied";
         };
         yes.onclick = () => decide(true);
         no.onclick = () => decide(false);
@@ -355,31 +362,50 @@
         if (!text) return;
         box.value = "";
         const isRun = mode.value === "run";
-        add("user", isRun ? "run on host" : "you", text);
-        const out = add("bot", isRun ? "host" : "remote", "");
+        add("user", isRun ? "Run on host" : "You", text);
+        const out = add("bot", isRun ? "Host" : "Assistant", "");
         const pre = out.querySelector("pre");
+        let quiet = out.querySelector(".quiet");
+        if (!quiet) {
+          quiet = document.createElement("div");
+          quiet.className = "quiet";
+          out.appendChild(quiet);
+        }
         sendBtn.disabled = true;
         try {
           const url = isRun ? "/api/run" : "/api/chat";
           const payload = isRun ? { command: text } : { message: text, handoff: true };
           await consumeSse(url, payload, (ev) => {
-            if (ev.type === "token" || ev.type === "thought" || ev.type === "output") {
-              if (pre.textContent) pre.textContent += "\n";
-              pre.textContent += ev.text || ev.chunk || "";
+            if (isRun) {
+              if (ev.type === "token" || ev.type === "thought" || ev.type === "output") {
+                if (pre.textContent) pre.textContent += "\n";
+                pre.textContent += ev.text || ev.chunk || "";
+                logEl.scrollTop = logEl.scrollHeight;
+              } else if (ev.type === "status") {
+                add("sys", "host", ev.text);
+              } else if (ev.type === "tool_start") {
+                add("sys", "tool", ev.name + " " + JSON.stringify(ev.args));
+              } else if (ev.type === "tool_result") {
+                add("sys", "host", ev.name + "\n" + (ev.result || ""));
+              } else if (ev.type === "approval") {
+                decideCard(ev, ev.reason + "\n" + ev.command);
+              } else if (ev.type === "error") {
+                add("sys err", "error", ev.message);
+              } else if (ev.type === "done") {
+                refreshJobs();
+              }
+              return;
+            }
+            if (ev.type === "token") {
+              pre.textContent = ev.text || "";
+              quiet.textContent = "";
               logEl.scrollTop = logEl.scrollHeight;
             } else if (ev.type === "status") {
-              add("sys", "remote", ev.text);
-            } else if (ev.type === "tool_start") {
-              add("sys", "tool", ev.name + " " + JSON.stringify(ev.args));
-            } else if (ev.type === "tool_result") {
-              add("sys", "remote", ev.name + "\n" + (ev.result || ""));
-            } else if (ev.type === "handoff_proposal") {
-              decideCard("handoff", ev, ev.reason + "\n" + ev.goal);
-            } else if (ev.type === "approval") {
-              decideCard("approval", ev, ev.reason + "\n" + ev.command);
+              if (!pre.textContent) quiet.textContent = ev.text === "thinking" ? "…" : ev.text;
             } else if (ev.type === "error") {
               add("sys err", "error", ev.message);
             } else if (ev.type === "done") {
+              quiet.textContent = "";
               refreshJobs();
             }
           });
@@ -404,8 +430,8 @@
       setInterval(refreshJobs, 5000);
       add(
         "sys",
-        "ready",
-        "一条线程：输入任务 → 确认交接 → OpenHands 事件回流到这里，直到结束或报错。\n无本机模型 key 也可以。先开隧道：ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host",
+        "",
+        "发给这台电脑就会直接对话。先开隧道：ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host",
       );
     </script>
   </body>

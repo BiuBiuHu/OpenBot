@@ -309,10 +309,6 @@ async function cmdChat(rest: string[], flags: Record<string, string>): Promise<v
       timeoutMs,
       pollMs,
       threadId: flags.thread || "chat_default",
-      waitForConfirm: async (proposal) => {
-        if (flags.yes === "true" || flags.confirm === "true") return true;
-        return confirmHandoff(proposal.goal);
-      },
     });
     process.stdout.write("\n");
     if (result.path === "handoff" && remoteConversationFailed(result.conversation)) {

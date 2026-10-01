@@ -33,12 +33,6 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
   const useHandoff = deps.forceHandoff || !hasLocalKey;
 
   if (useHandoff) {
-    if (!hasLocalKey && !deps.forceHandoff) {
-      deps.emit({
-        type: "status",
-        text: "no local model key — handing this to the computer",
-      });
-    }
     const conversation = await runHandoffTurn(goal, deps);
     return { path: "handoff", conversation, history: deps.history ?? [] };
   }

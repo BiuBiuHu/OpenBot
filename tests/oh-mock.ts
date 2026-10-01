@@ -16,6 +16,7 @@ export interface MockOhServer {
   conversations: Map<string, MockConversation>;
   requests: Array<{ method: string; url: string; key?: string }>;
   creates: Array<{ id: string; body: Record<string, unknown>; llm?: { model?: string; api_key?: string } }>;
+  messages: Array<{ id: string; text: string }>;
   stop: () => Promise<void>;
 }
 
@@ -28,6 +29,7 @@ export async function startMockOhServer(
   const conversations = new Map<string, MockConversation>();
   const requests: MockOhServer["requests"] = [];
   const creates: MockOhServer["creates"] = [];
+  const messages: MockOhServer["messages"] = [];
   let seq = 0;
 
   const server = http.createServer((req, res) => {
@@ -181,6 +183,22 @@ export async function startMockOhServer(
 
       const sendMsg = url.pathname.match(/^\/api\/conversations\/([^/]+)\/events$/);
       if (req.method === "POST" && sendMsg) {
+        const conv = conversations.get(sendMsg[1]);
+        const content = body.content;
+        const text =
+          (Array.isArray(content) &&
+            content[0] &&
+            typeof content[0] === "object" &&
+            content[0] !== null &&
+            typeof (content[0] as { text?: string }).text === "string" &&
+            (content[0] as { text: string }).text) ||
+          (typeof body.text === "string" ? body.text : "");
+        if (conv && text) {
+          conv.goal = text;
+          conv.polls = 0;
+          conv.execution_status = "running";
+          messages.push({ id: conv.id, text });
+        }
         send(200, { success: true });
         return;
       }
@@ -208,6 +226,7 @@ export async function startMockOhServer(
     conversations,
     requests,
     creates,
+    messages,
     stop: () =>
       new Promise<void>((resolve) => {
         server.close(() => resolve());
