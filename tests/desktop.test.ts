@@ -61,6 +61,10 @@ describe("desktop pane (no live host)", () => {
       assert.match(html, /电脑/);
       assert.match(html, /id="desk"/);
       assert.match(html, /desk-wrap/);
+      assert.match(html, /aspect-ratio:\s*1280\s*\/\s*800/);
+      assert.match(html, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s*28rem/);
+      assert.match(html, /id="desk-bar"/);
+      assert.match(html, /工具条/);
       assert.match(html, /allow-pointer-lock/);
       assert.match(html, /pointer-lock/);
       assert.doesNotMatch(html, /On this computer/);
@@ -68,8 +72,7 @@ describe("desktop pane (no live host)", () => {
       const view = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/desktop-view`)).text();
       assert.match(view, /1280/);
       assert.match(view, /800/);
-      assert.match(view, /工具条/);
-      assert.match(view, /scale\(/);
+      assert.match(view, /scale\(" \+ sw \/ FRAME_W \+ "," \+ sh \/ FRAME_H \+ "\)/);
       const proxied = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/novnc/vnc.html`)).text();
       assert.match(proxied, /openbot-desk-fit/);
       assert.match(proxied, /noVNC_control_bar/);
