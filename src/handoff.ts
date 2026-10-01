@@ -124,13 +124,14 @@ export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promi
   const deadline = Date.now() + timeoutMs;
   let last = delivery.conversation;
   let timedOut = false;
+  let mappedEvents = 0;
   while (Date.now() < deadline) {
     last = await deps.client.getConversation(id);
     deps.emit({ type: "status", text: `remote ${last.executionStatus} (${last.status})` });
     try {
       const page = await deps.client.searchEvents(id, { limit: 80 });
-      const emitted = emitUnseenOhEvents(page.items, seen, deps.emit);
-      if (!emitted) {
+      mappedEvents += emitUnseenOhEvents(page.items, seen, deps.emit);
+      if (!mappedEvents) {
         const snippet = conversationSnippet(page);
         if (snippet && !seen.has(`snippet:${snippet}`)) {
           seen.add(`snippet:${snippet}`);
@@ -162,8 +163,6 @@ export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promi
     });
   } else if (last.status === "cancelled") {
     deps.emit({ type: "error", message: `remote conversation ${id} cancelled` });
-  } else {
-    deps.emit({ type: "status", text: `remote finished ${last.executionStatus} (${last.status})` });
   }
   deps.emit({ type: "done" });
   return last;
