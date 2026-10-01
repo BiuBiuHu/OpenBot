@@ -46,6 +46,8 @@
         id="vnc"
         title="Remote desktop"
         tabindex="0"
+        width="1280"
+        height="800"
         allow="pointer-lock; fullscreen; clipboard-read; clipboard-write"
       ></iframe>
     </div>
@@ -74,7 +76,7 @@
       function layout() {
         const sw = stage.clientWidth || 1;
         const sh = stage.clientHeight || 1;
-        const scale = Math.max(sw / FRAME_W, sh / FRAME_H);
+        const scale = Math.min(sw / FRAME_W, sh / FRAME_H);
         frame.style.width = FRAME_W + "px";
         frame.style.height = FRAME_H + "px";
         frame.style.transform = "scale(" + scale + ")";
@@ -90,6 +92,7 @@
           /* keep default loopback port */
         }
         frame.src = novncSrc();
+        frame.addEventListener("load", layout);
         layout();
       }
 
