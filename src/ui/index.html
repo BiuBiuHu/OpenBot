@@ -56,6 +56,35 @@
         background: var(--phosphor);
         box-shadow: 0 0 0 3px rgba(182, 227, 106, 0.18);
       }
+      .avatar {
+        width: 2.1rem;
+        height: 2.1rem;
+        border-radius: 999px;
+        background: var(--phosphor);
+        position: relative;
+        flex-shrink: 0;
+        box-shadow: inset 0 -6px 0 rgba(16, 20, 15, 0.12);
+      }
+      .avatar .eyes::before,
+      .avatar .eyes::after {
+        content: "";
+        position: absolute;
+        top: 0.68rem;
+        width: 0.28rem;
+        height: 0.28rem;
+        border-radius: 50%;
+        background: #10140f;
+      }
+      .avatar .eyes::before { left: 0.52rem; }
+      .avatar .eyes::after { right: 0.52rem; }
+      .avatar.waiting {
+        animation: wait-bob 0.7s ease-in-out infinite;
+      }
+      @keyframes wait-bob {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50% { transform: translateY(-4px) scale(1.06); }
+      }
+      .brand h1 { display: flex; align-items: center; gap: 0.5rem; }
       .meta {
         font-family: var(--mono);
         font-size: 0.75rem;
@@ -99,7 +128,12 @@
         align-self: flex-start;
         margin-right: auto;
         border-color: #2d3a22;
+        display: flex;
+        gap: 0.55rem;
+        align-items: flex-start;
       }
+      .msg.bot .avatar { width: 1.7rem; height: 1.7rem; }
+      .msg.bot .bubble { min-width: 0; }
       .msg.sys {
         align-self: center;
         max-width: min(42rem, 92%);
@@ -226,6 +260,19 @@
         margin-bottom: 0.5rem;
       }
       .job strong { color: var(--phosphor); }
+      .desk {
+        width: 100%;
+        min-height: 16rem;
+        height: calc(100vh - 12rem);
+        border: 1px solid var(--line);
+        background: #0a0d09;
+      }
+      .desk-missing {
+        padding: 0.7rem 0.15rem;
+        color: var(--amber);
+        font-size: 0.88rem;
+        line-height: 1.45;
+      }
       header .actions { display: flex; gap: 0.5rem; align-items: flex-start; }
       header button, .sheet button, footer button {
         font-family: var(--mono);
@@ -307,7 +354,7 @@
   <body>
     <header>
       <div class="brand">
-        <h1><span id="lamp" class="lamp"></span>OpenBot</h1>
+        <h1><span id="lamp" class="lamp"></span><span id="face" class="avatar" title="OpenBot"><span class="eyes"></span></span>OpenBot</h1>
         <p>SSH your own machine. The agent gets a computer — you keep the keys. <a href="/oh-test" style="color:var(--phosphor)">本机试连</a></p>
       </div>
       <div class="actions">
@@ -319,8 +366,9 @@
     <main>
       <section id="log"></section>
       <aside>
-        <h2>On this computer</h2>
-        <div id="jobs">Handed-off conversations persist on the host.</div>
+        <h2>电脑</h2>
+        <div id="desk-missing" class="desk-missing">Desktop not reachable yet.</div>
+        <iframe id="desk" class="desk" hidden title="Remote desktop" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
       </aside>
     </main>
     <footer>
@@ -353,11 +401,13 @@
       import { createComposeGuard, renderMarkdown, shouldSendOnEnter } from "/chat-ui.js";
 
       const logEl = document.getElementById("log");
-      const jobsEl = document.getElementById("jobs");
+      const desk = document.getElementById("desk");
+      const deskMissing = document.getElementById("desk-missing");
       const box = document.getElementById("box");
       const sendBtn = document.getElementById("send");
       const meta = document.getElementById("meta");
       const lamp = document.getElementById("lamp");
+      const face = document.getElementById("face");
       const banner = document.getElementById("banner");
       const settingsEl = document.getElementById("settings");
       const settingsForm = document.getElementById("settings-form");
@@ -366,10 +416,18 @@
       function add(kind, title, body, extra) {
         const el = document.createElement("article");
         el.className = "msg " + kind;
+        if (kind === "bot") {
+          const av = document.createElement("div");
+          av.className = "avatar";
+          av.innerHTML = '<span class="eyes"></span>';
+          el.appendChild(av);
+        }
+        const wrap = document.createElement("div");
+        wrap.className = "bubble";
         if (title) {
           const h = document.createElement("h3");
           h.textContent = title;
-          el.appendChild(h);
+          wrap.appendChild(h);
         }
         const markdown = kind === "bot" && title === "Assistant";
         const bodyEl = document.createElement(kind === "sys" ? "div" : markdown ? "div" : "pre");
@@ -379,8 +437,9 @@
         } else {
           bodyEl.textContent = body || "";
         }
-        el.appendChild(bodyEl);
-        if (extra) el.appendChild(extra);
+        wrap.appendChild(bodyEl);
+        if (extra) wrap.appendChild(extra);
+        el.appendChild(wrap);
         logEl.appendChild(el);
         logEl.scrollTop = logEl.scrollHeight;
         return el;
@@ -416,47 +475,25 @@
         }
       }
 
-      async function refreshJobs() {
+      async function refreshDesktop() {
         try {
-          const conv = await (await fetch("/api/conversations")).json();
-          const items = conv.conversations || [];
-          if (items.length) {
-            jobsEl.innerHTML = items
-              .slice(0, 12)
-              .map((c) => {
-                return (
-                  '<div class="job"><strong>' +
-                  escapeHtml(c.status || c.execution_status) +
-                  "</strong> " +
-                  escapeHtml(c.id) +
-                  "</div>"
-                );
-              })
-              .join("");
-            return;
+          const d = await (await fetch("/api/desktop")).json();
+          if (d.ok && d.viewerUrl) {
+            deskMissing.hidden = true;
+            if (desk.getAttribute("src") !== d.viewerUrl) desk.src = d.viewerUrl;
+            desk.hidden = false;
+          } else {
+            desk.hidden = true;
+            desk.removeAttribute("src");
+            deskMissing.hidden = false;
+            deskMissing.textContent =
+              d.missing ||
+              "Desktop not reachable yet. On the host start a desktop + VNC/noVNC on 127.0.0.1 only, then Save and connect.";
           }
-          const data = await (await fetch("/api/jobs")).json();
-          const jobs = data.jobs || [];
-          if (!jobs.length) {
-            jobsEl.textContent = "No conversations yet. Send a message to start one.";
-            return;
-          }
-          jobsEl.innerHTML = jobs
-            .slice(0, 12)
-            .map((j) => {
-              return (
-                '<div class="job"><strong>' +
-                escapeHtml(j.status) +
-                "</strong> " +
-                escapeHtml(j.id) +
-                "<br>" +
-                escapeHtml(j.command) +
-                "</div>"
-              );
-            })
-            .join("");
         } catch {
-          /* tunnel may be reconnecting */
+          desk.hidden = true;
+          deskMissing.hidden = false;
+          deskMissing.textContent = "Desktop not reachable yet.";
         }
       }
 
@@ -524,31 +561,40 @@
         add("user", "You", text);
         const out = add("bot", "Assistant", "");
         const bodyEl = out.querySelector(".md, pre");
+        const av = out.querySelector(".avatar");
         let quiet = out.querySelector(".quiet");
         if (!quiet) {
           quiet = document.createElement("div");
           quiet.className = "quiet";
-          out.appendChild(quiet);
+          out.querySelector(".bubble").appendChild(quiet);
         }
         sendBtn.disabled = true;
+        face.classList.add("waiting");
+        if (av) av.classList.add("waiting");
         try {
           await consumeSse("/api/chat", { message: text, handoff: true }, (ev) => {
             if (ev.type === "token") {
               bodyEl.innerHTML = renderMarkdown(ev.text || "");
               quiet.textContent = "";
+              face.classList.remove("waiting");
+              if (av) av.classList.remove("waiting");
               logEl.scrollTop = logEl.scrollHeight;
             } else if (ev.type === "status") {
-              if (!bodyEl.textContent) quiet.textContent = ev.text === "thinking" ? "…" : ev.text;
+              if (!bodyEl.textContent) quiet.textContent = ev.text === "thinking" ? "" : ev.text;
             } else if (ev.type === "error") {
-              add("sys err", "error", ev.message);
+              if (!bodyEl.innerHTML) bodyEl.innerHTML = renderMarkdown(ev.message || "");
             } else if (ev.type === "done") {
               quiet.textContent = "";
-              refreshJobs();
+              face.classList.remove("waiting");
+              if (av) av.classList.remove("waiting");
+              refreshDesktop();
             }
           });
         } catch (err) {
-          add("sys err", "error", String(err));
+          bodyEl.innerHTML = renderMarkdown("这台电脑这轮没做成。你换一句再试。");
         } finally {
+          face.classList.remove("waiting");
+          if (av) av.classList.remove("waiting");
           sendBtn.disabled = false;
           box.focus();
         }
@@ -599,6 +645,7 @@
           settingsForm.sessionApiKey.value = "";
           settingsNext.textContent = (data.connect && data.connect.nextStep) || "Saved to ~/.openbot.";
           await refreshStatus();
+          await refreshDesktop();
         } catch (err) {
           settingsNext.textContent = String(err);
         } finally {
@@ -616,9 +663,9 @@
         send();
       });
       refreshStatus();
-      refreshJobs();
+      refreshDesktop();
       setInterval(refreshStatus, 8000);
-      setInterval(refreshJobs, 5000);
+      setInterval(refreshDesktop, 5000);
       add(
         "sys",
         "",

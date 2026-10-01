@@ -49,6 +49,9 @@ describe("local control plane + worker (no fake remote)", () => {
     assert.match(html, /SSH your own machine/);
     assert.match(html, /Settings/);
     assert.match(html, /\/api\/settings/);
+    assert.match(html, /\/api\/desktop/);
+    assert.match(html, /电脑/);
+    assert.match(html, /class="avatar"/);
     assert.match(html, /直接开始对话/);
     assert.match(html, /Assistant/);
     assert.match(html, /\.msg\.user\s*\{[^}]*align-self:\s*flex-end/s);

@@ -13,6 +13,8 @@ import {
   upsertHomeEnv,
 } from "./config.js";
 import { connectConfiguredHost, isLoopback, type ConnectResult } from "./connect.js";
+import { probeDesktop, type DesktopStatus } from "./desktop.js";
+import { appendLiveEvalRun } from "./eval-set.js";
 import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "./handoff.js";
 import { conversationSnippet, OpenHandsClient } from "./oh-client.js";
 import { repoRoot } from "./paths.js";
@@ -58,6 +60,8 @@ export async function startControlPlane(
   let liveConfig = config;
   let oh = OpenHandsClient.fromConfig(liveConfig);
   let ohTunnel: TunnelHandle | undefined;
+  let desktopTunnel: TunnelHandle | undefined;
+  let lastDesktop: DesktopStatus | undefined;
   let lastConnect: ConnectResult | undefined;
   let history: ChatMessage[] = [];
 
@@ -65,6 +69,8 @@ export async function startControlPlane(
     try {
       lastConnect = await connectConfiguredHost(liveConfig, { timeoutMs: 3_000 });
       ohTunnel = lastConnect.tunnel;
+      desktopTunnel = lastConnect.desktopTunnel;
+      lastDesktop = lastConnect.desktop;
       oh = OpenHandsClient.fromConfig(liveConfig);
     } catch {
       /* UI still serves; Settings shows the next step */
@@ -106,7 +112,16 @@ export async function startControlPlane(
         return;
       }
       if (req.method === "GET" && url.pathname === "/api/status") {
-        await json(res, await statusPayload(liveConfig, worker, oh, lastConnect));
+        await json(res, await statusPayload(liveConfig, worker, oh, lastConnect, lastDesktop));
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/api/desktop") {
+        const desktop =
+          lastDesktop ||
+          (await probeDesktop(liveConfig, {
+            sshOk: lastConnect ? lastConnect.ssh.ok : !Boolean(liveConfig.host.hostname),
+          }));
+        await json(res, { ok: desktop.ok, viewerUrl: desktop.viewerUrl, missing: desktop.missing });
         return;
       }
       if (req.method === "GET" && url.pathname === "/api/settings") {
@@ -153,8 +168,14 @@ export async function startControlPlane(
               await ohTunnel.stop();
               ohTunnel = undefined;
             }
+            if (desktopTunnel) {
+              await desktopTunnel.stop();
+              desktopTunnel = undefined;
+            }
             lastConnect = await connectConfiguredHost(liveConfig, { timeoutMs });
             ohTunnel = lastConnect.tunnel;
+            desktopTunnel = lastConnect.desktopTunnel;
+            lastDesktop = lastConnect.desktop;
             oh = OpenHandsClient.fromConfig(liveConfig);
           }
           const published = publicSettings(liveConfig);
@@ -324,6 +345,7 @@ export async function startControlPlane(
         const live = liveConfig;
         const threadId = String(body.thread_id || body.threadId || "chat_default");
         await streamSse(req, res, async (emit) => {
+          let shown = "";
           const result = await runThreadTurn(message, {
             client: oh,
             oh: live.openhands,
@@ -331,7 +353,10 @@ export async function startControlPlane(
             worker,
             store: handoffs,
             history,
-            emit,
+            emit: (event) => {
+              if (event.type === "token") shown = event.text;
+              emit(event);
+            },
             forceHandoff: true,
             timeoutMs: typeof body.timeout_ms === "number" ? body.timeout_ms : 60_000,
             pollMs: typeof body.poll_ms === "number" ? body.poll_ms : 250,
@@ -344,6 +369,20 @@ export async function startControlPlane(
           });
           history = result.history.slice(-40);
           if (result.conversation?.id) threadConversations.set(threadId, result.conversation.id);
+          try {
+            appendLiveEvalRun({
+              at: new Date().toISOString(),
+              userMessage: message,
+              shown,
+              remote: {
+                ok: result.conversation?.status === "succeeded",
+                status: result.conversation?.status || result.conversation?.executionStatus || "",
+                conversationId: result.conversation?.id || "",
+              },
+            });
+          } catch {
+            /* eval log is optional */
+          }
         });
         return;
       }
@@ -372,6 +411,7 @@ export async function startControlPlane(
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await tunnel?.stop();
       await ohTunnel?.stop();
+      await desktopTunnel?.stop();
     },
   };
 }
@@ -441,6 +481,7 @@ async function statusPayload(
   worker: WorkerClient | undefined,
   oh: OpenHandsClient,
   lastConnect?: ConnectResult,
+  lastDesktop?: DesktopStatus,
 ) {
   const healthy = worker ? await worker.health() : false;
   let info = null;
@@ -495,6 +536,9 @@ async function statusPayload(
       hasSessionKey: Boolean(config.openhands.sessionApiKey),
       error: ohOk ? undefined : (lastConnect?.openhands.error || (ohProbe.raw as { error?: string })?.error || "not reachable"),
     },
+    desktop: lastDesktop
+      ? { ok: lastDesktop.ok, missing: lastDesktop.missing }
+      : { ok: false, missing: lastConnect?.desktop.missing },
     info,
     error,
   };

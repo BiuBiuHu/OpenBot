@@ -100,6 +100,12 @@ export function defaultConfig(partial: Partial<OpenBotConfig> = {}): OpenBotConf
     controlPlane: {
       port: partial.controlPlane?.port || Number(pick(env, "OPENBOT_CONTROL_PORT", "3847")),
     },
+    desktop: {
+      localPort: partial.desktop?.localPort || Number(pick(env, "OPENBOT_DESKTOP_PORT", "6080")),
+      remotePort:
+        partial.desktop?.remotePort ||
+        Number(pick(env, "OPENBOT_DESKTOP_REMOTE_PORT", pick(env, "OPENBOT_DESKTOP_PORT", "6080"))),
+    },
     openhands: {
       baseUrl: (
         partial.openhands?.baseUrl ||
@@ -238,6 +244,10 @@ export function publicSettings(config: OpenBotConfig) {
     openhands: {
       baseUrl: config.openhands.baseUrl,
       hasSessionKey: Boolean(config.openhands.sessionApiKey),
+    },
+    desktop: {
+      localPort: config.desktop.localPort,
+      remotePort: config.desktop.remotePort,
     },
     configPath: configPath(),
     envPath: path.join(openbotHome(), ".env"),

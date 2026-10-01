@@ -4,6 +4,7 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { classifyCommand } from "./approval.js";
 import { applyHostSettings, defaultConfig, hasLocalModelKey, loadConfig, saveConfig, writeEnvExampleToHome } from "./config.js";
+import { loadEvalCases, runEvalSuite, writeEvalSuiteRun } from "./eval-set.js";
 import { openbotHome } from "./paths.js";
 import { startControlPlane } from "./server.js";
 import { bootstrapWorker, probeSsh, sshTarget } from "./ssh.js";
@@ -29,6 +30,7 @@ Usage:
   npx openbot oh health         Probe tunneled OpenHands Agent Server
   npx openbot oh conversations  List OH conversations
   npx openbot oh run <goal>     Confirmed handoff: create OH conversation + poll
+  npx openbot eval              Replay the chat-layer eval set (writes ~/.openbot/evals)
   npx openbot help
 
 OpenHands is reached at OH_BASE_URL (default http://127.0.0.1:8000).
@@ -358,6 +360,17 @@ async function main(): Promise<void> {
     case "chat":
       await cmdChat(rest, flags);
       break;
+    case "eval": {
+      const records = runEvalSuite(loadEvalCases());
+      const file = writeEvalSuiteRun(records);
+      const failed = records.filter((r) => !r.pass);
+      for (const r of records) {
+        console.log(`${r.pass ? "pass" : "FAIL"}  ${r.caseId}  shown=${JSON.stringify(r.shown)}`);
+      }
+      console.log(`Wrote ${file}`);
+      if (failed.length) process.exitCode = 1;
+      break;
+    }
     case "oh":
       await cmdOh(rest, flags);
       break;

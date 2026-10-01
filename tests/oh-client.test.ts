@@ -397,9 +397,14 @@ describe("web → OpenHands (no worker)", () => {
     assert.match(html, /Settings/);
     assert.match(html, /\/api\/chat/);
     assert.match(html, /\/api\/settings/);
+    assert.match(html, /\/api\/desktop/);
     assert.match(html, /直接开始对话/);
     assert.match(html, /Assistant/);
     assert.match(html, /"You"/);
+    assert.match(html, /class="avatar"/);
+    assert.match(html, /wait-bob/);
+    assert.match(html, /电脑/);
+    assert.doesNotMatch(html, /On this computer/);
     assert.match(html, /\.msg\.user\s*\{[^}]*align-self:\s*flex-end/s);
     assert.match(html, /\.msg\.bot\s*\{[^}]*align-self:\s*flex-start/s);
     assert.match(html, /type="module"/);
@@ -632,7 +637,10 @@ describe("handoff error and chat CLI against mock", () => {
     assert.equal(last?.status, "failed");
     assert.ok(events.some((e) => e.type === "error"));
     assert.ok(events.some((e) => e.type === "done"));
-    assert.ok(events.some((e) => e.type === "tool_start" || e.type === "thought"));
+    const answers = events.filter((e) => e.type === "token").map((e) => String(e.text || ""));
+    assert.ok(answers.some((t) => t.length > 0 && t.length < 80));
+    assert.ok(!answers.some((t) => /conversation timed out while/.test(t)));
+    assert.ok(!events.some((e) => e.type === "tool_start" || e.type === "thought"));
   });
 
   it("TC-OH-014: openbot chat without worker uses OH_BASE_URL / OH_SESSION_API_KEY", async () => {

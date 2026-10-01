@@ -1,0 +1,21 @@
+{
+  "id": "links-render",
+  "title": "Links in a short reply become markdown so the chat layer can render them",
+  "userMessage": "文档在哪",
+  "remote": {
+    "status": "finished",
+    "conversationId": "eval-links-render",
+    "rawReply": "看这里 <https://example.com/docs>。"
+  },
+  "expect": {
+    "remoteOutcome": "succeeded",
+    "shownMustMatch": [
+      "\\[example.com/docs\\]\\(https://example.com/docs\\)"
+    ],
+    "shownMustNotMatch": [
+      "<https://example.com/docs>"
+    ],
+    "maxSentences": 2,
+    "maxChars": 80
+  }
+}

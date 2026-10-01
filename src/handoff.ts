@@ -1,4 +1,5 @@
-import { agentReplyText, emitUnseenOhEvents } from "./oh-events.js";
+import { outcomeFromRemote, voiceChatReply } from "./chat-voice.js";
+import { agentReplyText } from "./oh-events.js";
 import {
   OpenHandsClient,
   isTerminalStatus,
@@ -118,28 +119,16 @@ export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promi
     return last;
   }
 
-  const seen = new Set<string>();
   const timeoutMs = deps.timeoutMs ?? 60_000;
   const pollMs = deps.pollMs ?? 250;
   const deadline = Date.now() + timeoutMs;
   let timedOut = false;
-  let mappedContent = 0;
   let lastItems: unknown[] = [];
   while (Date.now() < deadline) {
     last = await deps.client.getConversation(id);
     try {
       const page = await deps.client.searchEvents(id, { limit: 80 });
       lastItems = page.items;
-      const emitted = emitUnseenOhEvents(page.items, seen, deps.emit);
-      mappedContent += emitted.content;
-      if (!mappedContent) {
-        const reply = agentReplyText(page.items);
-        if (reply && !seen.has(`answer:${reply}`)) {
-          seen.add(`answer:${reply}`);
-          deps.emit({ type: "token", text: reply });
-          mappedContent += 1;
-        }
-      }
     } catch {
       /* events search is optional across OH versions */
     }
@@ -153,21 +142,12 @@ export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promi
   if (!isTerminalStatus(last.executionStatus)) {
     timedOut = true;
   }
-  if (timedOut) {
-    deps.emit({
-      type: "error",
-      message: `conversation timed out while ${last.executionStatus}`,
-    });
-  } else if (last.status === "failed" || last.status === "timeout") {
-    deps.emit({
-      type: "error",
-      message: `conversation ${last.executionStatus}`,
-    });
-  } else if (last.status === "cancelled") {
-    deps.emit({ type: "error", message: "conversation cancelled" });
-  } else if (!mappedContent) {
-    const reply = agentReplyText(lastItems);
-    if (reply) deps.emit({ type: "token", text: reply });
+  const raw = agentReplyText(lastItems);
+  const outcome = outcomeFromRemote(last.status, timedOut);
+  const voiced = voiceChatReply({ userMessage: goal, remoteText: raw, outcome });
+  deps.emit({ type: "token", text: voiced.text });
+  if (voiced.kind === "fail") {
+    deps.emit({ type: "error", message: voiced.text });
   }
   deps.emit({ type: "done" });
   return last;

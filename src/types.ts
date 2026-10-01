@@ -25,6 +25,12 @@ export interface ControlPlaneConfig {
   port: number;
 }
 
+/** Local-forward only. Host desktop/VNC listens on 127.0.0.1; never a public port. */
+export interface DesktopConfig {
+  localPort: number;
+  remotePort: number;
+}
+
 /** Local tunnel client for v0 remote runtime = OpenHands Agent Server. */
 export interface OpenHandsConfig {
   /** Default http://127.0.0.1:8000 — reach via `ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host`. */
@@ -50,6 +56,7 @@ export interface OpenBotConfig {
   llm: LlmConfig;
   controlPlane: ControlPlaneConfig;
   openhands: OpenHandsConfig;
+  desktop: DesktopConfig;
 }
 
 export interface HandoffProposal {

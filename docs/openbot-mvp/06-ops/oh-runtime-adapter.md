@@ -57,7 +57,7 @@ npx openbot serve
 # 打开 http://127.0.0.1:3847/
 ```
 
-聊天没有模式开关：发一条消息就 `POST /api/chat` 创建或续上 OH conversation。Settings 保存主机 / 用户 / 私钥路径到 `~/.openbot` 并尝试开隧道。同一线程是 You / Assistant，只显示最终答复。`/api/handoffs/stream` 同样直发。`/api/run` 仍是 PR#1 worker 逃生口，主 UI 不再露出。本机规划 Agent 仍属 Phase 2。
+聊天没有模式开关：发一条消息就 `POST /api/chat` 创建或续上 OH conversation。聊天层把头像 / 短回复给人看，远端 dump 不进对话。右侧「电脑」是 SSH 本地转发后的桌面 / VNC（默认 `127.0.0.1:6080`），不是 conversation UUID 列表。Settings 保存主机 / 用户 / 私钥路径到 `~/.openbot` 并尝试开隧道。`/api/run` 仍是 PR#1 worker 逃生口。评测集：`evals/chat-layer/`，`npx openbot eval`。
 
 ## 4. 代码位置
 

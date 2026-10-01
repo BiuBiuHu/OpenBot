@@ -27,6 +27,16 @@ function inlineMd(s) {
     if (!safe) return label;
     return `<a href="${escapeHtml(safe)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
   });
+  out = out.replace(/&lt;(https?:\/\/[^&\s]+)&gt;/gi, (_, url) => {
+    const safe = safeHref(url);
+    if (!safe) return _;
+    return `<a href="${escapeHtml(safe)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+  });
+  out = out.replace(/(^|[^"'>=])(https?:\/\/[^\s<]+)/gi, (full, pre, url) => {
+    const safe = safeHref(url);
+    if (!safe) return full;
+    return `${pre}<a href="${escapeHtml(safe)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+  });
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/__([^_]+)__/g, "<strong>$1</strong>");
   out = out.replace(/(^|[^\*])\*([^*\n]+)\*/g, "$1<em>$2</em>");

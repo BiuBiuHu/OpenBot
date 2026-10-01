@@ -1,0 +1,22 @@
+{
+  "id": "who-are-you",
+  "title": "「你是谁」 must not return the canned OpenHands self-introduction",
+  "userMessage": "你是谁",
+  "remote": {
+    "status": "finished",
+    "conversationId": "eval-who-are-you",
+    "rawReply": "我是 OpenHands，一个可以操作计算机来帮你完成软件工程任务的 AI 智能体。\n我运行在你的工作环境中，能够：\n- 执行命令：在终端里运行 shell\n- 读写代码\n我目前的工作目录是 workspace/project。\n补充：可以查阅官方文档 <https://docs.openhands.dev/>。"
+  },
+  "expect": {
+    "remoteOutcome": "succeeded",
+    "shownMustNotMatch": [
+      "我是 OpenHands",
+      "workspace/project",
+      "可以操作计算机",
+      "conversation timed out"
+    ],
+    "shownMustMatch": ["OpenBot"],
+    "maxSentences": 3,
+    "maxChars": 160
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "analyze-other-product",
+  "title": "A request to analyze another product must not return the OpenHands introduction",
+  "userMessage": "帮我分析下 grokbot 的架构",
+  "remote": {
+    "status": "finished",
+    "conversationId": "eval-analyze-other-product",
+    "rawReply": "我是 OpenHands，一个可以操作计算机来帮你完成软件工程任务的 AI 智能体。\n我运行在你的工作环境中，能够在终端里运行 shell、读写代码。\n我目前的工作目录是 workspace/project。\n补充：可以查阅官方文档 <https://docs.openhands.dev/>。"
+  },
+  "expect": {
+    "remoteOutcome": "succeeded",
+    "shownMustNotMatch": [
+      "我是 OpenHands",
+      "workspace/project",
+      "可以操作计算机",
+      "docs.openhands.dev"
+    ],
+    "shownMustMatch": ["grokbot"],
+    "maxSentences": 3,
+    "maxChars": 200
+  }
+}

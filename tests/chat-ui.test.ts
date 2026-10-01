@@ -49,6 +49,13 @@ describe("assistant markdown", () => {
     assert.doesNotMatch(html, /javascript:/);
     assert.match(html, /<a href="https:\/\/ok.example"/);
   });
+
+  it("TC-UI-MD-003: angle-bracket and bare URLs become links", () => {
+    const html = renderMarkdown("看 <https://example.com/docs> 和 https://ok.example/a");
+    assert.match(html, /<a href="https:\/\/example.com\/docs"/);
+    assert.match(html, /<a href="https:\/\/ok.example\/a"/);
+    assert.doesNotMatch(html, /&lt;https:\/\/example.com\/docs&gt;/);
+  });
 });
 
 describe("IME Enter", () => {
