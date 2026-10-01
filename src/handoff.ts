@@ -1,4 +1,4 @@
-import { emitUnseenOhEvents } from "./oh-events.js";
+import { agentReplyText, emitUnseenOhEvents } from "./oh-events.js";
 import {
   OpenHandsClient,
   conversationSnippet,
@@ -125,18 +125,22 @@ export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promi
   const deadline = Date.now() + timeoutMs;
   let last = delivery.conversation;
   let timedOut = false;
-  let mappedEvents = 0;
+  let mappedContent = 0;
+  let lastItems: unknown[] = [];
   while (Date.now() < deadline) {
     last = await deps.client.getConversation(id);
     deps.emit({ type: "status", text: `remote ${last.executionStatus} (${last.status})` });
     try {
       const page = await deps.client.searchEvents(id, { limit: 80 });
-      mappedEvents += emitUnseenOhEvents(page.items, seen, deps.emit);
-      if (!mappedEvents) {
+      lastItems = page.items;
+      const emitted = emitUnseenOhEvents(page.items, seen, deps.emit);
+      mappedContent += emitted.content;
+      if (!mappedContent) {
         const snippet = conversationSnippet(page);
         if (snippet && !seen.has(`snippet:${snippet}`)) {
           seen.add(`snippet:${snippet}`);
           deps.emit({ type: "thought", text: snippet });
+          mappedContent += 1;
         }
       }
     } catch {
@@ -164,6 +168,9 @@ export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promi
     });
   } else if (last.status === "cancelled") {
     deps.emit({ type: "error", message: `remote conversation ${id} cancelled` });
+  } else if (!mappedContent) {
+    const reply = agentReplyText(lastItems);
+    if (reply) deps.emit({ type: "thought", text: reply });
   }
   deps.emit({ type: "done" });
   return last;

@@ -16,7 +16,13 @@ import {
   buildAgentLlm,
   DEFAULT_REMOTE_LLM_MODEL,
 } from "../src/oh-client.js";
-import { agentEventsFromOh, normalizeOhEvent } from "../src/oh-events.js";
+import {
+  agentEventsFromOh,
+  agentReplyText,
+  clientVisibleReplyTexts,
+  messageTextsFromEvent,
+  normalizeOhEvent,
+} from "../src/oh-events.js";
 import { repoRoot } from "../src/paths.js";
 import { startControlPlane } from "../src/server.js";
 import { runThreadTurn } from "../src/thread.js";
@@ -439,8 +445,11 @@ describe("web → OpenHands (no worker)", () => {
     assert.ok(events.some((e) => e.type === "handoff_proposal"));
     assert.ok(events.some((e) => e.type === "thought"));
     assert.ok(events.some((e) => e.type === "done"));
-    const thought = events.find((e) => e.type === "thought");
-    assert.match(String(thought?.text || ""), /list workspace/);
+    const thoughts = events.filter((e) => e.type === "thought").map((e) => String(e.text || ""));
+    assert.ok(
+      thoughts.some((t) => /list workspace/.test(t)),
+      `expected a reply mentioning the goal, got ${JSON.stringify(thoughts)}`,
+    );
     const listed = (await (await fetch(`http://127.0.0.1:${port}/api/conversations`)).json()) as {
       conversations: Array<{ id: string }>;
     };
@@ -522,6 +531,70 @@ describe("OH event mapping", () => {
       3,
     );
     assert.equal(agentEventsFromOh(thought)[0]?.type, "thought");
+  });
+
+  it("TC-OH-020: 1.49.2 finished conversation shows agent reply, not only state kinds", () => {
+    const fixture = [
+      {
+        id: "s1",
+        kind: "ConversationStateUpdateEvent",
+        source: "environment",
+        key: "execution_status",
+        value: "idle",
+      },
+      {
+        id: "u1",
+        kind: "MessageEvent",
+        source: "user",
+        llm_message: { role: "user", content: [{ type: "text", text: "你是谁？" }] },
+      },
+      {
+        id: "s2",
+        kind: "ConversationStateUpdateEvent",
+        source: "environment",
+        key: "execution_status",
+        value: "running",
+      },
+      {
+        id: "s3",
+        kind: "ConversationStateUpdateEvent",
+        source: "environment",
+        key: "full_state",
+        value: { execution_status: "running" },
+      },
+      {
+        id: "a1",
+        kind: "MessageEvent",
+        source: "agent",
+        llm_message: {
+          role: "assistant",
+          content: [{ type: "text", text: "我是 OpenHands 助手，跑在你的主机上。" }],
+        },
+      },
+      {
+        id: "s4",
+        kind: "ConversationStateUpdateEvent",
+        source: "environment",
+        key: "execution_status",
+        value: "finished",
+      },
+    ];
+    const extracted = messageTextsFromEvent(fixture[4]);
+    assert.match(extracted.join("\n"), /OpenHands/);
+    assert.equal(messageTextsFromEvent(fixture[0]).join(""), "");
+    const replies = clientVisibleReplyTexts(fixture);
+    assert.ok(
+      replies.some((t) => /OpenHands/.test(t)),
+      `expected reply text, got ${JSON.stringify(replies)}`,
+    );
+    assert.ok(!replies.some((t) => /ConversationStateUpdateEvent/.test(t)));
+    assert.equal(agentReplyText(fixture), "我是 OpenHands 助手，跑在你的主机上。");
+    const state = normalizeOhEvent(fixture[2], 2);
+    const mappedState = agentEventsFromOh(state);
+    assert.equal(mappedState[0]?.type, "status");
+    assert.match(String(mappedState[0] && "text" in mappedState[0] ? mappedState[0].text : ""), /running/);
+    const user = normalizeOhEvent(fixture[1], 1);
+    assert.deepEqual(agentEventsFromOh(user), []);
   });
 });
 

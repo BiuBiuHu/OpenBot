@@ -114,21 +114,34 @@ export async function startMockOhServer(
         }
         const items: Record<string, unknown>[] = [
           {
+            id: `${conv.id}-state-idle`,
+            kind: "ConversationStateUpdateEvent",
+            source: "environment",
+            key: "execution_status",
+            value: "idle",
+          },
+          {
             id: `${conv.id}-user`,
             kind: "MessageEvent",
             source: "user",
-            content: [{ type: "text", text: conv.goal }],
+            llm_message: { role: "user", content: [{ type: "text", text: conv.goal }] },
           },
         ];
         if (conv.polls >= 1) {
           items.push({
+            id: `${conv.id}-state-run`,
+            kind: "ConversationStateUpdateEvent",
+            source: "environment",
+            key: "execution_status",
+            value: "running",
+          });
+          items.push({
             id: `${conv.id}-action`,
             kind: "ActionEvent",
             source: "agent",
+            thought: [{ type: "text", text: "I'll check the host." }],
             action: { kind: "CmdRunAction", command: "uname -a" },
           });
-        }
-        if (conv.polls >= 1) {
           items.push({
             id: `${conv.id}-obs`,
             kind: "ObservationEvent",
@@ -141,7 +154,17 @@ export async function startMockOhServer(
             id: `${conv.id}-agent`,
             kind: "MessageEvent",
             source: "agent",
-            content: [{ type: "text", text: `done: ${conv.goal}` }],
+            llm_message: {
+              role: "assistant",
+              content: [{ type: "text", text: `done: ${conv.goal}` }],
+            },
+          });
+          items.push({
+            id: `${conv.id}-state-done`,
+            kind: "ConversationStateUpdateEvent",
+            source: "environment",
+            key: "execution_status",
+            value: terminalStatus === "error" ? "error" : "finished",
           });
         }
         if (terminalStatus === "error" && conv.polls >= finishAfterPolls) {
