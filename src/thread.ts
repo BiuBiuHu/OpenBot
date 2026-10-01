@@ -1,5 +1,5 @@
 import { runAgentTurn, runLocalChatTurn } from "./agent.js";
-import { needsLookup, lookupQuery, voiceFromSearch } from "./chat-voice.js";
+import { needsLookup, lookupQuery, preferChinese, voiceFromSearch } from "./chat-voice.js";
 import { hasLocalModelKey } from "./config.js";
 import { runHandoffTurn, type HandoffTurnDeps } from "./handoff.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, LlmConfig } from "./types.js";
@@ -40,7 +40,9 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
   if (needsLookup(goal)) {
     deps.emit({ type: "status", text: "thinking" });
     const query = lookupQuery(goal);
-    let hits = await (deps.searchWeb ?? searchWeb)(query);
+    let hits = await (deps.searchWeb
+      ? deps.searchWeb(query)
+      : searchWeb(query, { preferChinese: preferChinese(goal) }));
     if (!hits.length) {
       hits = await (deps.browsePublicPage
         ? deps.browsePublicPage(query)

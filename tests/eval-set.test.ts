@@ -76,5 +76,13 @@ describe("chat-layer eval set", () => {
       scoreEvalCase(c, "网上查过了，还没找到能直接说的结论。", true).some((x) => !x.pass),
       "empty 还没找到 must fail when a public page would have answered",
     );
+    assert.ok(
+      scoreEvalCase(
+        c,
+        "网上查过了。Grok is a series of generative AI large language models developed by SpaceXAI.",
+        true,
+      ).some((x) => !x.pass),
+      "English source paragraph must fail a Chinese question",
+    );
   });
 });

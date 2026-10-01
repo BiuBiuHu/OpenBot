@@ -160,6 +160,18 @@ export function scoreEvalCase(c: EvalCase, shown: string, remoteOk: boolean): Ev
       detail: shown.slice(0, 160),
     });
   }
+  if (/[\u3400-\u9fff]/.test(c.userMessage)) {
+    const hasZh = /[\u3400-\u9fff]/.test(shown);
+    const pastedEnglish =
+      /\b(?:is a (?:series of )?(?:generative|chatbot)|generative artificial intelligence|developed by (?:xAI|SpaceXAI)|large language model)\b/i.test(
+        shown,
+      );
+    checks.push({
+      name: "same-language",
+      pass: hasZh && !pastedEnglish,
+      detail: shown.slice(0, 160),
+    });
+  }
   if (c.expect.maxSentences) {
     const n = countSentences(shown);
     checks.push({

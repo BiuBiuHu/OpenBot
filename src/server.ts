@@ -13,7 +13,7 @@ import {
   upsertHomeEnv,
 } from "./config.js";
 import { connectConfiguredHost, isLoopback, type ConnectResult } from "./connect.js";
-import { probeDesktop, type DesktopStatus } from "./desktop.js";
+import { openDesktopForward, refreshDesktopStatus, type DesktopStatus } from "./desktop.js";
 import { appendLiveEvalRun } from "./eval-set.js";
 import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "./handoff.js";
 import { conversationSnippet, OpenHandsClient } from "./oh-client.js";
@@ -116,11 +116,24 @@ export async function startControlPlane(
         return;
       }
       if (req.method === "GET" && url.pathname === "/api/desktop") {
-        const desktop =
-          lastDesktop ||
-          (await probeDesktop(liveConfig, {
-            sshOk: lastConnect ? lastConnect.ssh.ok : !Boolean(liveConfig.host.hostname),
-          }));
+        const hostname = liveConfig.host.hostname || "";
+        const remote = Boolean(hostname) && !isLoopback(hostname);
+        const sshOk = lastConnect ? lastConnect.ssh.ok : !remote;
+        const refreshed = await refreshDesktopStatus(liveConfig, {
+          sshOk,
+          timeoutMs: 800,
+          tunnel: desktopTunnel,
+          openForward:
+            sshOk && remote
+              ? async () => {
+                  desktopTunnel = await openDesktopForward(liveConfig, { existing: desktopTunnel });
+                  return desktopTunnel;
+                }
+              : undefined,
+        });
+        desktopTunnel = refreshed.tunnel ?? desktopTunnel;
+        lastDesktop = refreshed.desktop;
+        const desktop = refreshed.desktop;
         await json(res, { ok: desktop.ok, viewerUrl: desktop.viewerUrl, missing: desktop.missing });
         return;
       }

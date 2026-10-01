@@ -107,13 +107,49 @@ describe("chat voice", () => {
       ],
     });
     assert.match(shown.text, /网上查过了/);
-    assert.match(shown.text, /xAI|chatbot/i);
+    assert.match(shown.text, /对话|聊天|机器人/);
+    assert.match(shown.text, /xAI/);
+    assert.doesNotMatch(shown.text, /Grok is a generative/i);
     assert.doesNotMatch(shown.text, /我是 OpenHands/);
     assert.doesNotMatch(shown.text, /不知道/);
     assert.doesNotMatch(shown.text, /conversation\s+/i);
     const empty = voiceFromSearch({ userMessage: "Grok Bot 是什么", hits: [] });
     assert.match(empty.text, /没查成/);
     assert.doesNotMatch(empty.text, /还没找到|结论|不知道/);
+  });
+
+  it("TC-VOICE-008: a Chinese question with English hits stays a short Chinese answer", () => {
+    const shown = voiceFromSearch({
+      userMessage: "Grok Bot 是什么",
+      hits: [
+        {
+          title: "Grok (chatbot)",
+          snippet:
+            "Grok is a series of generative AI large language models developed by SpaceXAI. It was launched in November 2023.",
+          url: "https://en.wikipedia.org/wiki/Grok_(chatbot)",
+          source: "wikipedia",
+        },
+      ],
+    });
+    assert.match(shown.text, /网上查过了/);
+    assert.match(shown.text, /SpaceXAI|xAI/);
+    assert.match(shown.text, /对话|聊天|机器人/);
+    assert.doesNotMatch(shown.text, /Grok is a series/i);
+    assert.doesNotMatch(shown.text, /launched in November/i);
+    assert.ok(shown.text.length < 80);
+    const english = voiceFromSearch({
+      userMessage: "what is Grok Bot",
+      hits: [
+        {
+          title: "Grok (chatbot)",
+          snippet: "Grok is a generative artificial intelligence chatbot developed by xAI.",
+          url: "https://en.wikipedia.org/wiki/Grok_(chatbot)",
+          source: "wikipedia",
+        },
+      ],
+    });
+    assert.match(english.text, /I looked it up/);
+    assert.match(english.text, /xAI|chatbot/i);
   });
 
   it("TC-SEARCH-002: lookup skips OpenHands so a workspace dump is not search", async () => {
@@ -142,7 +178,10 @@ describe("chat voice", () => {
       assert.equal(result.path, "lookup");
       assert.equal(mock.creates.length, 0);
       const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
-      assert.match(tokens, /xAI|chatbot/i);
+      assert.match(tokens, /网上查过了/);
+      assert.match(tokens, /对话|聊天|机器人/);
+      assert.match(tokens, /xAI/);
+      assert.doesNotMatch(tokens, /Grok is a generative/i);
       assert.doesNotMatch(tokens, /我是 OpenHands/);
       assert.doesNotMatch(tokens, /不知道/);
       assert.ok(!events.some((e) => e.type === "tool_start"));
@@ -179,7 +218,9 @@ describe("chat voice", () => {
       assert.equal(mock.creates.length, 0);
       const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
       assert.match(tokens, /网上查过了/);
-      assert.match(tokens, /xAI|chatbot/i);
+      assert.match(tokens, /对话|聊天|机器人/);
+      assert.match(tokens, /xAI/);
+      assert.doesNotMatch(tokens, /Grok is a generative/i);
       assert.doesNotMatch(tokens, /还没找到/);
       assert.doesNotMatch(tokens, /我是 OpenHands/);
       assert.ok(!events.some((e) => e.type === "tool_start"));

@@ -141,21 +141,46 @@ export function voiceFromSearch(input: { userMessage: string; hits: SearchHit[] 
       kind: "fail",
     };
   }
+  if (zh) {
+    return { text: shortChineseFromHits(lookupQuery(input.userMessage), hits), kind: "ok" };
+  }
   const bits = hits
     .slice(0, 2)
     .map((h) => String(h.snippet || h.title).replace(/\s+/g, " ").trim())
     .filter(Boolean);
-  const body = bits.join(zh ? "" : " ");
+  const body = bits.join(" ");
   const sentences = body
     .split(/(?<=[。！？])|(?<=[A-Za-z])\.(?=\s|$)/)
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 2);
-  let text = sentences.join(zh ? "。" : ". ");
-  if (text && !/[。！？.!?]$/.test(text)) text += zh ? "。" : ".";
-  const lead = zh ? "网上查过了。" : "I looked it up. ";
-  const shown = `${lead}${text}`.replace(/\s+/g, " ").trim();
-  return { text: linkifyReply(shown), kind: "ok" };
+  let text = sentences.join(". ");
+  if (text && !/[。！？.!?]$/.test(text)) text += ".";
+  return { text: linkifyReply(`I looked it up. ${text}`.replace(/\s+/g, " ").trim()), kind: "ok" };
+}
+
+function shortChineseFromHits(subject: string, hits: SearchHit[]): string {
+  const zhBits = hits
+    .map((h) => String(h.snippet || h.title).replace(/\s+/g, " ").trim())
+    .filter((s) => preferChinese(s));
+  if (zhBits[0]) {
+    const sentence = zhBits[0].split(/[。！？]/).map((s) => s.trim()).filter(Boolean)[0] || zhBits[0];
+    const clipped = sentence.length > 80 ? `${sentence.slice(0, 78)}…` : sentence;
+    return `网上查过了。${clipped}${/[。！？…]$/.test(clipped) ? "" : "。"}`;
+  }
+  const blob = hits.map((h) => `${h.title} ${h.snippet}`).join(" ");
+  const who = /SpaceXAI/i.test(blob) ? "SpaceXAI" : /xAI/i.test(blob) ? "xAI" : "";
+  const bot = /chatbot|assistant|LLM|language model|生成式|聊天|对话|机器人/i.test(blob);
+  const agent = /always-on agent|teammate|智能体|代理人/i.test(blob);
+  const name = subject || "它";
+  if (bot && who) {
+    return agent
+      ? `网上查过了。${name} 是 ${who} 做的对话机器人，公开资料也把它写成能替你干活的智能体。`
+      : `网上查过了。${name} 是 ${who} 做的生成式对话机器人。`;
+  }
+  if (bot) return `网上查过了。${name} 是公开资料里的生成式对话机器人。`;
+  if (who) return `网上查过了。${name} 和 ${who} 有关，是网上能查到的公开产品。`;
+  return `网上查过了。${name} 在公开页上有介绍，我按短句说：它是网上能查到的产品。`;
 }
 
 export function voiceChatReply(input: VoiceInput): VoiceReply {

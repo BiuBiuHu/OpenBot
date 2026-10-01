@@ -25,4 +25,4 @@ Cases that came from the live laptop:
 | `analyze-other-product` | that same intro for grokbot |
 | `timeout-is-short` | raw `conversation timed out while running` plus an investigation log |
 | `links-render` | angle-bracket URLs left unclickable |
-| `what-is-grok-bot` | canned intro, bare “I don't know”, or empty 「还没找到」 when a public page would have answered |
+| `what-is-grok-bot` | canned intro, bare “I don't know”, empty 「还没找到」, or an English source paragraph for a Chinese question |

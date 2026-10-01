@@ -265,6 +265,30 @@
       "forbidden_side_effects": "不得把 OpenHands 自我介绍或「不知道」当作答案",
       "evidence": "tests/chat-voice.test.ts",
       "mode": "automated"
+    },
+    {
+      "id": "TC-VOICE-008",
+      "req": "BL-CHAT-SEARCH",
+      "system": "chat-layer",
+      "priority": "P0",
+      "precondition": "中文「是什么」+ 英文检索摘要",
+      "steps": ["voiceFromSearch({ userMessage: 'Grok Bot 是什么', hits: [英文维基段落] })"],
+      "expected": "短中文答；含「网上查过了」和对话/机器人；不粘贴英文原文",
+      "forbidden_side_effects": "不得把英文源段落当作回复",
+      "evidence": "tests/chat-voice.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-DESK-004",
+      "req": "BL-DESKTOP",
+      "system": "desktop",
+      "priority": "P0",
+      "precondition": "连接时 6080 尚未起来，随后本机 noVNC 应答",
+      "steps": ["GET /api/desktop", "启动 127.0.0.1 noVNC mock", "再 GET /api/desktop"],
+      "expected": "第二次 ok，viewerUrl 带 autoconnect；缺页文案不叫人再装桌面",
+      "forbidden_side_effects": "不得把一次失败缓存成永远关闭；不得绑定 0.0.0.0；不得写入主机 IP 或密钥",
+      "evidence": "tests/desktop.test.ts",
+      "mode": "automated"
     }
   ]
 }

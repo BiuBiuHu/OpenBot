@@ -2,7 +2,7 @@ import {
   identityFileMissing,
   nextStepForConnect,
 } from "./config.js";
-import { openDesktopForward, probeDesktop, type DesktopStatus } from "./desktop.js";
+import { openDesktopForward, refreshDesktopStatus, type DesktopStatus } from "./desktop.js";
 import { OpenHandsClient } from "./oh-client.js";
 import { probeSsh } from "./ssh.js";
 import type { OpenBotConfig } from "./types.js";
@@ -89,7 +89,18 @@ export async function connectConfiguredHost(
       desktopTunnel = undefined;
     }
   }
-  const desktop = await probeDesktop(config, { sshOk: ssh.ok, timeoutMs: Math.min(800, timeoutMs) });
+  const remoteHost = hasHost && !isLoopback(config.host.hostname);
+  const refreshed = await refreshDesktopStatus(config, {
+    sshOk: ssh.ok,
+    timeoutMs: desktopTunnel ? 1200 : Math.min(800, timeoutMs),
+    tunnel: desktopTunnel,
+    openForward:
+      remoteHost && ssh.ok && !opts.skipTunnel
+        ? () => openDesktopForward(config, { connectTimeoutSec, existing: desktopTunnel })
+        : undefined,
+  });
+  desktopTunnel = refreshed.tunnel;
+  const desktop = refreshed.desktop;
   const guide = nextStepForConnect({
     hasHost,
     identityFile: config.host.identityFile,

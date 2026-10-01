@@ -386,7 +386,7 @@
       <aside>
         <h2>电脑</h2>
         <div id="desk-missing" class="desk-missing">Desktop not reachable yet.</div>
-        <iframe id="desk" class="desk" hidden title="Remote desktop" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+        <iframe id="desk" class="desk" hidden title="Remote desktop" tabindex="0" allow="pointer-lock; fullscreen; clipboard-read; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups"></iframe>
       </aside>
     </main>
     <footer>
@@ -518,7 +518,7 @@
             deskMissing.hidden = false;
             deskMissing.textContent =
               d.missing ||
-              "Desktop not reachable yet. On the host start a desktop + VNC/noVNC on 127.0.0.1 only, then Save and connect.";
+              "The desktop tunnel is not open yet. Save and connect; the client forwards 127.0.0.1:6080.";
           }
         } catch {
           desk.hidden = true;

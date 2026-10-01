@@ -138,6 +138,54 @@ describe("web search", () => {
     }
   });
 
+  it("TC-SEARCH-007: a Chinese question prefers zh Wikipedia and cn.bing", async () => {
+    const port = await freePort();
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url || "/", `http://127.0.0.1:${port}`);
+      if (url.pathname === "/w/api.php") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            query: { search: [{ title: "Grok", snippet: "Grok 是 xAI 做的聊天机器人。" }] },
+          }),
+        );
+        return;
+      }
+      if (url.pathname.startsWith("/api/rest_v1/page/summary/")) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            title: "Grok",
+            extract: "Grok 是 xAI 开发的生成式对话机器人。",
+            content_urls: { desktop: { page: "https://zh.wikipedia.org/wiki/Grok" } },
+          }),
+        );
+        return;
+      }
+      if (url.searchParams.get("format") === "json" || url.pathname === "/search") {
+        res.writeHead(200, { "Content-Type": url.pathname === "/search" ? "text/html" : "application/json" });
+        res.end(url.pathname === "/search" ? "<html></html>" : JSON.stringify({ AbstractText: "", RelatedTopics: [] }));
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
+    const seen: string[] = [];
+    try {
+      const hits = await searchWeb("Grok Bot", {
+        fetch: rewriteFetch(port, seen),
+        timeoutMs: 3000,
+        preferChinese: true,
+      });
+      assert.ok(seen.some((u) => u.startsWith("https://zh.wikipedia.org/")));
+      assert.ok(seen.some((u) => u.startsWith("https://cn.bing.com/")));
+      assert.ok(hits.some((h) => /对话|聊天|机器人/.test(h.snippet)));
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    }
+  });
+
   it("parses Bing and Wikipedia public pages into hits", () => {
     const bing = parseBingHtml(
       `<li class="b_algo"><h2><a href="https://example.com">Grok</a></h2><p>Grok is a chatbot by xAI.</p></li>`,

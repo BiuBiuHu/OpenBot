@@ -11,6 +11,8 @@ export interface SearchWebOptions {
   /** Injectable for tests. Production uses global fetch against public APIs. */
   fetch?: typeof fetch;
   timeoutMs?: number;
+  /** Prefer Chinese Wikipedia / Bing when the person asked in Chinese. */
+  preferChinese?: boolean;
 }
 
 const UA = "OpenBot/0.1 (local chat client; https://github.com/BiuBiuHu/OpenBot)";
@@ -26,14 +28,15 @@ export async function searchWeb(query: string, opts: SearchWebOptions = {}): Pro
   if (!q) return [];
   const fetchFn = opts.fetch ?? globalThis.fetch.bind(globalThis);
   const timeoutMs = opts.timeoutMs ?? 12_000;
+  const preferZh = Boolean(opts.preferChinese);
   const [ddg, wiki, bing] = await Promise.all([
     duckDuckGoHits(fetchFn, q, timeoutMs).catch(() => [] as SearchHit[]),
-    wikipediaHits(fetchFn, q, timeoutMs).catch(() => [] as SearchHit[]),
-    bingHits(fetchFn, q, timeoutMs).catch(() => [] as SearchHit[]),
+    wikipediaHits(fetchFn, q, timeoutMs, preferZh).catch(() => [] as SearchHit[]),
+    bingHits(fetchFn, q, timeoutMs, preferZh).catch(() => [] as SearchHit[]),
   ]);
   let hits = dedupeHits([...wiki, ...bing, ...ddg]);
   if (!hits.length) {
-    hits = dedupeHits(await wikiPageFallbacks(fetchFn, q, timeoutMs).catch(() => [] as SearchHit[]));
+    hits = dedupeHits(await wikiPageFallbacks(fetchFn, q, timeoutMs, preferZh).catch(() => [] as SearchHit[]));
   }
   return hits.slice(0, 6);
 }
@@ -80,12 +83,17 @@ function flattenRelated(item: unknown, hits: SearchHit[]): void {
   });
 }
 
-async function wikipediaHits(fetchFn: typeof fetch, q: string, timeoutMs: number): Promise<SearchHit[]> {
+async function wikipediaHits(
+  fetchFn: typeof fetch,
+  q: string,
+  timeoutMs: number,
+  preferZh = false,
+): Promise<SearchHit[]> {
   const [zh, en] = await Promise.all([
     wikipediaSearch(fetchFn, WIKI_ZH, q, timeoutMs).catch(() => [] as SearchHit[]),
     wikipediaSearch(fetchFn, WIKI_EN, q, timeoutMs).catch(() => [] as SearchHit[]),
   ]);
-  return /[\u3400-\u9fff]/.test(q) ? [...zh, ...en] : [...en, ...zh];
+  return preferZh || /[\u3400-\u9fff]/.test(q) ? [...zh, ...en] : [...en, ...zh];
 }
 
 async function wikipediaSearch(
@@ -141,20 +149,30 @@ async function wikipediaSummary(
   };
 }
 
-async function bingHits(fetchFn: typeof fetch, q: string, timeoutMs: number): Promise<SearchHit[]> {
-  const urls = [
-    `${BING}?q=${encodeURIComponent(q)}&setlang=en`,
-    `${BING_CN}?q=${encodeURIComponent(q)}`,
-  ];
-  const pages = await Promise.all(urls.map((url) => getText(fetchFn, url, timeoutMs).catch(() => "")));
+async function bingHits(
+  fetchFn: typeof fetch,
+  q: string,
+  timeoutMs: number,
+  preferZh = false,
+): Promise<SearchHit[]> {
+  const urls = preferZh
+    ? [`${BING_CN}?q=${encodeURIComponent(q)}`, `${BING}?q=${encodeURIComponent(q)}&setlang=zh-CN`]
+    : [`${BING}?q=${encodeURIComponent(q)}&setlang=en`, `${BING_CN}?q=${encodeURIComponent(q)}`];
+  const pages = await Promise.all(urls.map((url) => getText(fetchFn, url, timeoutMs, preferZh).catch(() => "")));
   const hits: SearchHit[] = [];
   for (const html of pages) hits.push(...parseBingHtml(html));
   return hits;
 }
 
-async function wikiPageFallbacks(fetchFn: typeof fetch, q: string, timeoutMs: number): Promise<SearchHit[]> {
+async function wikiPageFallbacks(
+  fetchFn: typeof fetch,
+  q: string,
+  timeoutMs: number,
+  preferZh = false,
+): Promise<SearchHit[]> {
   const hits: SearchHit[] = [];
-  for (const origin of [WIKI_EN, WIKI_ZH]) {
+  const origins = preferZh || /[\u3400-\u9fff]/.test(q) ? [WIKI_ZH, WIKI_EN] : [WIKI_EN, WIKI_ZH];
+  for (const origin of origins) {
     for (const slug of wikiSlugs(q)) {
       const summary = await wikipediaSummary(fetchFn, origin, slug.replace(/_/g, " "), timeoutMs).catch(() => undefined);
       if (summary?.extract) {
@@ -166,7 +184,7 @@ async function wikiPageFallbacks(fetchFn: typeof fetch, q: string, timeoutMs: nu
         });
         continue;
       }
-      const html = await getText(fetchFn, `${origin}/wiki/${encodeURIComponent(slug)}`, timeoutMs).catch(() => "");
+      const html = await getText(fetchFn, `${origin}/wiki/${encodeURIComponent(slug)}`, timeoutMs, preferZh).catch(() => "");
       const page = parseWikipediaArticle(html, `${origin}/wiki/${slug}`);
       if (page) hits.push(page);
     }
@@ -243,11 +261,11 @@ async function getJson(fetchFn: typeof fetch, url: string, timeoutMs: number): P
   }
 }
 
-async function getText(fetchFn: typeof fetch, url: string, timeoutMs: number): Promise<string> {
+async function getText(fetchFn: typeof fetch, url: string, timeoutMs: number, preferZh = false): Promise<string> {
   const res = await fetchFn(url, {
     headers: {
       Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "en,zh;q=0.8",
+      "Accept-Language": preferZh ? "zh-CN,zh;q=0.9,en;q=0.4" : "en,zh;q=0.8",
       "User-Agent": BROWSER_UA,
     },
     redirect: "follow",

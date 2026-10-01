@@ -30,9 +30,23 @@ export function desktopMissingLine(kind: "ssh" | "tcp" | "http" | "no-host"): st
     return "SSH is down, so the desktop tunnel is not open.";
   }
   if (kind === "tcp") {
-    return "Desktop port is closed. On the host start a desktop + VNC/noVNC on 127.0.0.1 only, then Save and connect.";
+    return "The desktop tunnel to 127.0.0.1:6080 is not open yet. Save and connect; the client will retry the forward.";
   }
-  return "Tunnel reached the port, but no web VNC page. On the host run noVNC/websockify on 127.0.0.1 (default 6080).";
+  return "Tunnel reached the port, but no web VNC page answered on 127.0.0.1 (default 6080).";
+}
+
+export function desktopViewerPaths(): string[] {
+  return [
+    "/vnc.html?autoconnect=1&resize=scale",
+    "/vnc.html",
+    "/vnc_lite.html?autoconnect=1",
+    "/vnc_lite.html",
+    "/",
+  ];
+}
+
+export function desktopTunnelLive(tunnel?: TunnelHandle): boolean {
+  return Boolean(tunnel && tunnel.process.exitCode === null);
 }
 
 async function tcpOpen(port: number, timeoutMs: number): Promise<boolean> {
@@ -56,8 +70,7 @@ async function tcpOpen(port: number, timeoutMs: number): Promise<boolean> {
 }
 
 async function httpViewer(port: number, timeoutMs: number): Promise<string | undefined> {
-  const paths = ["/vnc.html", "/vnc_lite.html", "/"];
-  for (const path of paths) {
+  for (const path of desktopViewerPaths()) {
     const url = `http://127.0.0.1:${port}${path}`;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
@@ -92,6 +105,40 @@ export async function probeDesktop(
     return { ok: false, localPort, remotePort, missing: desktopMissingLine("no-host") };
   }
   return { ok: false, localPort, remotePort, missing: desktopMissingLine("tcp") };
+}
+
+/** Re-probe. If SSH is up and the 6080 forward is missing, open it and probe again. */
+export async function refreshDesktopStatus(
+  config: OpenBotConfig,
+  opts: {
+    timeoutMs?: number;
+    sshOk?: boolean;
+    tunnel?: TunnelHandle;
+    openForward?: () => Promise<TunnelHandle>;
+  } = {},
+): Promise<{ desktop: DesktopStatus; tunnel?: TunnelHandle }> {
+  const timeoutMs = opts.timeoutMs ?? 800;
+  let tunnel = opts.tunnel;
+  let desktop = await probeDesktop(config, { timeoutMs, sshOk: opts.sshOk });
+  if (desktop.ok) return { desktop, tunnel };
+
+  const hostname = config.host.hostname || "";
+  const remote = Boolean(hostname) && !isLoopback(hostname);
+  if (opts.sshOk && remote && opts.openForward && !desktopTunnelLive(tunnel)) {
+    try {
+      tunnel = await opts.openForward();
+    } catch {
+      /* keep the first probe */
+    }
+  }
+
+  if (!desktop.ok && (desktopTunnelLive(tunnel) || !remote)) {
+    desktop = await probeDesktop(config, {
+      timeoutMs: Math.max(timeoutMs, 1200),
+      sshOk: opts.sshOk,
+    });
+  }
+  return { desktop, tunnel };
 }
 
 export async function openDesktopForward(

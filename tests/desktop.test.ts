@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import http from "node:http";
-import { after, describe, it } from "node:test";
+import { describe, it } from "node:test";
 import { defaultConfig } from "../src/config.js";
-import { desktopMissingLine, probeDesktop } from "../src/desktop.js";
+import { desktopMissingLine, probeDesktop, refreshDesktopStatus } from "../src/desktop.js";
 import { startControlPlane } from "../src/server.js";
 import { freePort } from "./helpers.js";
 import { startMockOhServer } from "./oh-mock.js";
@@ -14,6 +14,7 @@ describe("desktop pane (no live host)", () => {
       assert.ok(line.length < 180);
       assert.doesNotMatch(line, /\b(?!127\.0\.0\.1)(?:\d{1,3}\.){3}\d{1,3}\b/);
       assert.doesNotMatch(line, /BEGIN /);
+      assert.doesNotMatch(line, /start a desktop/i);
     }
   });
 
@@ -50,14 +51,106 @@ describe("desktop pane (no live host)", () => {
       };
       assert.equal(desk.ok, true);
       assert.match(String(desk.viewerUrl), /127\.0\.0\.1/);
+      assert.match(String(desk.viewerUrl), /autoconnect=1/);
       const html = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/`)).text();
       assert.match(html, /电脑/);
       assert.match(html, /id="desk"/);
+      assert.match(html, /allow-pointer-lock/);
+      assert.match(html, /pointer-lock/);
       assert.doesNotMatch(html, /On this computer/);
+      assert.doesNotMatch(html, /start a desktop/i);
     } finally {
       await plane.close();
       await mock.stop();
       await new Promise<void>((resolve) => vnc.close(() => resolve()));
+    }
+  });
+
+  it("TC-DESK-004: /api/desktop re-probes after a failed connect-time probe", async () => {
+    const port = await freePort();
+    const mock = await startMockOhServer({ sessionKey: "desk-retry" });
+    const config = defaultConfig();
+    config.controlPlane.port = await freePort();
+    config.host.hostname = "127.0.0.1";
+    config.host.user = "demo";
+    config.openhands.baseUrl = mock.baseUrl;
+    config.openhands.sessionApiKey = "desk-retry";
+    config.desktop.localPort = port;
+    config.desktop.remotePort = port;
+    const plane = await startControlPlane(config, { skipTunnel: true, allowWithoutWorker: true });
+    let vnc: http.Server | undefined;
+    try {
+      const first = (await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/api/desktop`)).json()) as {
+        ok?: boolean;
+        missing?: string;
+      };
+      assert.equal(first.ok, false);
+      assert.doesNotMatch(String(first.missing || ""), /start a desktop/i);
+      vnc = http.createServer((_req, res) => {
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end("<html><title>noVNC</title></html>");
+      });
+      await new Promise<void>((resolve) => vnc.listen(port, "127.0.0.1", resolve));
+      const second = (await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/api/desktop`)).json()) as {
+        ok?: boolean;
+        viewerUrl?: string;
+      };
+      assert.equal(second.ok, true);
+      assert.match(String(second.viewerUrl), /autoconnect=1/);
+    } finally {
+      await plane.close();
+      await mock.stop();
+      if (vnc) await new Promise<void>((resolve) => vnc.close(() => resolve()));
+    }
+  });
+
+  it("TC-DESK-005: refresh opens the 6080 forward when SSH is up and the tunnel is missing", async () => {
+    const port = await freePort();
+    const config = defaultConfig();
+    config.host.hostname = "192.0.2.10";
+    config.host.user = "demo";
+    config.desktop.localPort = port;
+    config.desktop.remotePort = 6080;
+    let opened = 0;
+    let vnc: http.Server | undefined;
+    const status = await refreshDesktopStatus(config, {
+      sshOk: true,
+      timeoutMs: 250,
+      openForward: async () => {
+        opened += 1;
+        vnc = http.createServer((_req, res) => {
+          res.writeHead(200, { "Content-Type": "text/html" });
+          res.end("<html><title>noVNC</title></html>");
+        });
+        await new Promise<void>((resolve) => vnc!.listen(port, "127.0.0.1", resolve));
+        return {
+          localPort: port,
+          process: { exitCode: null } as import("node:child_process").ChildProcess,
+          stop: async () => undefined,
+        };
+      },
+    });
+    try {
+      assert.equal(opened, 1);
+      assert.equal(status.desktop.ok, true);
+      assert.match(String(status.desktop.viewerUrl), /127\.0\.0\.1/);
+      const skipped = await refreshDesktopStatus(config, {
+        sshOk: false,
+        timeoutMs: 200,
+        openForward: async () => {
+          opened += 1;
+          return {
+            localPort: port,
+            process: { exitCode: null } as import("node:child_process").ChildProcess,
+            stop: async () => undefined,
+          };
+        },
+      });
+      assert.equal(opened, 1);
+      assert.equal(skipped.desktop.ok, false);
+      assert.match(String(skipped.desktop.missing), /SSH/);
+    } finally {
+      if (vnc) await new Promise<void>((resolve) => vnc.close(() => resolve()));
     }
   });
 });

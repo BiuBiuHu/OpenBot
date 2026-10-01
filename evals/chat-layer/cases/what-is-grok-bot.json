@@ -37,12 +37,14 @@
       "不会编",
       "还没找到",
       "没有能直接说的结论",
-      "conversation timed out"
+      "conversation timed out",
+      "generative artificial intelligence",
+      "I looked it up"
     ],
     "shownMustMatch": [
       "网上查过了",
       "xAI",
-      "chatbot"
+      "对话|聊天|机器人"
     ],
     "maxSentences": 4,
     "maxChars": 400
