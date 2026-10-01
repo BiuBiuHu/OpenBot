@@ -7,11 +7,12 @@
 | v0.1 | 2026-09-20 | 初始清单 | 实施前占位 | — |
 | v0.2 | 2026-09-20 | 回填命令结果 | 验证完成 | 与 test-report 对齐 |
 | v0.3 | 2026-09-22 | OH adapter mock 证据 | Phase 1 | npm test 19/19 |
+| v0.4 | 2026-10-01 | 本机客户端 mock 证据 | 同一线程 /api/chat | 见本轮 npm test |
 
 ## 1. 当前结论
 
 - 保存点：`8fea153` 脚手架；文档提交 `0690587`；本轮修复在后续 commit。
-- 最小充分测试集：`npm test` → **19 passed**（含 OH adapter mock）。
+- 最小充分测试集：`npm test` → **28 passed**（含本机客户端 / 同一线程 mock）。
 - 产品路径：localhost SSH `bind` → `run 'uname -a'` → CLI 退出后 worker `/health` 仍 ok。
 - Phase 1：`openbot oh health` / `oh run` / `POST /api/handoffs` 对 **mock** Agent Server 通过。
 - 未执行：真实公网 VPS、真实付费模型、真实 tunneled OH、SaaS 预发。

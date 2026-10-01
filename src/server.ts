@@ -1,12 +1,12 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { runAgentTurn } from "./agent.js";
 import { classifyCommand } from "./approval.js";
 import { loadConfig } from "./config.js";
 import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "./handoff.js";
 import { conversationSnippet, OpenHandsClient } from "./oh-client.js";
 import { repoRoot } from "./paths.js";
+import { runThreadTurn } from "./thread.js";
 import { ensureWorkerAccess, type TunnelHandle } from "./tunnel.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, HandoffProposal, OpenBotConfig } from "./types.js";
 import { WorkerClient } from "./worker-client.js";
@@ -72,7 +72,7 @@ export async function startControlPlane(
           raw: probe.raw,
           hint: probe.ok
             ? undefined
-            : "在笔记本上先开：ssh -L 8000:127.0.0.1:8000 user@host，并把 OPENHANDS_API_KEY 写入 ~/.openbot/.env",
+            : "在笔记本上先开：ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host，并把 OH_SESSION_API_KEY 写入 ~/.openbot/.env 或仓库外的 .env",
         });
         return;
       }
@@ -213,28 +213,40 @@ export async function startControlPlane(
       }
       if (req.method === "POST" && url.pathname === "/api/chat") {
         const body = await readJson(req);
-        const message = String(body.message || "").trim();
+        const message = String(body.message || body.goal || "").trim();
         if (!message) {
           await json(res, { ok: false, error: "message required" }, 400);
           return;
         }
-        if (!worker) {
-          await json(res, { ok: false, error: "worker not bound — local BYOK chat still uses the PR#1 worker tools" }, 400);
-          return;
-        }
-        const boundWorker = worker;
+        const forceHandoff =
+          body.handoff === true ||
+          body.handoff === "true" ||
+          body.mode === "handoff" ||
+          body.mode === "computer";
+        const live = loadConfig();
         await streamSse(req, res, async (emit) => {
-          const next = await runAgentTurn(message, {
-            worker: boundWorker,
-            llm: loadConfig().llm,
+          const result = await runThreadTurn(message, {
+            client: oh,
+            oh: live.openhands,
+            llm: live.llm,
+            worker,
+            store: handoffs,
             history,
             emit,
+            forceHandoff,
+            timeoutMs: typeof body.timeout_ms === "number" ? body.timeout_ms : 60_000,
+            pollMs: typeof body.poll_ms === "number" ? body.poll_ms : 250,
+            threadId: String(body.thread_id || body.threadId || "chat_default"),
+            waitForConfirm: (proposal: HandoffProposal) =>
+              new Promise<boolean>((resolve) => {
+                handoffWaiters.set(proposal.id, resolve);
+              }),
             waitForApproval: (req) =>
               new Promise<boolean>((resolve) => {
                 approvals.set(req.id, { req, resolve });
               }),
           });
-          history = next.slice(-40);
+          history = result.history.slice(-40);
         });
         return;
       }
@@ -344,7 +356,7 @@ async function statusPayload(config: OpenBotConfig, worker: WorkerClient | undef
     error =
       error ||
       ((ohProbe.raw as { error?: string })?.error ||
-        "OpenHands not reachable — ssh -L 8000:127.0.0.1:8000 then retry. Worker bind is optional for this path.");
+        "OpenHands not reachable — ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host then retry. Worker bind is optional for this path.");
   }
   return {
     ok: ohProbe.ok || healthy,

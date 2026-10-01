@@ -7,6 +7,7 @@
 | v0.1 | 2026-09-20 | 占位 | 先有策略再跑 | — |
 | v0.2 | 2026-09-20 | 回填实验室结果 | `npm test` 9/9；localhost SSH bind 跑通 | Code PR 可评审 |
 | v0.3 | 2026-09-22 | Phase 1 OH adapter | `npm test` 19/19；tsc 通过 | mock HTTP，无真实 ECS |
+| v0.4 | 2026-10-01 | 本机客户端同一线程 | `npm test` 28/28；tsc 通过 | mock HTTP，无真实 ECS |
 
 ## 1. 环境
 

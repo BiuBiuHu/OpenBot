@@ -9,7 +9,7 @@
 Agent Server 只听主机 `127.0.0.1:8000`。笔记本上先开本地转发：
 
 ```bash
-ssh -i <SSH_IDENTITY> -L 8000:127.0.0.1:8000 <USER>@<ECS_HOST>
+ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host
 ```
 
 不要把 8000 对公网暴露，也不要无鉴权绑 `0.0.0.0`。合上笔记本只应拆隧道，不应杀掉主机上的 `openhands-agent-server`。
@@ -19,12 +19,12 @@ ssh -i <SSH_IDENTITY> -L 8000:127.0.0.1:8000 <USER>@<ECS_HOST>
 复制 [`.env.example`](../../../.env.example) 到 `~/.openbot/.env`（`chmod 600`）：
 
 ```bash
-OPENHANDS_BASE_URL=http://127.0.0.1:8000
-OPENHANDS_API_KEY=<与主机 OH_SESSION_API_KEYS_0 相同>
-# 等价：OH_SESSION_API_KEY=
+OH_BASE_URL=http://127.0.0.1:8000
+OH_SESSION_API_KEY=
+# 别名：OPENHANDS_BASE_URL / OPENHANDS_API_KEY
 ```
 
-`OPENHANDS_API_KEY` 只用于请求头 `X-Session-API-Key`。不要写进 git。远端模型循环另用主机 BYOK（`OPENHANDS_LLM_MODEL` / `OPENHANDS_LLM_API_KEY`，可选）。
+`OH_SESSION_API_KEY` 只用于请求头 `X-Session-API-Key`。不要写进 git。远端模型循环另用主机 BYOK（`OPENHANDS_LLM_MODEL` / `OPENHANDS_LLM_API_KEY`，可选）。本机用法见 [local-client.md](local-client.md)。
 
 ## 3. 探活与交接 stub
 
@@ -57,16 +57,18 @@ npx openbot serve
 # 打开 http://127.0.0.1:3847/
 ```
 
-默认输入是 **This computer**：发一条 goal → 同一线程出交接卡 → 确认后 `POST /api/handoffs/stream` 创建 OH conversation，事件标 `remote` 回流。`Run on host` 仍是 PR#1 worker 直执逃生口。本机规划 Agent 仍属 Phase 2，这刀先把 Web 接到远端。
+默认输入是 **This computer**：发一条 goal → 同一线程出交接卡 → 确认后 `POST /api/chat`（`handoff:true`）创建 OH conversation，事件标 `remote` 回流直到 finished / error。`/api/handoffs/stream` 仍可用。`Run on host` 仍是 PR#1 worker 直执逃生口。无本机模型 key 时 `/api/chat` 也会走交接。本机规划 Agent 仍属 Phase 2。
 
 ## 4. 代码位置
 
 | 文件 | 职责 |
 |------|------|
 | `src/oh-client.ts` | HTTP 客户端：health / create / get / list / events / poll |
-| `src/handoff.ts` | 交接提案存储 + 确认后 `createConversation` |
-| `src/config.ts` | `openhands.*` + 上列环境变量 |
-| `src/cli.ts` | `oh` / `runtime` 子命令 |
+| `src/oh-events.ts` | OH 事件 → 同一线程 `thought` / `tool_*` / `error` |
+| `src/handoff.ts` | 交接提案存储 + 确认后 `createConversation` + 事件回流 |
+| `src/thread.ts` | 一条线程：无 key / forceHandoff → OH；有 key 可本机闲聊 |
+| `src/config.ts` | `openhands.*`；`OH_BASE_URL` / `OH_SESSION_API_KEY` 优先 |
+| `src/cli.ts` | `serve` / `chat` / `oh` / `runtime` |
 | `worker/worker.py` | **保留**。PR#1 执行原语对照，本 PR 不删、不改成 openbot-agent |
 
 类型按 OpenHands Agent Server OpenAPI 对齐，但本地自持、字段缺失不崩。
@@ -77,11 +79,11 @@ npx openbot serve
 
 ```bash
 # 终端 A：隧道
-ssh -i <SSH_IDENTITY> -L 8000:127.0.0.1:8000 <USER>@<ECS_HOST>
+ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host
 
 # 终端 B：本机壳
 cd /path/to/OpenBot
-# ~/.openbot/.env 写 OPENHANDS_BASE_URL 与 OPENHANDS_API_KEY
+# OH_BASE_URL / OH_SESSION_API_KEY 或 ~/.openbot/.env
 npx openbot serve
 ```
 
@@ -95,9 +97,9 @@ npx openbot serve
 ## 6. 手工打真实 ECS（CLI）
 
 1. 主机按 [试装笔记](openhands-agent-server-trial.md) 跑着 `openhands-agent-server`。
-2. 笔记本 `ssh -L 8000:127.0.0.1:8000 …`。
+2. 笔记本 `ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host`。
 3. `curl -sS http://127.0.0.1:8000/health` → `{"status":"ok"}`。
-4. 写入 `OPENHANDS_API_KEY`（= 主机 `OH_SESSION_API_KEYS_0`）。
+4. 写入 `OH_SESSION_API_KEY`（= 主机 session key）。
 5. `npx openbot oh health`，再 `npx openbot oh run '…'`。
 
 单元测试只打本地 mock HTTP，不连真实 ECS。

@@ -7,12 +7,12 @@ import { defaultConfig, loadConfig, saveConfig, writeEnvExampleToHome } from "./
 import { openbotHome } from "./paths.js";
 import { startControlPlane } from "./server.js";
 import { bootstrapWorker, probeSsh, sshTarget } from "./ssh.js";
-import type { AgentEvent, OpenBotConfig } from "./types.js";
+import type { OpenBotConfig } from "./types.js";
 import { WorkerClient } from "./worker-client.js";
 import { ensureWorkerAccess } from "./tunnel.js";
-import { runAgentTurn } from "./agent.js";
 import { OpenHandsClient, conversationSnippet } from "./oh-client.js";
-import { deliverConfirmedHandoff } from "./handoff.js";
+import { deliverConfirmedHandoff, HandoffStore } from "./handoff.js";
+import { printThreadEvent, runThreadTurn } from "./thread.js";
 
 function usage(): string {
   return `OpenBot — SSH your own machine. The agent gets a computer — you keep the keys.
@@ -22,20 +22,20 @@ Usage:
                    [--name NAME] [--model MODEL] [--base-url URL]
   npx openbot bind              Install/start the worker on the remote host
   npx openbot status            SSH + worker + OpenHands tunnel health
-  npx openbot serve [--port N]  Local control plane + UI (OH handoff and/or worker)
-                                Laptop trial: http://127.0.0.1:3847/oh-test
-  npx openbot run <command>     Run a command on the remote host (no LLM)
-  npx openbot chat [message]    One-shot BYOK chat that uses remote tools
+  npx openbot serve [--port N]  Local client UI (one thread → OpenHands)
+                                http://127.0.0.1:3847/  trial: /oh-test
+  npx openbot run <command>     Run a command on the remote host (PR#1 worker)
+  npx openbot chat [message]    Same thread: local chat or OH handoff
   npx openbot oh health         Probe tunneled OpenHands Agent Server
   npx openbot oh conversations  List OH conversations
   npx openbot oh run <goal>     Confirmed handoff: create OH conversation + poll
   npx openbot help
 
-OpenHands is reached at OPENHANDS_BASE_URL (default http://127.0.0.1:8000).
-Open a tunnel first: ssh -L 8000:127.0.0.1:8000 user@host
-Session key: OPENHANDS_API_KEY or OH_SESSION_API_KEY (X-Session-API-Key).
+OpenHands is reached at OH_BASE_URL (default http://127.0.0.1:8000).
+Open a tunnel first: ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host
+Session key: OH_SESSION_API_KEY (header X-Session-API-Key). OPENHANDS_* aliases still work.
 
-Config lives in ~/.openbot (never commit it). API keys go in ~/.openbot/.env.
+Config lives in ~/.openbot (never commit it). Keys go in ~/.openbot/.env or a gitignored .env.
 `;
 }
 
@@ -152,16 +152,16 @@ async function cmdServe(flags: Record<string, string>): Promise<void> {
     hasWorker ? {} : { skipTunnel: true, allowWithoutWorker: true },
   );
   const url = `http://127.0.0.1:${config.controlPlane.port}`;
-  console.log(`Control plane ${url}`);
+  console.log(`Local client  ${url}`);
   console.log(`Laptop trial  ${url}/oh-test`);
+  console.log(`OpenHands     ${config.openhands.baseUrl}  (${config.openhands.sessionApiKey ? "session-key=set" : "session-key=unset"})`);
+  console.log("Tunnel first: ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host");
   if (hasWorker) {
-    console.log(`Tunnel 127.0.0.1:${config.worker.localPort} → ${sshTarget(config)}:${config.worker.remotePort}`);
+    console.log(`Worker tunnel 127.0.0.1:${config.worker.localPort} → ${sshTarget(config)}:${config.worker.remotePort}`);
     console.log(`Persist on host: ${config.worker.persist}`);
-    console.log("Close this laptop whenever. The worker stays on the remote machine.");
   } else {
-    console.log("Worker not bound — UI talks to OpenHands via the local tunnel.");
-    console.log(`OpenHands ${config.openhands.baseUrl} (ssh -L 8000:127.0.0.1:8000)`);
-    console.log("Optional: `npx openbot bind` if you still want PR#1 worker jobs.");
+    console.log("Worker not bound — this is fine. One thread talks to OpenHands.");
+    console.log("Set OH_BASE_URL / OH_SESSION_API_KEY (or ~/.openbot/.env).");
   }
   const shutdown = async () => {
     await plane.close();
@@ -203,28 +203,6 @@ async function cmdRun(rest: string[]): Promise<void> {
   });
 }
 
-function printEvent(event: AgentEvent): void {
-  switch (event.type) {
-    case "token":
-      process.stdout.write(event.text);
-      break;
-    case "tool_start":
-      process.stderr.write(`\n▸ ${event.name} ${JSON.stringify(event.args)}\n`);
-      break;
-    case "output":
-      process.stdout.write(event.chunk);
-      break;
-    case "error":
-      process.stderr.write(`\nerror: ${event.message}\n`);
-      break;
-    case "approval":
-      process.stderr.write(`\napproval: ${event.reason}\n  ${event.command}\n`);
-      break;
-    default:
-      break;
-  }
-}
-
 function ohClient(config: OpenBotConfig): OpenHandsClient {
   return OpenHandsClient.fromConfig(config);
 }
@@ -240,7 +218,7 @@ async function printOhHealth(config: OpenBotConfig): Promise<boolean> {
   const err = (probe.raw as { error?: string })?.error || "not reachable";
   console.log(`OpenHands ${client.baseUrl} down (${key})`);
   console.log(`  ${err}`);
-  console.log("  Tunnel: ssh -L 8000:127.0.0.1:8000 user@host");
+  console.log("  Tunnel: ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host");
   return false;
 }
 
@@ -298,15 +276,55 @@ async function cmdOh(rest: string[], flags: Record<string, string>): Promise<voi
   throw new Error(`Unknown oh subcommand: ${sub}\nTry: openbot oh health | conversations | run '<goal>'`);
 }
 
-async function cmdChat(rest: string[]): Promise<void> {
+async function confirmHandoff(goal: string): Promise<boolean> {
+  if (!process.stdin.isTTY) return true;
+  const rl = readline.createInterface({ input, output });
+  const answer = await rl.question(`Hand this to the computer?\n  ${goal}\nConfirm? [y/N] `);
+  rl.close();
+  return /^y(es)?$/i.test(answer.trim());
+}
+
+async function cmdChat(rest: string[], flags: Record<string, string>): Promise<void> {
   const message = rest.join(" ").trim();
   if (!message) throw new Error("Usage: npx openbot chat 'what kernel is on my machine?'");
   const config = loadConfig();
-  await withWorker(config, async (worker) => {
-    await runAgentTurn(message, {
-      worker,
+  const forceHandoff = flags.handoff === "true" || flags.computer === "true" || !config.llm.apiKey;
+  const hasWorker = Boolean(config.host.hostname && config.worker.token);
+
+  if (forceHandoff || !hasWorker) {
+    const client = ohClient(config);
+    const store = new HandoffStore();
+    const timeoutMs = flags.timeout ? Number(flags.timeout) * 1000 : 60_000;
+    const pollMs = flags["poll-ms"] ? Number(flags["poll-ms"]) : 250;
+    await runThreadTurn(message, {
+      client,
+      oh: config.openhands,
       llm: config.llm,
-      emit: printEvent,
+      store,
+      emit: printThreadEvent,
+      forceHandoff,
+      timeoutMs,
+      pollMs,
+      threadId: flags.thread || "chat_default",
+      waitForConfirm: async (proposal) => {
+        if (flags.yes === "true" || flags.confirm === "true") return true;
+        return confirmHandoff(proposal.goal);
+      },
+    });
+    process.stdout.write("\n");
+    return;
+  }
+
+  await withWorker(config, async (worker) => {
+    await runThreadTurn(message, {
+      client: ohClient(config),
+      oh: config.openhands,
+      llm: config.llm,
+      worker,
+      store: new HandoffStore(),
+      emit: printThreadEvent,
+      forceHandoff: false,
+      waitForConfirm: async (proposal) => confirmHandoff(proposal.goal),
       waitForApproval: async (req) => confirmDangerous(req.command),
     });
     process.stdout.write("\n");
@@ -332,7 +350,7 @@ async function main(): Promise<void> {
       await cmdRun(rest);
       break;
     case "chat":
-      await cmdChat(rest);
+      await cmdChat(rest, flags);
       break;
     case "oh":
       await cmdOh(rest, flags);

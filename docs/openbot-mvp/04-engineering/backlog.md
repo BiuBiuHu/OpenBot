@@ -12,6 +12,7 @@
 | v0.6 | 2026-09-22 | v0 锁定 OH runtime；补 adapter；native 延后 | 用户确认出货路径 | BL-016 P0；BL-010 延后；BL-015 已决 |
 | v0.7 | 2026-09-22 | 补扩展层：桌面/VNC 近端项 | OH 无可见屏幕；避免 OH-only forever | BL-017 P2；不挡 v0；不 fork OH |
 | v0.8 | 2026-09-22 | BL-016 薄 adapter 落地 | Phase 1 代码 PR | 探活 / 建会话 / 交接 stub；完整同一线程回流仍属 BL-011 |
+| v0.9 | 2026-10-01 | 本机客户端同一线程 | 可用本地壳 | `/api/chat` + 事件映射；本机规划仍缺 |
 
 ## 1. 当前决策
 
@@ -24,7 +25,7 @@
 |----|----|--------|------|------|
 | BL-016 | Phase 1：**本机壳的 OH runtime adapter**（隧道 / API、交接投递、事件回流、探活） | P0 | PR#1 bind 故事；[试装笔记](../06-ops/openhands-agent-server-trial.md) | **本 PR 落地薄切片**：`src/oh-client.ts` + `openbot oh health\|run` + `/api/handoffs` 确认 stub。完整同一线程回流 / 收尾仍走 BL-011。不 fork OH；不自建远端循环；[adapter 笔记](../06-ops/oh-runtime-adapter.md) |
 | BL-014 | **本机 Agent**（规划/编排，笔记本 BYOK，无需 bind）+ `handoff_proposal` | P1 | 本机控制面 | 不挡 Phase 1；无确认不创建远端任务 |
-| BL-011 | Phase 2：交接确认、远端事件回流**同一线程**、本机收尾 | P1 | BL-016、BL-014 | Web 先接通：默认 This computer + 交接卡 + OH 回流（本分支）。本机规划/收尾仍缺 |
+| BL-011 | Phase 2：交接确认、远端事件回流**同一线程**、本机收尾 | P1 | BL-016、BL-014 | 本机壳已把确认 + OH 事件回流接到同一线程（`/api/chat` / `openbot chat`）。本机规划/收尾仍缺 |
 | BL-012 | Phase 3：无头浏览 plugin | P3 | BL-016、2C4G 评估 | 禁止冒充 Grok 桌面；plugin ≠ Agent；**不是** BL-017 的可见屏幕 |
 | BL-013 | v0.5：Agent 群组房间（mention / 本机编排 / 按 Agent 扇出） | P2 | BL-011 | 共享发言 vs 私有 memory；不挡 Phase 1 |
 | BL-017 | **扩展层**：可选桌面 / VNC / 实时可见屏幕（同一台 BYO 机器上的 sidecar，挂在 OH **旁边**） | P2 | BL-016（本机壳先通） | **不挡 v0**；不 fork OH；不是第二个 Agent；以后 connectors 走同一层 |

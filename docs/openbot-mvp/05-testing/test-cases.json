@@ -163,7 +163,7 @@
       "req": "BL-016",
       "system": "cli",
       "priority": "P0",
-      "precondition": "mock + OPENHANDS_BASE_URL",
+      "precondition": "mock + OH_BASE_URL / OH_SESSION_API_KEY",
       "steps": ["openbot oh health", "openbot oh run 'summarize uname'"],
       "expected": "health ok；打印 conversation id / status / snippet",
       "forbidden_side_effects": "不得要求 worker bind",
@@ -180,6 +180,66 @@
       "expected": "先 needs_confirm；确认后创建 conversation",
       "forbidden_side_effects": "未确认不得建远端会话",
       "evidence": "tests/oh-client.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-OH-011",
+      "req": "BL-011",
+      "system": "control-plane",
+      "priority": "P0",
+      "precondition": "控制面无 worker + mock OH",
+      "steps": ["POST /api/chat {message, handoff:true}", "确认交接卡", "读 SSE 至 done"],
+      "expected": "同一线程出现 handoff_proposal 与 thought/tool 事件，无 worker-not-bound",
+      "forbidden_side_effects": "不得连接真实 ECS",
+      "evidence": "tests/oh-client.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-OH-012",
+      "req": "BL-011",
+      "system": "oh-adapter",
+      "priority": "P0",
+      "precondition": "无",
+      "steps": ["map ActionEvent / ObservationEvent / MessageEvent"],
+      "expected": "tool_start / tool_result / thought；跳过 user echo",
+      "forbidden_side_effects": "不得把用户气泡再画一遍",
+      "evidence": "tests/oh-client.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-OH-013",
+      "req": "BL-011",
+      "system": "handoff",
+      "priority": "P0",
+      "precondition": "mock terminalStatus=error",
+      "steps": ["runHandoffTurn 确认后轮询"],
+      "expected": "error 事件 + done；status=failed",
+      "forbidden_side_effects": "不得把失败标成 succeeded",
+      "evidence": "tests/oh-client.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-OH-014",
+      "req": "BL-011",
+      "system": "cli",
+      "priority": "P0",
+      "precondition": "mock + OH_BASE_URL + OH_SESSION_API_KEY，无 worker",
+      "steps": ["openbot chat 'summarize uname'"],
+      "expected": "非 TTY 视为已确认；打印远端结果",
+      "forbidden_side_effects": "不得要求 bind worker",
+      "evidence": "tests/oh-client.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-CFG-002",
+      "req": "REQ-OPENBOT-007",
+      "system": "config",
+      "priority": "P0",
+      "precondition": "临时环境变量",
+      "steps": ["同时设 OH_* 与 OPENHANDS_*"],
+      "expected": "OH_BASE_URL / OH_SESSION_API_KEY 优先",
+      "forbidden_side_effects": "不得把 key 写入仓库",
+      "evidence": "tests/config.test.ts",
       "mode": "automated"
     }
   ]

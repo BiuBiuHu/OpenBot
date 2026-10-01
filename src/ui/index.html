@@ -184,7 +184,7 @@
         <option value="handoff">This computer</option>
         <option value="run">Run on host</option>
       </select>
-      <textarea id="box" rows="2" placeholder="Hand a goal to this computer. Confirm before anything runs remotely."></textarea>
+      <textarea id="box" rows="2" placeholder="同一条线程：发给这台电脑。确认后远端事件会回流到这里。"></textarea>
       <button id="send" type="button">Send</button>
     </footer>
     <script>
@@ -225,7 +225,8 @@
               ? "<br>OH " +
                 (ohOk ? "ok" : "down") +
                 " " +
-                escapeHtml(s.openhands.baseUrl || "")
+                escapeHtml(s.openhands.baseUrl || "") +
+                (s.openhands.hasSessionKey ? "" : " · set OH_SESSION_API_KEY")
               : "<br>OH not configured") +
             "<br>persist " + escapeHtml(s.persist || "unknown") +
             (info ? "<br>" + escapeHtml(info.uname.string) : "") +
@@ -359,8 +360,8 @@
         const pre = out.querySelector("pre");
         sendBtn.disabled = true;
         try {
-          const url = isRun ? "/api/run" : "/api/handoffs/stream";
-          const payload = isRun ? { command: text } : { goal: text };
+          const url = isRun ? "/api/run" : "/api/chat";
+          const payload = isRun ? { command: text } : { message: text, handoff: true };
           await consumeSse(url, payload, (ev) => {
             if (ev.type === "token" || ev.type === "thought" || ev.type === "output") {
               if (pre.textContent) pre.textContent += "\n";
@@ -370,6 +371,8 @@
               add("sys", "remote", ev.text);
             } else if (ev.type === "tool_start") {
               add("sys", "tool", ev.name + " " + JSON.stringify(ev.args));
+            } else if (ev.type === "tool_result") {
+              add("sys", "remote", ev.name + "\n" + (ev.result || ""));
             } else if (ev.type === "handoff_proposal") {
               decideCard("handoff", ev, ev.reason + "\n" + ev.goal);
             } else if (ev.type === "approval") {
@@ -402,7 +405,7 @@
       add(
         "sys",
         "ready",
-        "One thread: type a goal, confirm the handoff card, events come back from OpenHands on this computer.\nRun on host is the old worker shell. Tunnel first: ssh -L 8000:127.0.0.1:8000",
+        "一条线程：输入任务 → 确认交接 → OpenHands 事件回流到这里，直到结束或报错。\n无本机模型 key 也可以。先开隧道：ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host",
       );
     </script>
   </body>

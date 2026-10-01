@@ -92,12 +92,12 @@
     <section class="step">
       <h2>1. 笔记本上先开隧道</h2>
       <p>Agent Server 只听主机 <code>127.0.0.1:8000</code>。另开一个终端：</p>
-      <pre>ssh -i &lt;SSH_IDENTITY&gt; -L 8000:127.0.0.1:8000 &lt;USER&gt;@&lt;ECS_HOST&gt;</pre>
+      <pre>ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host</pre>
       <p>然后本机应能 <code>curl -sS http://127.0.0.1:8000/health</code> 看到 <code>{"status":"ok"}</code>。</p>
       <p><code>~/.openbot/.env</code> 至少：</p>
-      <pre>OPENHANDS_BASE_URL=http://127.0.0.1:8000
-OPENHANDS_API_KEY=&lt;主机 OH_SESSION_API_KEYS_0&gt;</pre>
-      <p>可选：<code>OPENHANDS_LLM_MODEL</code> / <code>OPENHANDS_LLM_API_KEY</code>（远端循环自己的 BYOK）。不要把 PEM 或 key 贴进聊天。</p>
+      <pre>OH_BASE_URL=http://127.0.0.1:8000
+OH_SESSION_API_KEY=&lt;session-key-from-host-env&gt;</pre>
+      <p>也可写入 gitignore 的 <code>.env</code> / <code>~/.openbot/.env</code>。可选 <code>OPENHANDS_LLM_MODEL</code>。不要把 PEM 或 key 贴进聊天。</p>
     </section>
 
     <section class="step">
@@ -138,7 +138,7 @@ OPENHANDS_API_KEY=&lt;主机 OH_SESSION_API_KEYS_0&gt;</pre>
             probeLine.innerHTML =
               '<span class="ok">通了</span> ' +
               escapeHtml(data.baseUrl || "") +
-              (data.hasSessionKey ? " · session key 已配置" : " · 还没配 OPENHANDS_API_KEY");
+              (data.hasSessionKey ? " · session key 已配置" : " · 还没配 OH_SESSION_API_KEY");
           } else {
             probeLine.innerHTML =
               '<span class="err">不通</span> ' +

@@ -1,3 +1,4 @@
+import { emitUnseenOhEvents } from "./oh-events.js";
 import {
   OpenHandsClient,
   conversationSnippet,
@@ -122,21 +123,47 @@ export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promi
   const pollMs = deps.pollMs ?? 250;
   const deadline = Date.now() + timeoutMs;
   let last = delivery.conversation;
+  let timedOut = false;
   while (Date.now() < deadline) {
     last = await deps.client.getConversation(id);
     deps.emit({ type: "status", text: `remote ${last.executionStatus} (${last.status})` });
     try {
-      const page = await deps.client.searchEvents(id, { limit: 50 });
-      const snippet = conversationSnippet(page);
-      if (snippet && !seen.has(snippet)) {
-        seen.add(snippet);
-        deps.emit({ type: "thought", text: snippet });
+      const page = await deps.client.searchEvents(id, { limit: 80 });
+      const emitted = emitUnseenOhEvents(page.items, seen, deps.emit);
+      if (!emitted) {
+        const snippet = conversationSnippet(page);
+        if (snippet && !seen.has(`snippet:${snippet}`)) {
+          seen.add(`snippet:${snippet}`);
+          deps.emit({ type: "thought", text: snippet });
+        }
       }
     } catch {
       /* events search is optional across OH versions */
     }
     if (isTerminalStatus(last.executionStatus)) break;
+    if (Date.now() >= deadline) {
+      timedOut = true;
+      break;
+    }
     await sleep(pollMs);
+  }
+  if (!isTerminalStatus(last.executionStatus)) {
+    timedOut = true;
+  }
+  if (timedOut) {
+    deps.emit({
+      type: "error",
+      message: `remote conversation ${id} timed out while ${last.executionStatus} (${last.status})`,
+    });
+  } else if (last.status === "failed" || last.status === "timeout") {
+    deps.emit({
+      type: "error",
+      message: `remote conversation ${id} ${last.executionStatus} (${last.status})`,
+    });
+  } else if (last.status === "cancelled") {
+    deps.emit({ type: "error", message: `remote conversation ${id} cancelled` });
+  } else {
+    deps.emit({ type: "status", text: `remote finished ${last.executionStatus} (${last.status})` });
   }
   deps.emit({ type: "done" });
   return last;

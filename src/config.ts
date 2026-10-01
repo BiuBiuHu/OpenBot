@@ -77,12 +77,12 @@ export function defaultConfig(partial: Partial<OpenBotConfig> = {}): OpenBotConf
     openhands: {
       baseUrl: (
         partial.openhands?.baseUrl ||
-        pick(env, "OPENHANDS_BASE_URL") ||
-        pick(env, "OH_BASE_URL", "http://127.0.0.1:8000")
+        pick(env, "OH_BASE_URL") ||
+        pick(env, "OPENHANDS_BASE_URL", "http://127.0.0.1:8000")
       ).replace(/\/$/, ""),
       sessionApiKey:
-        pick(env, "OPENHANDS_API_KEY") ||
         pick(env, "OH_SESSION_API_KEY") ||
+        pick(env, "OPENHANDS_API_KEY") ||
         partial.openhands?.sessionApiKey ||
         "",
       workspaceDir:

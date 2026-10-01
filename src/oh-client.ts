@@ -1,3 +1,4 @@
+import { textsFromEvent } from "./oh-events.js";
 import type { OpenBotConfig, OpenHandsConfig } from "./types.js";
 
 export class OpenHandsError extends Error {
@@ -166,7 +167,7 @@ export class OpenHandsClient {
     } catch (err) {
       const why = err instanceof Error ? err.message : String(err);
       throw new OpenHandsError(
-        `OpenHands unreachable at ${this.baseUrl} (${why}). Is \`ssh -L 8000:127.0.0.1:8000\` up?`,
+        `OpenHands unreachable at ${this.baseUrl} (${why}). Is \`ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host\` up?`,
       );
     }
     const text = await res.text();
@@ -358,24 +359,6 @@ function normalizeEventPage(raw: unknown): OhEventPage {
     (typeof rec.nextPageId === "string" && rec.nextPageId) ||
     undefined;
   return { items, nextPageId, raw };
-}
-
-function textsFromEvent(ev: unknown): string[] {
-  if (!isRecord(ev)) return typeof ev === "string" ? [ev] : [];
-  const out: string[] = [];
-  const message = isRecord(ev.message) ? ev.message : undefined;
-  const content = ev.content ?? message?.content ?? ev.body;
-  if (Array.isArray(content)) {
-    for (const part of content) {
-      if (typeof part === "string") out.push(part);
-      else if (isRecord(part) && typeof part.text === "string") out.push(part.text);
-    }
-  } else if (typeof content === "string") {
-    out.push(content);
-  } else if (typeof ev.text === "string") {
-    out.push(ev.text);
-  }
-  return out;
 }
 
 function sleep(ms: number): Promise<void> {

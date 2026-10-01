@@ -11,6 +11,7 @@
 | v0.5 | 2026-09-22 | Phase 1 改为 OH runtime adapter；native 延后 | v0 runtime 锁定 | 不先自建 `openbot-agent` |
 | v0.6 | 2026-09-22 | 近端扩展：桌面/VNC sidecar | OH 无可见屏幕 | 不挡 Phase 1/2；不 fork OH |
 | v0.7 | 2026-09-22 | Phase 1 薄 adapter 代码 | 文档 PR#4 已锁 runtime | `oh-client` + CLI 探活/run + 交接 stub |
+| v0.8 | 2026-10-01 | 本机客户端同一线程 | 叠在 Web 交接上 | `/api/chat` 不依赖 worker；事件映射；[local-client.md](../06-ops/local-client.md) |
 
 ## 1. 当前决策
 
@@ -51,7 +52,7 @@
 
 PR#1 已完成：脚手架 → 00–06 文档 → 测试与 localhost SSH bind → 中文 Code PR。
 
-**Phase 1 薄切片**：adapter CLI + 交接 stub（#5）。**下一刀（本分支）**：Web 默认 This computer → 交接卡 → OH 事件回流；`serve` 可不 bind worker。完整本机规划仍属 Phase 2。
+**Phase 1 薄切片**：adapter CLI + 交接 stub（#5）。**Web 交接**（#6）：默认 This computer。**本分支**：可用本机客户端，一条线程看到 health / 发任务 / 事件回流到结束或报错。完整本机规划仍属 Phase 2。
 
 | 阶段 | 任务 | 退出条件 | 失败处理 |
 |------|------|----------|----------|

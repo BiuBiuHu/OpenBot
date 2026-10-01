@@ -27,9 +27,9 @@ export interface ControlPlaneConfig {
 
 /** Local tunnel client for v0 remote runtime = OpenHands Agent Server. */
 export interface OpenHandsConfig {
-  /** Default http://127.0.0.1:8000 — reach via `ssh -L 8000:127.0.0.1:8000`. */
+  /** Default http://127.0.0.1:8000 — reach via `ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host`. */
   baseUrl: string;
-  /** Sent as X-Session-API-Key. From OPENHANDS_API_KEY / OH_SESSION_API_KEY. */
+  /** Sent as X-Session-API-Key. From OH_SESSION_API_KEY (or OPENHANDS_API_KEY). */
   sessionApiKey: string;
   /** OH LocalWorkspace.working_dir. Not a public path. */
   workspaceDir: string;

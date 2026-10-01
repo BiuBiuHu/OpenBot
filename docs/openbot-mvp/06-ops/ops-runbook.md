@@ -9,6 +9,7 @@
 | v0.3 | 2026-09-21 | 链到 OpenHands Agent Server 试装笔记 | 2C4G ECS 摸手感，对照自建内核 | 不改变 OpenBot 巡检命令 |
 | v0.4 | 2026-09-22 | v0 远端 runtime 定为 OH Agent Server | 用户锁定 | 试装笔记升为 v0 运维路径；native 延后 |
 | v0.5 | 2026-09-22 | 本机壳 OH adapter 探活 / `oh run` | Phase 1 代码 | 见 [oh-runtime-adapter.md](oh-runtime-adapter.md) |
+| v0.6 | 2026-10-01 | 本机客户端同一线程回流 | 可用本地壳 | 见 [local-client.md](local-client.md) |
 
 ## 1. 当前决策
 
@@ -41,10 +42,11 @@ npx openbot run 'uname -a'
 npx openbot serve
 
 # v0 OH runtime（先开隧道，再探活）
-# ssh -i <SSH_IDENTITY> -L 8000:127.0.0.1:8000 <USER>@<ECS_HOST>
-# ~/.openbot/.env: OPENHANDS_BASE_URL=http://127.0.0.1:8000  OPENHANDS_API_KEY=<OH_SESSION_API_KEYS_0>
+# ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host
+# OH_BASE_URL=http://127.0.0.1:8000  OH_SESSION_API_KEY=  （或 gitignore 的 .env）
 npx openbot oh health
-npx openbot oh run '在工作区写一份 uname 记录'
+npx openbot serve
+npx openbot chat '在工作区写一份 uname 记录'
 ```
 
 本机指向已隧道的 OH：[oh-runtime-adapter.md](oh-runtime-adapter.md)。试装全文：[openhands-agent-server-trial.md](openhands-agent-server-trial.md)。
@@ -102,11 +104,11 @@ v0 无中心告警。用户自己看 `worker.log` 与 job 状态。
 
 完整步骤、systemd、SSH 隧道与已锁定决策：[openhands-agent-server-trial.md](openhands-agent-server-trial.md)。
 
-- 只听 `127.0.0.1:8000`，经 `ssh -L 8000:127.0.0.1:8000` 到达。禁止无鉴权绑 `0.0.0.0`。
-- 探活：`curl -sS http://127.0.0.1:8000/health` → `{"status":"ok"}`；或本机 `npx openbot oh health`（adapter）。
+- 只听 `127.0.0.1:8000`，经 `ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host` 到达。禁止无鉴权绑 `0.0.0.0`。
+- 探活：`curl -sS http://127.0.0.1:8000/health` → `{"status":"ok"}`；或本机 `npx openbot oh health`。本机壳步骤：[local-client.md](local-client.md)。
 - 停服：`systemctl disable --now openhands-agent-server`。这不影响 `openbot-worker` / 以后的 native `openbot-agent`。
 
 ## 9. 未解决问题
 
 - 多机、自动升级。
-- 完整同一线程回流 / 本机收尾（BL-011）。`openbot status` 与 `/api/status` 已带 OH 探活。
+- 本机规划 Agent / 收尾（BL-014）。同一线程回流已由本机客户端接到 OH。`openbot status` 与 `/api/status` 带 OH 探活。

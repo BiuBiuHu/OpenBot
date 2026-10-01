@@ -95,7 +95,7 @@ export async function runAgentTurn(userText: string, deps: AgentDeps): Promise<C
   const maxRounds = deps.maxRounds ?? 8;
   for (let round = 0; round < maxRounds; round++) {
     deps.emit({ type: "status", text: `model ${deps.llm.model} · round ${round + 1}` });
-    const completion = await chatComplete(deps.llm, messages);
+    const completion = await chatComplete(deps.llm, messages, { tools: true });
     const assistant = completion.choices?.[0]?.message;
     if (!assistant) {
       deps.emit({ type: "error", message: "Model returned an empty completion." });
@@ -132,6 +132,52 @@ export async function runAgentTurn(userText: string, deps: AgentDeps): Promise<C
   }
   deps.emit({ type: "done" });
   return messages.filter((m) => m.role !== "system");
+}
+
+/** Local BYOK chat with no remote tools. Used when the worker is not bound. */
+export async function runLocalChatTurn(
+  userText: string,
+  deps: {
+    llm: LlmConfig;
+    history?: ChatMessage[];
+    emit: (event: AgentEvent) => void;
+  },
+): Promise<ChatMessage[]> {
+  if (!deps.llm.apiKey) {
+    deps.emit({
+      type: "error",
+      message:
+        "No OPENAI_API_KEY. Set it in ~/.openbot/.env for local chat, or send the task to the computer (OpenHands handoff).",
+    });
+    deps.emit({ type: "done" });
+    return deps.history ?? [];
+  }
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "You are OpenBot on the user's laptop. You have no computer. Plan, draft, and clarify. If they need the host, say so — do not pretend you ran a command.",
+    },
+    ...(deps.history ?? []),
+    { role: "user", content: userText },
+  ];
+  deps.emit({ type: "status", text: `local ${deps.llm.model}` });
+  const completion = await chatComplete(deps.llm, messages, { tools: false });
+  const assistant = completion.choices?.[0]?.message;
+  const content = assistant?.content || "";
+  if (!content) {
+    deps.emit({ type: "error", message: "Model returned an empty completion." });
+    deps.emit({ type: "done" });
+    return deps.history ?? [];
+  }
+  deps.emit({ type: "token", text: content });
+  deps.emit({ type: "done" });
+  const next: ChatMessage[] = [
+    ...(deps.history ?? []),
+    { role: "user", content: userText },
+    { role: "assistant", content },
+  ];
+  return next.slice(-40);
 }
 
 async function executeTool(
@@ -189,7 +235,11 @@ interface Completion {
   error?: { message?: string };
 }
 
-async function chatComplete(llm: LlmConfig, messages: ChatMessage[]): Promise<Completion> {
+async function chatComplete(
+  llm: LlmConfig,
+  messages: ChatMessage[],
+  opts: { tools: boolean },
+): Promise<Completion> {
   const url = `${llm.baseUrl}/chat/completions`;
   const res = await fetch(url, {
     method: "POST",
@@ -200,8 +250,7 @@ async function chatComplete(llm: LlmConfig, messages: ChatMessage[]): Promise<Co
     body: JSON.stringify({
       model: llm.model,
       messages,
-      tools: TOOLS,
-      tool_choice: "auto",
+      ...(opts.tools ? { tools: TOOLS, tool_choice: "auto" } : {}),
       temperature: 0.2,
     }),
   });

@@ -18,10 +18,11 @@ export interface MockOhServer {
 }
 
 export async function startMockOhServer(
-  opts: { sessionKey?: string; finishAfterPolls?: number } = {},
+  opts: { sessionKey?: string; finishAfterPolls?: number; terminalStatus?: string } = {},
 ): Promise<MockOhServer> {
   const sessionKey = opts.sessionKey ?? "test-oh-session";
   const finishAfterPolls = opts.finishAfterPolls ?? 2;
+  const terminalStatus = opts.terminalStatus ?? "finished";
   const conversations = new Map<string, MockConversation>();
   const requests: MockOhServer["requests"] = [];
   let seq = 0;
@@ -87,7 +88,7 @@ export async function startMockOhServer(
           return;
         }
         conv.polls += 1;
-        if (conv.polls >= finishAfterPolls) conv.execution_status = "finished";
+        if (conv.polls >= finishAfterPolls) conv.execution_status = terminalStatus;
         send(200, { id: conv.id, execution_status: conv.execution_status });
         return;
       }
@@ -99,20 +100,47 @@ export async function startMockOhServer(
           send(404, { detail: "not found" });
           return;
         }
-        send(200, {
-          items: [
-            {
-              kind: "MessageEvent",
-              source: "user",
-              content: [{ type: "text", text: conv.goal }],
-            },
-            {
-              kind: "MessageEvent",
-              source: "agent",
-              content: [{ type: "text", text: `done: ${conv.goal}` }],
-            },
-          ],
-        });
+        const items: Record<string, unknown>[] = [
+          {
+            id: `${conv.id}-user`,
+            kind: "MessageEvent",
+            source: "user",
+            content: [{ type: "text", text: conv.goal }],
+          },
+        ];
+        if (conv.polls >= 1) {
+          items.push({
+            id: `${conv.id}-action`,
+            kind: "ActionEvent",
+            source: "agent",
+            action: { kind: "CmdRunAction", command: "uname -a" },
+          });
+        }
+        if (conv.polls >= 1) {
+          items.push({
+            id: `${conv.id}-obs`,
+            kind: "ObservationEvent",
+            source: "agent",
+            observation: { kind: "CmdOutputObservation", content: "Linux mock 6.12" },
+          });
+        }
+        if (conv.polls >= finishAfterPolls || conv.execution_status === terminalStatus) {
+          items.push({
+            id: `${conv.id}-agent`,
+            kind: "MessageEvent",
+            source: "agent",
+            content: [{ type: "text", text: `done: ${conv.goal}` }],
+          });
+        }
+        if (terminalStatus === "error" && conv.polls >= finishAfterPolls) {
+          items.push({
+            id: `${conv.id}-err`,
+            kind: "AgentErrorEvent",
+            source: "agent",
+            error: "mock remote failed",
+          });
+        }
+        send(200, { items });
         return;
       }
 

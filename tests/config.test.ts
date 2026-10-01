@@ -50,4 +50,18 @@ describe("REQ-OPENBOT-007 config isolation", () => {
     assert.match(raw, /203\.0\.113\.10/);
     assert.equal(path.dirname(file).startsWith(home), true);
   });
+
+  it("TC-CFG-002: OH_BASE_URL / OH_SESSION_API_KEY win over OPENHANDS_* aliases", () => {
+    process.env.OH_BASE_URL = "http://127.0.0.1:18000";
+    process.env.OH_SESSION_API_KEY = "from-oh";
+    process.env.OPENHANDS_BASE_URL = "http://127.0.0.1:19999";
+    process.env.OPENHANDS_API_KEY = "from-openhands";
+    const cfg = defaultConfig();
+    assert.equal(cfg.openhands.baseUrl, "http://127.0.0.1:18000");
+    assert.equal(cfg.openhands.sessionApiKey, "from-oh");
+    delete process.env.OH_BASE_URL;
+    delete process.env.OH_SESSION_API_KEY;
+    delete process.env.OPENHANDS_BASE_URL;
+    delete process.env.OPENHANDS_API_KEY;
+  });
 });
