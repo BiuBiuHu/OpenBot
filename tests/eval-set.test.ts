@@ -72,5 +72,9 @@ describe("chat-layer eval set", () => {
     assert.ok(scoreEvalCase(c, intro, true).some((x) => !x.pass));
     assert.ok(scoreEvalCase(c, "不知道", true).some((x) => !x.pass));
     assert.ok(scoreEvalCase(c, "I don't know", true).some((x) => !x.pass));
+    assert.ok(
+      scoreEvalCase(c, "网上查过了，还没找到能直接说的结论。", true).some((x) => !x.pass),
+      "empty 还没找到 must fail when a public page would have answered",
+    );
   });
 });

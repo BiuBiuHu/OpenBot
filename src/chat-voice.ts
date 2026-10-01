@@ -137,8 +137,8 @@ export function voiceFromSearch(input: { userMessage: string; hits: SearchHit[] 
   const hits = (input.hits || []).filter((h) => String(h.snippet || h.title || "").trim());
   if (!hits.length) {
     return {
-      text: zh ? "网上查过了，还没找到能直接说的结论。" : "I looked it up, but I don't have a short answer yet.",
-      kind: "ok",
+      text: zh ? "网上没查成。" : "The lookup failed.",
+      kind: "fail",
     };
   }
   const bits = hits

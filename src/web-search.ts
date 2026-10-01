@@ -4,7 +4,7 @@ export interface SearchHit {
   title: string;
   snippet: string;
   url: string;
-  source: "duckduckgo" | "wikipedia";
+  source: "duckduckgo" | "wikipedia" | "bing" | "browser";
 }
 
 export interface SearchWebOptions {
@@ -14,20 +14,28 @@ export interface SearchWebOptions {
 }
 
 const UA = "OpenBot/0.1 (local chat client; https://github.com/BiuBiuHu/OpenBot)";
+const BROWSER_UA = "Mozilla/5.0 (compatible; OpenBot/0.1; +https://github.com/BiuBiuHu/OpenBot)";
 const DDG = "https://api.duckduckgo.com/";
 const WIKI_EN = "https://en.wikipedia.org";
 const WIKI_ZH = "https://zh.wikipedia.org";
+const BING = "https://www.bing.com/search";
+const BING_CN = "https://cn.bing.com/search";
 
 export async function searchWeb(query: string, opts: SearchWebOptions = {}): Promise<SearchHit[]> {
   const q = String(query || "").trim();
   if (!q) return [];
   const fetchFn = opts.fetch ?? globalThis.fetch.bind(globalThis);
-  const timeoutMs = opts.timeoutMs ?? 8_000;
-  const [ddg, wiki] = await Promise.all([
+  const timeoutMs = opts.timeoutMs ?? 12_000;
+  const [ddg, wiki, bing] = await Promise.all([
     duckDuckGoHits(fetchFn, q, timeoutMs).catch(() => [] as SearchHit[]),
     wikipediaHits(fetchFn, q, timeoutMs).catch(() => [] as SearchHit[]),
+    bingHits(fetchFn, q, timeoutMs).catch(() => [] as SearchHit[]),
   ]);
-  return dedupeHits([...ddg, ...wiki]).slice(0, 5);
+  let hits = dedupeHits([...wiki, ...bing, ...ddg]);
+  if (!hits.length) {
+    hits = dedupeHits(await wikiPageFallbacks(fetchFn, q, timeoutMs).catch(() => [] as SearchHit[]));
+  }
+  return hits.slice(0, 6);
 }
 
 async function duckDuckGoHits(fetchFn: typeof fetch, q: string, timeoutMs: number): Promise<SearchHit[]> {
@@ -73,11 +81,11 @@ function flattenRelated(item: unknown, hits: SearchHit[]): void {
 }
 
 async function wikipediaHits(fetchFn: typeof fetch, q: string, timeoutMs: number): Promise<SearchHit[]> {
-  const primary = /[\u3400-\u9fff]/.test(q) ? WIKI_ZH : WIKI_EN;
-  const secondary = primary === WIKI_ZH ? WIKI_EN : WIKI_ZH;
-  const first = await wikipediaSearch(fetchFn, primary, q, timeoutMs);
-  if (first.length) return first;
-  return wikipediaSearch(fetchFn, secondary, q, timeoutMs);
+  const [zh, en] = await Promise.all([
+    wikipediaSearch(fetchFn, WIKI_ZH, q, timeoutMs).catch(() => [] as SearchHit[]),
+    wikipediaSearch(fetchFn, WIKI_EN, q, timeoutMs).catch(() => [] as SearchHit[]),
+  ]);
+  return /[\u3400-\u9fff]/.test(q) ? [...zh, ...en] : [...en, ...zh];
 }
 
 async function wikipediaSearch(
@@ -133,6 +141,89 @@ async function wikipediaSummary(
   };
 }
 
+async function bingHits(fetchFn: typeof fetch, q: string, timeoutMs: number): Promise<SearchHit[]> {
+  const urls = [
+    `${BING}?q=${encodeURIComponent(q)}&setlang=en`,
+    `${BING_CN}?q=${encodeURIComponent(q)}`,
+  ];
+  const pages = await Promise.all(urls.map((url) => getText(fetchFn, url, timeoutMs).catch(() => "")));
+  const hits: SearchHit[] = [];
+  for (const html of pages) hits.push(...parseBingHtml(html));
+  return hits;
+}
+
+async function wikiPageFallbacks(fetchFn: typeof fetch, q: string, timeoutMs: number): Promise<SearchHit[]> {
+  const hits: SearchHit[] = [];
+  for (const origin of [WIKI_EN, WIKI_ZH]) {
+    for (const slug of wikiSlugs(q)) {
+      const summary = await wikipediaSummary(fetchFn, origin, slug.replace(/_/g, " "), timeoutMs).catch(() => undefined);
+      if (summary?.extract) {
+        hits.push({
+          title: summary.title,
+          snippet: summary.extract,
+          url: summary.url,
+          source: "wikipedia",
+        });
+        continue;
+      }
+      const html = await getText(fetchFn, `${origin}/wiki/${encodeURIComponent(slug)}`, timeoutMs).catch(() => "");
+      const page = parseWikipediaArticle(html, `${origin}/wiki/${slug}`);
+      if (page) hits.push(page);
+    }
+  }
+  return hits;
+}
+
+function wikiSlugs(q: string): string[] {
+  const cleaned = q.replace(/[？?！!。.]/g, "").trim();
+  const slugs = [cleaned.replace(/\s+/g, "_")];
+  const first = cleaned.split(/\s+/)[0];
+  if (first && first !== cleaned) slugs.push(first);
+  if (/grok/i.test(cleaned)) slugs.push("Grok_(chatbot)", "Grok", "Grok_Bot");
+  return [...new Set(slugs.filter(Boolean))].slice(0, 4);
+}
+
+export function parseWikipediaArticle(html: string, url = ""): SearchHit | undefined {
+  const title = stripHtml((String(html).match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || "");
+  const paras = [...String(html).matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)]
+    .map((m) => stripHtml(m[1] || ""))
+    .filter((p) => p.length > 40 && !/^coordinates/i.test(p));
+  if (!paras[0]) return undefined;
+  return { title: title || paras[0].slice(0, 40), snippet: paras[0], url: safeHttpUrl(url), source: "wikipedia" };
+}
+
+export function parseBingHtml(html: string): SearchHit[] {
+  const hits: SearchHit[] = [];
+  const chunks = String(html || "").split(/<li class="b_algo"/i).slice(1);
+  for (const raw of chunks.slice(0, 5)) {
+    const block = raw.slice(0, 5_000);
+    const title = stripHtml((block.match(/<h2[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i) || [])[1] || "");
+    const href = (block.match(/<h2[^>]*>[\s\S]*?<a[^>]+href="([^"]+)"/i) || [])[1] || "";
+    const snippet = stripHtml(
+      (block.match(/<p class="b_lineclamp[^"]*"[^>]*>([\s\S]*?)<\/p>/i) ||
+        block.match(/<p[^>]*>([\s\S]*?)<\/p>/i) ||
+        [])[1] || "",
+    );
+    if (!title || !snippet) continue;
+    hits.push({
+      title,
+      snippet: cleanBingSnippet(snippet),
+      url: safeHttpUrl(href),
+      source: "bing",
+    });
+  }
+  return hits;
+}
+
+function cleanBingSnippet(value: string): string {
+  return value
+    .replace(/^[A-Z][a-z]{2}\s+\d{1,2},\s+\d{4}\s*[·.\u00b7\u2022]+\s*/u, "")
+    .replace(/^\d{4}年\d{1,2}月\d{1,2}日\s*[·.\u00b7\u2022]+\s*/u, "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function getJson(fetchFn: typeof fetch, url: string, timeoutMs: number): Promise<unknown> {
   const res = await fetchFn(url, {
     headers: {
@@ -143,12 +234,33 @@ async function getJson(fetchFn: typeof fetch, url: string, timeoutMs: number): P
     signal: AbortSignal.timeout(Math.max(1_000, timeoutMs)),
   });
   if (!res.ok) return undefined;
-  return res.json();
+  const text = await res.text();
+  if (!text.trim()) return undefined;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+async function getText(fetchFn: typeof fetch, url: string, timeoutMs: number): Promise<string> {
+  const res = await fetchFn(url, {
+    headers: {
+      Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en,zh;q=0.8",
+      "User-Agent": BROWSER_UA,
+    },
+    redirect: "follow",
+    signal: AbortSignal.timeout(Math.max(1_000, timeoutMs)),
+  });
+  if (!res.ok) return "";
+  return res.text();
 }
 
 export function stripHtml(value: string): string {
   return String(value || "")
     .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;|&#160;|&#0183;/g, " ")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, "&")

@@ -249,7 +249,7 @@
       "priority": "P0",
       "precondition": "本地 HTTP mock 扮演 DuckDuckGo / Wikipedia",
       "steps": ["searchWeb('Grok Bot')"],
-      "expected": "对本机 mock 发出真实 HTTP；命中含 xAI/chatbot；不读 workspace",
+      "expected": "对本机 mock 发出真实 HTTP；命中含 xAI/chatbot；接口空时抓 Bing/Wikipedia 结果页；不读 workspace",
       "forbidden_side_effects": "不得把工作区 grep 当搜索；不得写入密钥",
       "evidence": "tests/web-search.test.ts",
       "mode": "automated"

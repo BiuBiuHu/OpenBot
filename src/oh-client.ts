@@ -63,6 +63,8 @@ export interface CreateConversationInput {
   maxIterations?: number;
   run?: boolean;
   threadId?: string;
+  /** Override the default tool list (lookup browser fallback). */
+  tools?: Array<{ name: string }>;
 }
 
 export interface PollOptions {
@@ -266,7 +268,7 @@ export class OpenHandsClient {
       agent: {
         kind: "Agent",
         llm: buildAgentLlm(input, cfg),
-        tools: DEFAULT_TOOLS,
+        tools: input.tools || DEFAULT_TOOLS,
       },
       workspace: {
         kind: "LocalWorkspace",

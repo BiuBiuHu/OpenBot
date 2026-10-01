@@ -1,8 +1,18 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import { describe, it } from "node:test";
-import { searchWeb } from "../src/web-search.js";
+import { parseBingHtml, parseWikipediaArticle, searchWeb } from "../src/web-search.js";
 import { freePort } from "./helpers.js";
+
+function rewriteFetch(port: number, seen: string[]): typeof fetch {
+  return async (input, init) => {
+    const original = String(input);
+    seen.push(original);
+    const u = new URL(original);
+    const mapped = new URL(u.pathname + u.search, `http://127.0.0.1:${port}`);
+    return fetch(mapped, init);
+  };
+}
 
 describe("web search", () => {
   it("TC-SEARCH-001: calls DuckDuckGo and Wikipedia over HTTP, not the workspace", async () => {
@@ -45,22 +55,14 @@ describe("web search", () => {
     });
     await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
     const seen: string[] = [];
-    const fetchFn: typeof fetch = async (input, init) => {
-      const original = String(input);
-      seen.push(original);
-      const u = new URL(original);
-      const mapped = new URL(u.pathname + u.search, `http://127.0.0.1:${port}`);
-      return fetch(mapped, init);
-    };
     try {
-      const hits = await searchWeb("Grok Bot", { fetch: fetchFn, timeoutMs: 3000 });
+      const hits = await searchWeb("Grok Bot", { fetch: rewriteFetch(port, seen), timeoutMs: 3000 });
       assert.ok(seen.some((u) => u.startsWith("https://api.duckduckgo.com/")));
       assert.ok(seen.some((u) => /https:\/\/(en|zh)\.wikipedia\.org\//.test(u)));
       assert.ok(!seen.some((u) => /workspace\/project|127\.0\.0\.1:8000/.test(u)));
       assert.ok(requested.some((r) => r.includes("format=json")));
       assert.ok(hits.length >= 1);
       assert.ok(hits.some((h) => /xAI|chatbot/i.test(h.snippet)));
-      assert.ok(hits.every((h) => h.source === "duckduckgo" || h.source === "wikipedia"));
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
     }
@@ -73,5 +75,77 @@ describe("web search", () => {
     };
     const hits = await searchWeb("Grok Bot", { fetch: fetchFn, timeoutMs: 200 });
     assert.deepEqual(hits, []);
+  });
+
+  it("TC-SEARCH-004: empty search APIs fall back to fetching the Bing result page", async () => {
+    const port = await freePort();
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url || "/", `http://127.0.0.1:${port}`);
+      if (url.pathname === "/search") {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(
+          `<ol><li class="b_algo"><h2><a href="https://example.com/grok">Grok Bot</a></h2>` +
+            `<p class="b_lineclamp2">Grok Bot is a team of always-on agents with their own computer.</p></li></ol>`,
+        );
+        return;
+      }
+      if (url.searchParams.get("format") === "json" || url.pathname === "/w/api.php") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ AbstractText: "", RelatedTopics: [], query: { search: [] } }));
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
+    const seen: string[] = [];
+    try {
+      const hits = await searchWeb("Grok Bot", { fetch: rewriteFetch(port, seen), timeoutMs: 3000 });
+      assert.ok(seen.some((u) => /bing\.com\/search/.test(u)));
+      assert.ok(hits.some((h) => h.source === "bing" && /always-on agents/i.test(h.snippet)));
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    }
+  });
+
+  it("TC-SEARCH-005: empty APIs fall back to reading a Wikipedia article page", async () => {
+    const port = await freePort();
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url || "/", `http://127.0.0.1:${port}`);
+      if (url.pathname.startsWith("/wiki/")) {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(
+          `<h1>Grok (chatbot)</h1><div class="mw-parser-output"><p>Grok is a generative artificial intelligence chatbot developed by xAI.</p></div>`,
+        );
+        return;
+      }
+      if (url.searchParams.get("format") === "json" || url.pathname === "/w/api.php" || url.pathname === "/search") {
+        res.writeHead(200, { "Content-Type": url.pathname === "/search" ? "text/html" : "application/json" });
+        res.end(url.pathname === "/search" ? "<html></html>" : JSON.stringify({ AbstractText: "", query: { search: [] } }));
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
+    const seen: string[] = [];
+    try {
+      const hits = await searchWeb("Grok Bot", { fetch: rewriteFetch(port, seen), timeoutMs: 3000 });
+      assert.ok(seen.some((u) => /wikipedia\.org\/wiki\//.test(u)));
+      assert.ok(hits.some((h) => /chatbot developed by xAI/i.test(h.snippet)));
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    }
+  });
+
+  it("parses Bing and Wikipedia public pages into hits", () => {
+    const bing = parseBingHtml(
+      `<li class="b_algo"><h2><a href="https://example.com">Grok</a></h2><p>Grok is a chatbot by xAI.</p></li>`,
+    );
+    assert.equal(bing[0]?.snippet.includes("chatbot"), true);
+    const wiki = parseWikipediaArticle(
+      `<h1>Grok</h1><p>Grok is a generative artificial intelligence chatbot developed by xAI.</p>`,
+    );
+    assert.match(wiki?.snippet || "", /xAI/);
   });
 });

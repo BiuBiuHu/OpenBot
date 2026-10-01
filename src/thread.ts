@@ -5,6 +5,7 @@ import { runHandoffTurn, type HandoffTurnDeps } from "./handoff.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, LlmConfig } from "./types.js";
 import type { WorkerClient } from "./worker-client.js";
 import type { OhConversation } from "./oh-client.js";
+import { browsePublicPage } from "./page-browse.js";
 import { searchWeb, type SearchHit } from "./web-search.js";
 
 export interface ThreadTurnDeps extends HandoffTurnDeps {
@@ -14,8 +15,10 @@ export interface ThreadTurnDeps extends HandoffTurnDeps {
   waitForApproval?: (req: ApprovalRequest) => Promise<boolean>;
   /** Force the remote OpenHands path (This computer). */
   forceHandoff?: boolean;
-  /** Real HTTP search. Tests inject a stub; production calls DuckDuckGo + Wikipedia. */
+  /** Real HTTP search. Tests inject a stub; production fetches APIs then public result pages. */
   searchWeb?: (query: string) => Promise<SearchHit[]>;
+  /** Last resort after HTTP pages are empty: OpenHands browser / page read. */
+  browsePublicPage?: (query: string) => Promise<SearchHit[]>;
 }
 
 export interface ThreadTurnResult {
@@ -36,7 +39,18 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
 
   if (needsLookup(goal)) {
     deps.emit({ type: "status", text: "thinking" });
-    const hits = await (deps.searchWeb ?? searchWeb)(lookupQuery(goal));
+    const query = lookupQuery(goal);
+    let hits = await (deps.searchWeb ?? searchWeb)(query);
+    if (!hits.length) {
+      hits = await (deps.browsePublicPage
+        ? deps.browsePublicPage(query)
+        : browsePublicPage(query, {
+            client: deps.client,
+            oh: deps.oh,
+            timeoutMs: Math.min(deps.timeoutMs ?? 25_000, 25_000),
+            pollMs: deps.pollMs,
+          }).catch(() => [] as SearchHit[]));
+    }
     const voiced = voiceFromSearch({ userMessage: goal, hits });
     deps.emit({ type: "token", text: voiced.text });
     deps.emit({ type: "done" });

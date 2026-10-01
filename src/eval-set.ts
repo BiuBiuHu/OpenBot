@@ -147,10 +147,16 @@ export function scoreEvalCase(c: EvalCase, shown: string, remoteOk: boolean): Ev
   }
   if (c.lookupRequired || c.expect.lookupRequired) {
     const bareDontKnow = /^(我不知道|不知道|I don't know\.?)$/i.test(shown.trim());
-    const noLookup = /不知道|I don't know/i.test(shown) && !/网上查|looked it up|查过/i.test(shown);
+    const noLookup = /不知道|I don't know/i.test(shown) && !/网上查|looked it up|查过|没查成|lookup failed/i.test(shown);
+    const emptyLookup = /还没找到|没有能直接说的结论|don't have a short answer/i.test(shown);
     checks.push({
       name: "lookup-required",
-      pass: !looksLikeOpenHandsIntro(shown) && !bareDontKnow && !noLookup && !/不会编/.test(shown),
+      pass:
+        !looksLikeOpenHandsIntro(shown) &&
+        !bareDontKnow &&
+        !noLookup &&
+        !emptyLookup &&
+        !/不会编/.test(shown),
       detail: shown.slice(0, 160),
     });
   }

@@ -45,7 +45,7 @@ npx openbot serve
 ```
 
 - 探活：`npx openbot oh health` 应打印 `OpenHands http://127.0.0.1:8000 ok`。
-- UI：打开 `http://127.0.0.1:3847/`。左边是聊天层（头像在气泡外侧：人在右、助手在左；远端干活时助手头像会动；短回复），右边是电脑（经 SSH 本地转发看主机桌面 / VNC，不对公网开端口）。Settings 里填自己的主机 / 用户 / 端口 / 本机私钥路径（不要把钥匙贴进仓库）。保存后写入 `~/.openbot` 并尝试开隧道。主机还没装 OpenHands 或桌面时页面会告诉你下一步，不会假装能聊。聊天没有 This computer / Run on host 开关。人问「是什么」而这边还不知道时，本机聊天层走 DuckDuckGo / Wikipedia 的 HTTP 搜索，再回两三句人话，不把工作区 grep 或 OpenHands 自我介绍当答案。评测集：`npx openbot eval`（`evals/chat-layer/`）。
+- UI：打开 `http://127.0.0.1:3847/`。左边是聊天层（头像在气泡外侧：人在右、助手在左；远端干活时助手头像会动；短回复），右边是电脑（经 SSH 本地转发看主机桌面 / VNC，不对公网开端口）。Settings 里填自己的主机 / 用户 / 端口 / 本机私钥路径（不要把钥匙贴进仓库）。保存后写入 `~/.openbot` 并尝试开隧道。主机还没装 OpenHands 或桌面时页面会告诉你下一步，不会假装能聊。聊天没有 This computer / Run on host 开关。人问「是什么」而这边还不知道时，本机聊天层先走 Bing / Wikipedia / DuckDuckGo 的 HTTP；接口空了就抓公开结果页，再不行才让 OpenHands 浏览器读页。聊天里只回两三句事实，不把工具轨迹或「还没找到」当答案。评测集：`npx openbot eval`（`evals/chat-layer/`）。
 - 试连页：`http://127.0.0.1:3847/oh-test`。
 - CLI 同一路径：`npx openbot chat '在工作区写一份 uname 记录'`（`oh run` 仍是已确认交接）。
 

@@ -112,8 +112,8 @@ describe("chat voice", () => {
     assert.doesNotMatch(shown.text, /不知道/);
     assert.doesNotMatch(shown.text, /conversation\s+/i);
     const empty = voiceFromSearch({ userMessage: "Grok Bot 是什么", hits: [] });
-    assert.match(empty.text, /网上查过了/);
-    assert.doesNotMatch(empty.text, /不知道/);
+    assert.match(empty.text, /没查成/);
+    assert.doesNotMatch(empty.text, /还没找到|结论|不知道/);
   });
 
   it("TC-SEARCH-002: lookup skips OpenHands so a workspace dump is not search", async () => {
@@ -145,6 +145,43 @@ describe("chat voice", () => {
       assert.match(tokens, /xAI|chatbot/i);
       assert.doesNotMatch(tokens, /我是 OpenHands/);
       assert.doesNotMatch(tokens, /不知道/);
+      assert.ok(!events.some((e) => e.type === "tool_start"));
+    } finally {
+      await mock.stop();
+    }
+  });
+
+  it("TC-SEARCH-006: empty HTTP falls back to a page read, not a browser dump", async () => {
+    const mock = await startMockOhServer({
+      sessionKey: "voice-key",
+      replyFor: () => INTRO,
+    });
+    try {
+      const events: AgentEvent[] = [];
+      const result = await runThreadTurn("Grok Bot 是什么", {
+        client: new OpenHandsClient(mock.baseUrl, "voice-key"),
+        store: new HandoffStore(),
+        emit: (e) => events.push(e),
+        forceHandoff: true,
+        timeoutMs: 2000,
+        pollMs: 20,
+        searchWeb: async () => [],
+        browsePublicPage: async () => [
+          {
+            title: "Grok Bot",
+            snippet: "Grok is a generative AI chatbot developed by xAI.",
+            url: "https://www.bing.com/search?q=Grok+Bot",
+            source: "browser",
+          },
+        ],
+      });
+      assert.equal(result.path, "lookup");
+      assert.equal(mock.creates.length, 0);
+      const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+      assert.match(tokens, /网上查过了/);
+      assert.match(tokens, /xAI|chatbot/i);
+      assert.doesNotMatch(tokens, /还没找到/);
+      assert.doesNotMatch(tokens, /我是 OpenHands/);
       assert.ok(!events.some((e) => e.type === "tool_start"));
     } finally {
       await mock.stop();
