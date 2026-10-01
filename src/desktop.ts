@@ -149,30 +149,71 @@ export async function refreshDesktopStatus(
   return { desktop, tunnel };
 }
 
+const NOVNC_CHROME_IDS = [
+  "noVNC_control_bar_anchor",
+  "noVNC_control_bar",
+  "noVNC_control_bar_handle",
+  "noVNC_status",
+  "noVNC_status_bar",
+  "noVNC_hint_anchor",
+  "noVNC_transition",
+  "noVNC_logo",
+  "noVNC_buttons",
+  "noVNC_connect_dlg",
+];
+
+/** websockify often serves vnc.html without Content-Type: text/html. */
+export function looksLikeHtml(contentType: string, pathname: string, body: string): boolean {
+  const type = String(contentType || "").toLowerCase();
+  if (type.includes("text/html") || type.includes("application/xhtml")) return true;
+  if (
+    type.includes("javascript") ||
+    type.includes("ecmascript") ||
+    type.includes("css") ||
+    type.includes("image/") ||
+    type.includes("font")
+  ) {
+    return false;
+  }
+  const head = String(body || "").slice(0, 512).trimStart();
+  if (/^(?:<!doctype html|<html[\s>]|<!--)/i.test(head)) return true;
+  if ((/vnc[^/]*\.html$/i.test(pathname) || pathname === "/") && head.startsWith("<")) return true;
+  return false;
+}
+
 export function injectDesktopViewer(html: string, opts: { showBar?: boolean } = {}): string {
   const showBar = Boolean(opts.showBar);
   const fill =
-    `html,body,#noVNC_container{width:100%!important;height:100%!important;margin:0!important;overflow:visible!important;background:#111!important;border-radius:0!important;clip-path:none!important;-webkit-clip-path:none!important;mask:none!important;-webkit-mask-image:none!important}
+    `html,body,#noVNC_container,#noVNC_screen{width:100%!important;height:100%!important;margin:0!important;overflow:hidden!important;background:#111!important;border-radius:0!important;clip-path:inset(0)!important;-webkit-clip-path:inset(0)!important;mask:none!important;-webkit-mask-image:none!important}
      #noVNC_container{position:fixed!important;inset:0!important}
-     #noVNC_container canvas{border-radius:0!important;clip-path:none!important;-webkit-clip-path:none!important}`;
+     #noVNC_container canvas,#noVNC_screen canvas{border-radius:0!important;clip-path:inset(0)!important;-webkit-clip-path:inset(0)!important}`;
+  const hide = NOVNC_CHROME_IDS.map((id) => `#${id}`).join(",");
   const css = showBar
     ? fill
     : `${fill}
-       #noVNC_control_bar_anchor,#noVNC_control_bar,#noVNC_control_bar_handle,
-       #noVNC_status,#noVNC_status_bar,#noVNC_hint_anchor,#noVNC_transition,
-       .noVNC_panel{display:none!important;visibility:hidden!important}`;
+       ${hide},.noVNC_panel,.noVNC_logo,.noVNC_button,#noVNC_control_bar_anchor *{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important}`;
   const js = `(function(){
+    var hide=${showBar ? "false" : "true"};
     function clearClip(el){
       if(!el||!el.style)return;
-      el.style.overflow="visible";
+      el.style.overflow="hidden";
       el.style.borderRadius="0";
-      el.style.clipPath="none";
-      el.style.webkitClipPath="none";
+      el.style.clipPath="inset(0)";
+      el.style.webkitClipPath="inset(0)";
       el.style.mask="none";
       el.style.webkitMaskImage="none";
     }
+    function hideChrome(){
+      if(!hide)return;
+      ${JSON.stringify(NOVNC_CHROME_IDS)}.forEach(function(id){
+        var el=document.getElementById(id);
+        if(el)el.remove();
+      });
+      document.querySelectorAll(".noVNC_panel,.noVNC_logo").forEach(function(el){el.remove();});
+    }
     function fit(){
       try{
+        hideChrome();
         var rfb=window.UI&&UI.rfb;
         if(rfb){
           rfb.scaleViewport=true;
@@ -184,13 +225,18 @@ export function injectDesktopViewer(html: string, opts: { showBar?: boolean } = 
         clearClip(document.documentElement);
         clearClip(document.body);
         clearClip(document.getElementById("noVNC_container"));
+        clearClip(document.getElementById("noVNC_screen"));
         if(window.UI&&UI.updateViewSetting){try{UI.updateViewSetting();}catch(e){}}
         window.dispatchEvent(new Event("resize"));
       }catch(e){}
     }
+    hideChrome();
     window.addEventListener("load",function(){fit();setTimeout(fit,300);setTimeout(fit,1200);});
     window.addEventListener("resize",fit);
     setInterval(fit,2000);
+    try{
+      new MutationObserver(hideChrome).observe(document.documentElement,{childList:true,subtree:true});
+    }catch(e){}
   })();`;
   const snippet = `<style id="openbot-desk-fit">${css}</style><script id="openbot-desk-fit-js">${js}</script>`;
   if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${snippet}</head>`);
@@ -235,10 +281,11 @@ export async function proxyDesktopViewer(
   });
   const type = up.headers.get("content-type") || "";
   const buf = Buffer.from(await up.arrayBuffer());
-  if (type.includes("text/html")) {
+  const text = buf.toString("utf8");
+  if (looksLikeHtml(type, dest.pathname, text)) {
     const showBar = incoming.searchParams.get("bar") === "1";
     res.writeHead(up.status, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(injectDesktopViewer(buf.toString("utf8"), { showBar }));
+    res.end(injectDesktopViewer(text, { showBar }));
     return;
   }
   res.writeHead(up.status, { "Content-Type": type || "application/octet-stream" });

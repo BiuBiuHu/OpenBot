@@ -259,8 +259,8 @@
       .approval button.no { border-color: var(--danger); color: var(--danger); }
       aside {
         align-self: start;
-        position: sticky;
-        top: 0.7rem;
+        position: relative;
+        top: auto;
         width: 36rem;
         padding: 0.7rem 1.1rem 1rem 0.35rem;
         overflow: visible;
@@ -299,8 +299,25 @@
         border: 1px solid var(--line);
         border-radius: 0;
         background: #111;
-        overflow: visible;
+        overflow: hidden;
+        clip-path: inset(0);
+        -webkit-clip-path: inset(0);
       }
+      .desk-wrap.max {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        width: 100vw;
+        height: 100dvh;
+        max-width: none;
+        aspect-ratio: auto;
+        border: none;
+        border-radius: 0;
+        overflow: hidden;
+        clip-path: inset(0);
+        -webkit-clip-path: inset(0);
+      }
+      body.desk-max { overflow: hidden; }
       .desk {
         position: absolute;
         inset: 0;
@@ -309,9 +326,25 @@
         border: 0;
         background: #111;
         border-radius: 0;
-        overflow: visible;
-        clip-path: none;
+        overflow: hidden;
+        clip-path: inset(0);
+        -webkit-clip-path: inset(0);
       }
+      .desk-close {
+        display: none;
+        position: absolute;
+        top: 0.55rem;
+        right: 0.55rem;
+        z-index: 41;
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        border: 1px solid var(--phosphor);
+        background: #22291d;
+        color: var(--phosphor);
+        padding: 0.3rem 0.65rem;
+        cursor: pointer;
+      }
+      .desk-wrap.max .desk-close { display: block; }
       .desk-missing {
         padding: 0.7rem 0.15rem;
         color: var(--amber);
@@ -412,8 +445,9 @@
     <main>
       <section id="log"></section>
       <aside>
-        <h2>电脑 <button type="button" id="desk-bar" aria-pressed="false">工具条</button></h2>
-        <div class="desk-wrap">
+        <h2>电脑 <button type="button" id="desk-max-btn" aria-pressed="false">放大</button></h2>
+        <div class="desk-wrap" id="desk-wrap">
+          <button type="button" id="desk-close" class="desk-close" hidden>收起</button>
           <div id="desk-missing" class="desk-missing">Desktop not reachable yet.</div>
           <iframe id="desk" class="desk" hidden title="Remote desktop" tabindex="0" allow="pointer-lock; fullscreen; clipboard-read; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups"></iframe>
         </div>
@@ -458,8 +492,9 @@
       const logEl = document.getElementById("log");
       const desk = document.getElementById("desk");
       const deskMissing = document.getElementById("desk-missing");
-      const deskBar = document.getElementById("desk-bar");
-      let deskShowBar = false;
+      const deskWrap = document.getElementById("desk-wrap");
+      const deskMaxBtn = document.getElementById("desk-max-btn");
+      const deskClose = document.getElementById("desk-close");
       const box = document.getElementById("box");
       const sendBtn = document.getElementById("send");
       const meta = document.getElementById("meta");
@@ -546,15 +581,21 @@
 
       function deskSrc(desktop) {
         const q = new URLSearchParams({
-          autoconnect: "1",
-          resize: "scale",
-          reconnect: "1",
-          encrypt: "0",
-          host: "127.0.0.1",
           port: String((desktop && desktop.localPort) || 6080),
-          bar: deskShowBar ? "1" : "0",
         });
-        return "/novnc/vnc.html?" + q.toString();
+        return "/desktop-view?" + q.toString();
+      }
+
+      function deskMaximized() {
+        return deskWrap.classList.contains("max");
+      }
+
+      function setDeskMax(on) {
+        deskWrap.classList.toggle("max", on);
+        document.body.classList.toggle("desk-max", on);
+        deskClose.hidden = !on;
+        deskMaxBtn.setAttribute("aria-pressed", on ? "true" : "false");
+        deskMaxBtn.textContent = on ? "收起" : "放大";
       }
 
       async function refreshDesktop() {
@@ -738,12 +779,25 @@
         }
       });
 
-      deskBar.onclick = () => {
-        deskShowBar = !deskShowBar;
-        deskBar.classList.toggle("on", deskShowBar);
-        deskBar.setAttribute("aria-pressed", deskShowBar ? "true" : "false");
-        if (!desk.hidden) desk.src = deskSrc({ localPort: Number(new URL(desk.src, location.href).searchParams.get("port") || 6080) });
+      deskMaxBtn.onclick = (e) => {
+        e.stopPropagation();
+        setDeskMax(!deskMaximized());
       };
+      deskClose.onclick = (e) => {
+        e.stopPropagation();
+        setDeskMax(false);
+      };
+      deskWrap.addEventListener("dblclick", (e) => {
+        if (e.target === deskClose || e.target === deskMaxBtn) return;
+        setDeskMax(!deskMaximized());
+      });
+      window.addEventListener("message", (e) => {
+        if (e.origin !== location.origin) return;
+        if (e.data && e.data.type === "openbot-desk-toggle") setDeskMax(!deskMaximized());
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && deskMaximized()) setDeskMax(false);
+      });
       sendBtn.onclick = send;
       const compose = createComposeGuard();
       box.addEventListener("compositionstart", () => compose.onCompositionStart());

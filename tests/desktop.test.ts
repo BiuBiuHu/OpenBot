@@ -6,6 +6,7 @@ import {
   DESKTOP_EMBED_PATH,
   desktopMissingLine,
   injectDesktopViewer,
+  looksLikeHtml,
   probeDesktop,
   refreshDesktopStatus,
 } from "../src/desktop.js";
@@ -66,25 +67,33 @@ describe("desktop pane (no live host)", () => {
       const deskCss = (html.match(/\.desk-wrap\s*\{[^}]+\}/) || [])[0] || "";
       assert.match(deskCss, /border-radius:\s*0/);
       assert.doesNotMatch(deskCss, /border-radius:\s*(?:0\.\d+|50%|[1-9])/);
-      assert.match(deskCss, /overflow:\s*visible/);
-      assert.match(html, /id="desk-bar"/);
-      assert.match(html, /工具条/);
+      assert.match(deskCss, /clip-path:\s*inset\(0\)/);
+      assert.match(html, /\.desk-wrap\.max/);
+      assert.match(html, /id="desk-max-btn"/);
+      assert.match(html, /id="desk-close"/);
+      assert.match(html, /放大/);
+      assert.match(html, /收起/);
+      assert.match(html, /openbot-desk-toggle/);
       assert.match(html, /allow-pointer-lock/);
       assert.match(html, /pointer-lock/);
       assert.doesNotMatch(html, /On this computer/);
       assert.doesNotMatch(html, /start a desktop/i);
-      assert.match(html, /\/novnc\/vnc\.html/);
+      assert.doesNotMatch(html, /工具条/);
+      assert.doesNotMatch(html, /\/novnc\/vnc\.html/);
+      assert.match(html, /\/desktop-view/);
       const view = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/desktop-view`)).text();
-      assert.match(view, /location\.replace/);
-      assert.match(view, /\/novnc\/vnc\.html/);
+      assert.match(view, /\/novnc\/core\/rfb\.js/);
+      assert.match(view, /openbot-desk-toggle/);
+      assert.match(view, /clip-path:\s*inset\(0\)/);
       assert.doesNotMatch(view, /<iframe/);
-      assert.doesNotMatch(view, /overflow:\s*hidden/);
+      assert.doesNotMatch(view, /noVNC_control_bar/);
+      assert.doesNotMatch(view, /location\.replace/);
       assert.doesNotMatch(view, /FRAME_W|transform-origin|scale\(/);
       const proxied = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/novnc/vnc.html`)).text();
       assert.match(proxied, /openbot-desk-fit/);
       assert.match(proxied, /noVNC_control_bar/);
       assert.match(proxied, /display:none/);
-      assert.match(proxied, /clip-path:none/);
+      assert.match(proxied, /clip-path:inset\(0\)/);
       assert.doesNotMatch(proxied, /\b(?!127\.0\.0\.1)(?:\d{1,3}\.){3}\d{1,3}\b/);
     } finally {
       await plane.close();
@@ -185,14 +194,49 @@ describe("desktop pane (no live host)", () => {
     const hidden = injectDesktopViewer("<html><head></head><body><div id='noVNC_control_bar'></div></body></html>");
     assert.match(hidden, /openbot-desk-fit/);
     assert.match(hidden, /#noVNC_control_bar/);
+    assert.match(hidden, /\.noVNC_logo/);
     assert.match(hidden, /display:none/);
     assert.match(hidden, /scaleViewport=true/);
     assert.match(hidden, /clipViewport=false/);
     assert.match(hidden, /resizeSession=false/);
-    assert.match(hidden, /overflow:visible/);
+    assert.match(hidden, /clip-path:inset\(0\)/);
     assert.match(hidden, /border-radius:0/);
-    assert.match(hidden, /clip-path:none/);
+    assert.match(hidden, /MutationObserver/);
     const shown = injectDesktopViewer("<html><head></head><body></body></html>", { showBar: true });
     assert.doesNotMatch(shown, /#noVNC_control_bar/);
+  });
+
+  it("TC-DESK-007: injects HTML even when the VNC server omits Content-Type", async () => {
+    const port = await freePort();
+    const vnc = http.createServer((_req, res) => {
+      res.writeHead(200);
+      res.end("<html><head></head><body><div id='noVNC_control_bar'></div><h1 class='noVNC_logo'>noVNC</h1></body></html>");
+    });
+    await new Promise<void>((resolve) => vnc.listen(port, "127.0.0.1", resolve));
+    const mock = await startMockOhServer({ sessionKey: "desk-ctype" });
+    const config = defaultConfig();
+    config.controlPlane.port = await freePort();
+    config.openhands.baseUrl = mock.baseUrl;
+    config.openhands.sessionApiKey = "desk-ctype";
+    config.desktop.localPort = port;
+    config.desktop.remotePort = port;
+    const plane = await startControlPlane(config, { skipTunnel: true, allowWithoutWorker: true });
+    try {
+      const proxied = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/novnc/vnc.html`)).text();
+      assert.match(proxied, /openbot-desk-fit/);
+      assert.match(proxied, /display:none/);
+      assert.match(proxied, /clip-path:inset\(0\)/);
+    } finally {
+      await plane.close();
+      await mock.stop();
+      await new Promise<void>((resolve) => vnc.close(() => resolve()));
+    }
+  });
+
+  it("TC-DESK-008: HTML sniffing does not treat scripts as pages", () => {
+    assert.equal(looksLikeHtml("text/html", "/vnc.html", "<html></html>"), true);
+    assert.equal(looksLikeHtml("", "/vnc.html", "<html><title>noVNC</title></html>"), true);
+    assert.equal(looksLikeHtml("", "/core/rfb.js", "export default class RFB {}"), false);
+    assert.equal(looksLikeHtml("application/javascript", "/core/rfb.js", "const x = '<html>'"), false);
   });
 });
