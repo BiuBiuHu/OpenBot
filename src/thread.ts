@@ -1,9 +1,11 @@
 import { runAgentTurn, runLocalChatTurn } from "./agent.js";
+import { needsLookup, lookupQuery, voiceFromSearch } from "./chat-voice.js";
 import { hasLocalModelKey } from "./config.js";
 import { runHandoffTurn, type HandoffTurnDeps } from "./handoff.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, LlmConfig } from "./types.js";
 import type { WorkerClient } from "./worker-client.js";
 import type { OhConversation } from "./oh-client.js";
+import { searchWeb, type SearchHit } from "./web-search.js";
 
 export interface ThreadTurnDeps extends HandoffTurnDeps {
   llm?: LlmConfig;
@@ -12,10 +14,12 @@ export interface ThreadTurnDeps extends HandoffTurnDeps {
   waitForApproval?: (req: ApprovalRequest) => Promise<boolean>;
   /** Force the remote OpenHands path (This computer). */
   forceHandoff?: boolean;
+  /** Real HTTP search. Tests inject a stub; production calls DuckDuckGo + Wikipedia. */
+  searchWeb?: (query: string) => Promise<SearchHit[]>;
 }
 
 export interface ThreadTurnResult {
-  path: "handoff" | "local" | "worker";
+  path: "handoff" | "local" | "worker" | "lookup";
   conversation?: OhConversation;
   history: ChatMessage[];
 }
@@ -29,6 +33,16 @@ export interface ThreadTurnResult {
 export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Promise<ThreadTurnResult> {
   const goal = message.trim();
   if (!goal) throw new Error("message required");
+
+  if (needsLookup(goal)) {
+    deps.emit({ type: "status", text: "thinking" });
+    const hits = await (deps.searchWeb ?? searchWeb)(lookupQuery(goal));
+    const voiced = voiceFromSearch({ userMessage: goal, hits });
+    deps.emit({ type: "token", text: voiced.text });
+    deps.emit({ type: "done" });
+    return { path: "lookup", history: deps.history ?? [] };
+  }
+
   const hasLocalKey = hasLocalModelKey(deps.llm?.apiKey);
   const useHandoff = deps.forceHandoff || !hasLocalKey;
 

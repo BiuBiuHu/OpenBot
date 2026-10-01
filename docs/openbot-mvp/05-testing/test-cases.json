@@ -241,6 +241,30 @@
       "forbidden_side_effects": "不得把 key 写入仓库",
       "evidence": "tests/config.test.ts",
       "mode": "automated"
+    },
+    {
+      "id": "TC-SEARCH-001",
+      "req": "BL-CHAT-SEARCH",
+      "system": "chat-layer",
+      "priority": "P0",
+      "precondition": "本地 HTTP mock 扮演 DuckDuckGo / Wikipedia",
+      "steps": ["searchWeb('Grok Bot')"],
+      "expected": "对本机 mock 发出真实 HTTP；命中含 xAI/chatbot；不读 workspace",
+      "forbidden_side_effects": "不得把工作区 grep 当搜索；不得写入密钥",
+      "evidence": "tests/web-search.test.ts",
+      "mode": "automated"
+    },
+    {
+      "id": "TC-SEARCH-002",
+      "req": "BL-CHAT-SEARCH",
+      "system": "chat-layer",
+      "priority": "P0",
+      "precondition": "mock OpenHands 只会背自我介绍",
+      "steps": ["runThreadTurn('Grok Bot 是什么')"],
+      "expected": "path=lookup；不创建 OH conversation；短回复含查找结论",
+      "forbidden_side_effects": "不得把 OpenHands 自我介绍或「不知道」当作答案",
+      "evidence": "tests/chat-voice.test.ts",
+      "mode": "automated"
     }
   ]
 }

@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   looksLikeOpenHandsIntro,
+  needsLookup,
+  lookupQuery,
   voiceChatReply,
+  voiceFromSearch,
 } from "../src/chat-voice.js";
 import { runHandoffTurn, HandoffStore } from "../src/handoff.js";
 import { OpenHandsClient } from "../src/oh-client.js";
+import { runThreadTurn } from "../src/thread.js";
 import type { AgentEvent } from "../src/types.js";
 import { startMockOhServer } from "./oh-mock.js";
 
@@ -75,6 +79,72 @@ describe("chat voice", () => {
       const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || ""));
       assert.ok(tokens.some((t) => /OpenBot/.test(t)));
       assert.ok(!tokens.some((t) => /我是 OpenHands/.test(t)));
+      assert.ok(!events.some((e) => e.type === "tool_start"));
+    } finally {
+      await mock.stop();
+    }
+  });
+
+  it("TC-VOICE-006: 是什么 needs a lookup, 你是谁 and computer tasks do not", () => {
+    assert.equal(needsLookup("Grok Bot 是什么"), true);
+    assert.equal(needsLookup("what is Grok Bot"), true);
+    assert.equal(lookupQuery("Grok Bot 是什么"), "Grok Bot");
+    assert.equal(needsLookup("你是谁"), false);
+    assert.equal(needsLookup("帮我分析下 grokbot 的架构"), false);
+    assert.equal(needsLookup("在工作区写一份 uname 记录"), false);
+  });
+
+  it("TC-VOICE-007: search hits become a few sentences, not the intro or I don't know", () => {
+    const shown = voiceFromSearch({
+      userMessage: "Grok Bot 是什么",
+      hits: [
+        {
+          title: "Grok (chatbot)",
+          snippet: "Grok is a generative artificial intelligence chatbot developed by xAI.",
+          url: "https://en.wikipedia.org/wiki/Grok_(chatbot)",
+          source: "wikipedia",
+        },
+      ],
+    });
+    assert.match(shown.text, /网上查过了/);
+    assert.match(shown.text, /xAI|chatbot/i);
+    assert.doesNotMatch(shown.text, /我是 OpenHands/);
+    assert.doesNotMatch(shown.text, /不知道/);
+    assert.doesNotMatch(shown.text, /conversation\s+/i);
+    const empty = voiceFromSearch({ userMessage: "Grok Bot 是什么", hits: [] });
+    assert.match(empty.text, /网上查过了/);
+    assert.doesNotMatch(empty.text, /不知道/);
+  });
+
+  it("TC-SEARCH-002: lookup skips OpenHands so a workspace dump is not search", async () => {
+    const mock = await startMockOhServer({
+      sessionKey: "voice-key",
+      replyFor: () => INTRO,
+    });
+    try {
+      const events: AgentEvent[] = [];
+      const result = await runThreadTurn("Grok Bot 是什么", {
+        client: new OpenHandsClient(mock.baseUrl, "voice-key"),
+        store: new HandoffStore(),
+        emit: (e) => events.push(e),
+        forceHandoff: true,
+        timeoutMs: 2000,
+        pollMs: 20,
+        searchWeb: async () => [
+          {
+            title: "Grok (chatbot)",
+            snippet: "Grok is a generative AI chatbot developed by xAI.",
+            url: "https://en.wikipedia.org/wiki/Grok_(chatbot)",
+            source: "wikipedia",
+          },
+        ],
+      });
+      assert.equal(result.path, "lookup");
+      assert.equal(mock.creates.length, 0);
+      const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+      assert.match(tokens, /xAI|chatbot/i);
+      assert.doesNotMatch(tokens, /我是 OpenHands/);
+      assert.doesNotMatch(tokens, /不知道/);
       assert.ok(!events.some((e) => e.type === "tool_start"));
     } finally {
       await mock.stop();

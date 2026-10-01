@@ -375,8 +375,11 @@ export async function startControlPlane(
               userMessage: message,
               shown,
               remote: {
-                ok: result.conversation?.status === "succeeded",
-                status: result.conversation?.status || result.conversation?.executionStatus || "",
+                ok: result.path === "lookup" || result.conversation?.status === "succeeded",
+                status:
+                  result.path === "lookup"
+                    ? "lookup"
+                    : result.conversation?.status || result.conversation?.executionStatus || "",
                 conversationId: result.conversation?.id || "",
               },
             });

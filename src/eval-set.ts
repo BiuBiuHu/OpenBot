@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { voiceChatReply, type ChatOutcome } from "./chat-voice.js";
+import { looksLikeOpenHandsIntro, voiceChatReply, voiceFromSearch, type ChatOutcome } from "./chat-voice.js";
 import { ensureDir, openbotHome, repoRoot } from "./paths.js";
+import type { SearchHit } from "./web-search.js";
 
 export interface EvalRemoteFixture {
   status: ChatOutcome | "finished" | "error" | "succeeded";
@@ -16,6 +17,7 @@ export interface EvalExpect {
   maxSentences?: number;
   maxChars?: number;
   shownEquals?: string;
+  lookupRequired?: boolean;
 }
 
 export interface EvalCase {
@@ -24,6 +26,9 @@ export interface EvalCase {
   userMessage: string;
   remote: EvalRemoteFixture;
   expect: EvalExpect;
+  /** Replay a real search instead of voicing the remote dump. */
+  lookupRequired?: boolean;
+  search?: { hits: SearchHit[] };
 }
 
 export interface EvalCheck {
@@ -91,6 +96,12 @@ function mapFixtureOutcome(status: EvalRemoteFixture["status"]): ChatOutcome {
 }
 
 export function shownForCase(c: EvalCase): string {
+  if (c.lookupRequired || c.search) {
+    return voiceFromSearch({
+      userMessage: c.userMessage,
+      hits: c.search?.hits || [],
+    }).text;
+  }
   return voiceChatReply({
     userMessage: c.userMessage,
     remoteText: c.remote.rawReply,
@@ -131,6 +142,15 @@ export function scoreEvalCase(c: EvalCase, shown: string, remoteOk: boolean): Ev
     checks.push({
       name: `must:${pat}`,
       pass: re.test(shown),
+      detail: shown.slice(0, 160),
+    });
+  }
+  if (c.lookupRequired || c.expect.lookupRequired) {
+    const bareDontKnow = /^(我不知道|不知道|I don't know\.?)$/i.test(shown.trim());
+    const noLookup = /不知道|I don't know/i.test(shown) && !/网上查|looked it up|查过/i.test(shown);
+    checks.push({
+      name: "lookup-required",
+      pass: !looksLikeOpenHandsIntro(shown) && !bareDontKnow && !noLookup && !/不会编/.test(shown),
       detail: shown.slice(0, 160),
     });
   }

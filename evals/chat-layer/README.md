@@ -25,3 +25,4 @@ Cases that came from the live laptop:
 | `analyze-other-product` | that same intro for grokbot |
 | `timeout-is-short` | raw `conversation timed out while running` plus an investigation log |
 | `links-render` | angle-bracket URLs left unclickable |
+| `what-is-grok-bot` | that intro, or a bare “I don't know”, with no web lookup |

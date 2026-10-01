@@ -1,5 +1,7 @@
 /** Chat-layer voice: short, human replies. Remote dumps stay off the transcript. */
 
+import type { SearchHit } from "./web-search.js";
+
 export type ChatOutcome = "succeeded" | "failed" | "timeout" | "cancelled" | "running";
 
 export interface VoiceInput {
@@ -18,6 +20,11 @@ const OPENHANDS_INTRO =
 
 const WHO_ARE_YOU = /你是谁|你谁啊|你叫什么|who are you|what are you/i;
 
+const LOOKUP_ASK = /是什么|什么是|介绍一下|what(?:['’]s| is| are)\b|who is\b/i;
+
+const COMPUTER_TASK =
+  /uname|workspace|工作区|文件|目录|终端|\bshell\b|\bls\b|\bcat\b|mkdir|chmod|写一份|写一个|帮我(改|写|跑|修|部署|分析)|在(电脑|主机)上|运行命令|summarize uname/i;
+
 const OTHER_PRODUCT = /grok\s*bot|grokbot|openclaw|chatgpt|claude\b|devin\b|cursor\b/i;
 
 const DUMP_MARK =
@@ -31,6 +38,29 @@ export function looksLikeOpenHandsIntro(text: string): boolean {
 
 export function isWhoAreYou(message: string): boolean {
   return WHO_ARE_YOU.test(String(message || "").trim());
+}
+
+export function isComputerTask(message: string): boolean {
+  return COMPUTER_TASK.test(String(message || ""));
+}
+
+/** Unknown-fact questions the chat layer should look up instead of asking OpenHands. */
+export function needsLookup(message: string): boolean {
+  const t = String(message || "").trim();
+  if (!t) return false;
+  if (isWhoAreYou(t)) return false;
+  if (isComputerTask(t)) return false;
+  return LOOKUP_ASK.test(t);
+}
+
+export function lookupQuery(message: string): string {
+  let q = String(message || "").trim();
+  q = q.replace(/^[请帮我,，\s]*介绍一下\s*/i, "");
+  q = q.replace(/^(?:what(?:['’]s| is| are)|who is)\s+/i, "");
+  q = q.replace(/^什么是\s*/i, "");
+  q = q.replace(/\s*是什么[？?！!。.\s]*$/i, "");
+  q = q.replace(/[？?！!。.\s]+$/g, "").trim();
+  return q || String(message || "").trim();
 }
 
 export function mentionsOtherProduct(message: string): boolean {
@@ -100,6 +130,32 @@ function dumpLine(zh: boolean): string {
   return zh
     ? "电脑上查过了。这边一句话：还没有能直接用的结论。"
     : "I looked on the computer. Short version: nothing I can hand you as a conclusion yet.";
+}
+
+export function voiceFromSearch(input: { userMessage: string; hits: SearchHit[] }): VoiceReply {
+  const zh = preferChinese(input.userMessage);
+  const hits = (input.hits || []).filter((h) => String(h.snippet || h.title || "").trim());
+  if (!hits.length) {
+    return {
+      text: zh ? "网上查过了，还没找到能直接说的结论。" : "I looked it up, but I don't have a short answer yet.",
+      kind: "ok",
+    };
+  }
+  const bits = hits
+    .slice(0, 2)
+    .map((h) => String(h.snippet || h.title).replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const body = bits.join(zh ? "" : " ");
+  const sentences = body
+    .split(/(?<=[。！？])|(?<=[A-Za-z])\.(?=\s|$)/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+  let text = sentences.join(zh ? "。" : ". ");
+  if (text && !/[。！？.!?]$/.test(text)) text += zh ? "。" : ".";
+  const lead = zh ? "网上查过了。" : "I looked it up. ";
+  const shown = `${lead}${text}`.replace(/\s+/g, " ").trim();
+  return { text: linkifyReply(shown), kind: "ok" };
 }
 
 export function voiceChatReply(input: VoiceInput): VoiceReply {
