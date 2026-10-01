@@ -70,6 +70,6 @@
 
 ## 8. 活页三处（main `0d5eb94` 之后）
 
-1. **分栏。** `body` 把 footer 放在 main 外面横跨全宽；`main` `align-items: start`；电脑列 `36rem` + `aspect-ratio: 1280/800`。结果：气泡滚出聊天列、composer 盖住最后几句、电脑被裁成窄条，远端画面落在黑柱里。修：聊天列自己滚，composer 只在该列底部；电脑列独立铺满。
+1. **分栏。** 第一轮：`body` 把 footer 放在 main 外面。第二轮（`529490a` 活页 1280×800）：`body` 仍是 `grid-template-rows: auto auto 1fr`，`#banner` `display:none` 后 `main` 落到 `auto` 行，只跟内容等高——composer 贴在左列上方，电脑卡是右上短条，下面大片空。修：`body` 改纵向 flex，`main` `flex: 1 1 0` 且 `grid-template-rows: minmax(0,1fr)`；`#log` / `.desk-wrap` 用 `flex: 1 1 0` 吃满列高。双击 / Escape 仍在。
 2. **交接 60s。** `runHandoffTurn` 默认 `timeoutMs = 60_000`，超时后 `voiceChatReply(..., outcome: "timeout")` 用「没在时限里跑完」盖掉远端正文。修：等到 `executionStatus` 终态；链路失败说连接；不取消远端。
 3. **分流。** 仓库首页被 `isDocumentReadAsk` 当成文档后抓 GitHub HTML，「模型选型可参考这篇指南」被抽出来冒充某一章。「这是啥?」交接后 OH 说明书被 `skipManualLine` 换成含糊改代码套话。修：仓库读 README raw 或声明不是文档；套话只留给含糊改代码。

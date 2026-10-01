@@ -64,6 +64,7 @@
     10. `handoff-waits-until-terminal` **pass**（仓库已经下好了；无时限套话）
     另：`analyze-other-product` `links-render` `timeout-is-short` 仍 pass
 - 云 VM 不能打用户 Mac 活页；用户会把本分支拉到本机再跑那几句。
+- `529490a` 用户 Mac 活页：文本路径过（仓库 README、chapter3、时钟、你是谁、改代码）。**分栏仍失败**：1280×800 空会话截图里 composer 贴左列上方，电脑卡是右上短条。根因是 `#banner{display:none}` 让 `main` 落到 `auto` 行。本轮改为 `body` 纵向 flex + `main flex:1 1 0`。本机 1280×800 空会话复拍：输入框钉在左列底，电脑列铺满。用户会再截一次再合。
 - 环境：本地 Node，分支 `cursor/live-chat-eval-gate-74e9`，基线 `origin/main` = `0b445aa`。
 - 上一轮漏测（必须写进报告）：v0.2 绿跑的句子是「看看 … 这个文档讲了什么?」，JSON 里还塞了自编 `# 用户记忆和知识库` 两句。**不是**用户后打的「… 这个讲的是什么?」，也**没有**走真抓。所以那次绿不能证明活页。
 - 命令与结果（本分支）：
