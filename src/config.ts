@@ -90,9 +90,11 @@ export function defaultConfig(partial: Partial<OpenBotConfig> = {}): OpenBotConf
         pick(env, "OPENHANDS_WORKSPACE", "workspace/project"),
       llmModel:
         partial.openhands?.llmModel ||
+        pick(env, "OH_LLM_MODEL") ||
         pick(env, "OPENHANDS_LLM_MODEL") ||
-        pick(env, "OPENAI_MODEL", DEFAULT_MODEL),
+        "",
       llmApiKey:
+        pick(env, "OH_LLM_API_KEY") ||
         pick(env, "OPENHANDS_LLM_API_KEY") ||
         partial.openhands?.llmApiKey ||
         "",

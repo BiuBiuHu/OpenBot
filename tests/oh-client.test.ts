@@ -11,6 +11,8 @@ import {
   mapExecutionStatus,
   OpenHandsClient,
   OpenHandsError,
+  remoteConversationFailed,
+  remoteLlmOverride,
 } from "../src/oh-client.js";
 import { agentEventsFromOh, normalizeOhEvent } from "../src/oh-events.js";
 import { repoRoot } from "../src/paths.js";
@@ -112,6 +114,53 @@ describe("OpenHandsClient against mock HTTP", () => {
     assert.equal(delivery.proposal.goal, "list /tmp");
     assert.ok(delivery.conversation.id);
     assert.equal(mock.conversations.get(delivery.conversation.id)?.goal, "list /tmp");
+  });
+
+  it("TC-OH-016: empty local OPENAI key does not become the remote agent model", async () => {
+    assert.equal(remoteLlmOverride({ model: "gpt-4o-mini", apiKey: "" }), undefined);
+    assert.equal(
+      remoteLlmOverride(undefined, {
+        baseUrl: mock.baseUrl,
+        sessionApiKey: "k-oh-test",
+        workspaceDir: "workspace/project",
+        llmModel: "gpt-4o-mini",
+        llmApiKey: "",
+      }),
+      undefined,
+    );
+    const created = await deliverConfirmedHandoff(
+      client,
+      { goal: "do not send local openai" },
+      {
+        baseUrl: mock.baseUrl,
+        sessionApiKey: "k-oh-test",
+        workspaceDir: "workspace/project",
+        llmModel: "gpt-4o-mini",
+        llmApiKey: "",
+      },
+    );
+    const recorded = mock.creates.find((c) => c.id === created.conversation.id);
+    assert.ok(recorded);
+    assert.equal(recorded?.llm, undefined);
+    const agent = recorded?.body.agent as { llm?: unknown } | undefined;
+    assert.equal(agent?.llm, undefined);
+  });
+
+  it("TC-OH-017: explicit remote model+key is sent on create", async () => {
+    const override = remoteLlmOverride(undefined, {
+      baseUrl: mock.baseUrl,
+      sessionApiKey: "k-oh-test",
+      workspaceDir: "workspace/project",
+      llmModel: "test/remote",
+      llmApiKey: "remote-key",
+    });
+    assert.deepEqual(override, { model: "test/remote", apiKey: "remote-key" });
+    const created = await client.createConversation(
+      { goal: "use host override", model: "test/remote", apiKey: "remote-key" },
+    );
+    const recorded = mock.creates.find((c) => c.id === created.id);
+    assert.equal(recorded?.llm?.model, "test/remote");
+    assert.equal(recorded?.llm?.api_key, "remote-key");
   });
 });
 
@@ -489,6 +538,28 @@ describe("handoff error and chat CLI against mock", () => {
     });
     assert.equal(result.path, "handoff");
     assert.ok(events.some((e) => e.type === "status" && /no local model key/.test(e.text)));
+  });
+
+  it("TC-OH-018: openbot chat exits non-zero when remote conversation fails", async () => {
+    assert.equal(remoteConversationFailed({ status: "failed", executionStatus: "error" }), true);
+    assert.equal(remoteConversationFailed({ status: "succeeded", executionStatus: "finished" }), false);
+    const cli = path.join(repoRoot(), "src/cli.ts");
+    const env = {
+      ...process.env,
+      OPENBOT_HOME: home,
+      OH_BASE_URL: mock.baseUrl,
+      OH_SESSION_API_KEY: "err-key",
+    };
+    delete env.OPENAI_API_KEY;
+    delete env.OPENAI_MODEL;
+    delete env.OH_LLM_MODEL;
+    delete env.OH_LLM_API_KEY;
+    const run = await runCli(
+      [cli, "chat", "this should fail", "--handoff", "true", "--timeout", "5", "--poll-ms", "20"],
+      env,
+    );
+    assert.notEqual(run.code, 0, run.out);
+    assert.match(run.out, /error|failed/i);
   });
 });
 

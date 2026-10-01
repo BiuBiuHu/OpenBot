@@ -67,8 +67,8 @@ export async function deliverConfirmedHandoff(
     goal: normalized.goal,
     threadId: normalized.threadId,
     workspaceDir: oh?.workspaceDir,
-    model: oh?.llmModel,
-    apiKey: oh?.llmApiKey,
+    model: oh?.llmModel || undefined,
+    apiKey: oh?.llmApiKey || undefined,
   };
   const conversation = await client.createConversation(input, oh);
   return { proposal: normalized, conversation };

@@ -24,7 +24,7 @@ OH_SESSION_API_KEY=
 # 别名：OPENHANDS_BASE_URL / OPENHANDS_API_KEY
 ```
 
-`OH_SESSION_API_KEY` 只用于请求头 `X-Session-API-Key`。不要写进 git。远端模型循环另用主机 BYOK（`OPENHANDS_LLM_MODEL` / `OPENHANDS_LLM_API_KEY`，可选）。本机用法见 [local-client.md](local-client.md)。
+`OH_SESSION_API_KEY` 只用于请求头 `X-Session-API-Key`。不要写进 git。远端模型循环默认用主机已配的 BYOK。只有同时设置 `OH_LLM_MODEL` 与非空 `OH_LLM_API_KEY`（或 `OPENHANDS_LLM_*`）才会覆盖；本机 `OPENAI_MODEL` / 空 `OPENAI_API_KEY` 不会送去。本机用法见 [local-client.md](local-client.md)。
 
 ## 3. 探活与交接 stub
 

@@ -32,6 +32,8 @@ OH_SESSION_API_KEY=
 
 `OPENHANDS_BASE_URL` / `OPENHANDS_API_KEY` 仍是别名。缺本机 `OPENAI_API_KEY` 没关系，闲聊会跳过，走远端交接。
 
+**不要用本机 `OPENAI_MODEL` / 空的 `OPENAI_API_KEY` 去覆盖主机已配好的 LLM。** 交接默认用 Agent Server 自己的 BYOK；只有同时显式设置了 `OH_LLM_MODEL` **和** 非空的 `OH_LLM_API_KEY`（或 `OPENHANDS_LLM_*`）才会改远端模型。
+
 ## 3. 从干净 checkout 跑起来
 
 ```bash

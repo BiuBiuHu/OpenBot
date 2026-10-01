@@ -6,6 +6,7 @@ export interface MockConversation {
   execution_status: string;
   goal: string;
   polls: number;
+  llm?: { model?: string; api_key?: string };
 }
 
 export interface MockOhServer {
@@ -14,6 +15,7 @@ export interface MockOhServer {
   sessionKey: string;
   conversations: Map<string, MockConversation>;
   requests: Array<{ method: string; url: string; key?: string }>;
+  creates: Array<{ id: string; body: Record<string, unknown>; llm?: { model?: string; api_key?: string } }>;
   stop: () => Promise<void>;
 }
 
@@ -25,6 +27,7 @@ export async function startMockOhServer(
   const terminalStatus = opts.terminalStatus ?? "finished";
   const conversations = new Map<string, MockConversation>();
   const requests: MockOhServer["requests"] = [];
+  const creates: MockOhServer["creates"] = [];
   let seq = 0;
 
   const server = http.createServer((req, res) => {
@@ -64,8 +67,17 @@ export async function startMockOhServer(
         const id = `00000000-0000-4000-8000-${String(seq).padStart(12, "0")}`;
         const initial = body.initial_message as { content?: Array<{ text?: string }> } | undefined;
         const goal = initial?.content?.[0]?.text || "";
-        const conv: MockConversation = { id, execution_status: "running", goal, polls: 0 };
+        const agent = body.agent && typeof body.agent === "object" ? (body.agent as Record<string, unknown>) : {};
+        const llmRaw = agent.llm && typeof agent.llm === "object" ? (agent.llm as Record<string, unknown>) : undefined;
+        const llm = llmRaw
+          ? {
+              model: typeof llmRaw.model === "string" ? llmRaw.model : undefined,
+              api_key: typeof llmRaw.api_key === "string" ? llmRaw.api_key : undefined,
+            }
+          : undefined;
+        const conv: MockConversation = { id, execution_status: "running", goal, polls: 0, llm };
         conversations.set(id, conv);
+        creates.push({ id, body, llm });
         send(200, { id, execution_status: conv.execution_status, workspace: body.workspace });
         return;
       }
@@ -172,6 +184,7 @@ export async function startMockOhServer(
     sessionKey,
     conversations,
     requests,
+    creates,
     stop: () =>
       new Promise<void>((resolve) => {
         server.close(() => resolve());

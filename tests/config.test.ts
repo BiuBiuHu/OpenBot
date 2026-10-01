@@ -12,6 +12,12 @@ describe("REQ-OPENBOT-007 config isolation", () => {
     OPENHANDS_API_KEY: process.env.OPENHANDS_API_KEY,
     OH_SESSION_API_KEY: process.env.OH_SESSION_API_KEY,
     OH_BASE_URL: process.env.OH_BASE_URL,
+    OPENAI_MODEL: process.env.OPENAI_MODEL,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OH_LLM_MODEL: process.env.OH_LLM_MODEL,
+    OH_LLM_API_KEY: process.env.OH_LLM_API_KEY,
+    OPENHANDS_LLM_MODEL: process.env.OPENHANDS_LLM_MODEL,
+    OPENHANDS_LLM_API_KEY: process.env.OPENHANDS_LLM_API_KEY,
   };
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "openbot-home-"));
 
@@ -21,6 +27,12 @@ describe("REQ-OPENBOT-007 config isolation", () => {
     delete process.env.OPENHANDS_API_KEY;
     delete process.env.OH_SESSION_API_KEY;
     delete process.env.OH_BASE_URL;
+    delete process.env.OPENAI_MODEL;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OH_LLM_MODEL;
+    delete process.env.OH_LLM_API_KEY;
+    delete process.env.OPENHANDS_LLM_MODEL;
+    delete process.env.OPENHANDS_LLM_API_KEY;
   });
 
   after(() => {
@@ -63,5 +75,23 @@ describe("REQ-OPENBOT-007 config isolation", () => {
     delete process.env.OH_SESSION_API_KEY;
     delete process.env.OPENHANDS_BASE_URL;
     delete process.env.OPENHANDS_API_KEY;
+  });
+
+  it("TC-CFG-003: local OPENAI_MODEL / empty OPENAI_API_KEY are not the remote LLM", () => {
+    process.env.OPENAI_MODEL = "gpt-4o-mini";
+    process.env.OPENAI_API_KEY = "";
+    const cfg = defaultConfig();
+    assert.equal(cfg.llm.model, "gpt-4o-mini");
+    assert.equal(cfg.openhands.llmModel, "");
+    assert.equal(cfg.openhands.llmApiKey, "");
+    process.env.OH_LLM_MODEL = "test/remote";
+    process.env.OH_LLM_API_KEY = "remote-key";
+    const overridden = defaultConfig();
+    assert.equal(overridden.openhands.llmModel, "test/remote");
+    assert.equal(overridden.openhands.llmApiKey, "remote-key");
+    delete process.env.OPENAI_MODEL;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OH_LLM_MODEL;
+    delete process.env.OH_LLM_API_KEY;
   });
 });

@@ -10,7 +10,7 @@ import { bootstrapWorker, probeSsh, sshTarget } from "./ssh.js";
 import type { OpenBotConfig } from "./types.js";
 import { WorkerClient } from "./worker-client.js";
 import { ensureWorkerAccess } from "./tunnel.js";
-import { OpenHandsClient, conversationSnippet } from "./oh-client.js";
+import { OpenHandsClient, conversationSnippet, remoteConversationFailed } from "./oh-client.js";
 import { deliverConfirmedHandoff, HandoffStore } from "./handoff.js";
 import { printThreadEvent, runThreadTurn } from "./thread.js";
 
@@ -34,6 +34,7 @@ Usage:
 OpenHands is reached at OH_BASE_URL (default http://127.0.0.1:8000).
 Open a tunnel first: ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host
 Session key: OH_SESSION_API_KEY (header X-Session-API-Key). OPENHANDS_* aliases still work.
+Remote LLM stays on the host unless BOTH OH_LLM_MODEL and OH_LLM_API_KEY are set.
 
 Config lives in ~/.openbot (never commit it). Keys go in ~/.openbot/.env or a gitignored .env.
 `;
@@ -266,7 +267,7 @@ async function cmdOh(rest: string[], flags: Record<string, string>): Promise<voi
     } catch {
       /* events endpoint optional on older OH */
     }
-    if (final.status === "failed") process.exitCode = 1;
+    if (remoteConversationFailed(final)) process.exitCode = 1;
     return;
   }
   if (sub === "help" || sub === "-h" || sub === "--help") {
@@ -296,7 +297,7 @@ async function cmdChat(rest: string[], flags: Record<string, string>): Promise<v
     const store = new HandoffStore();
     const timeoutMs = flags.timeout ? Number(flags.timeout) * 1000 : 60_000;
     const pollMs = flags["poll-ms"] ? Number(flags["poll-ms"]) : 250;
-    await runThreadTurn(message, {
+    const result = await runThreadTurn(message, {
       client,
       oh: config.openhands,
       llm: config.llm,
@@ -312,11 +313,14 @@ async function cmdChat(rest: string[], flags: Record<string, string>): Promise<v
       },
     });
     process.stdout.write("\n");
+    if (result.path === "handoff" && remoteConversationFailed(result.conversation)) {
+      process.exitCode = 1;
+    }
     return;
   }
 
   await withWorker(config, async (worker) => {
-    await runThreadTurn(message, {
+    const result = await runThreadTurn(message, {
       client: ohClient(config),
       oh: config.openhands,
       llm: config.llm,
@@ -328,6 +332,9 @@ async function cmdChat(rest: string[], flags: Record<string, string>): Promise<v
       waitForApproval: async (req) => confirmDangerous(req.command),
     });
     process.stdout.write("\n");
+    if (result.path === "handoff" && remoteConversationFailed(result.conversation)) {
+      process.exitCode = 1;
+    }
   });
 }
 

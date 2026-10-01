@@ -33,9 +33,12 @@ export interface OpenHandsConfig {
   sessionApiKey: string;
   /** OH LocalWorkspace.working_dir. Not a public path. */
   workspaceDir: string;
-  /** Optional model id forwarded when creating a conversation. */
+  /**
+   * Optional remote-loop model. Only sent with a non-empty llmApiKey.
+   * From OH_LLM_MODEL / OPENHANDS_LLM_MODEL — never OPENAI_MODEL.
+   */
   llmModel: string;
-  /** Optional remote-loop key (host BYOK). Never commit. */
+  /** Optional remote-loop key (OH_LLM_API_KEY). Never commit. Never use OPENAI_API_KEY. */
   llmApiKey: string;
 }
 

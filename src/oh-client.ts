@@ -109,6 +109,27 @@ export function isTerminalStatus(status: string | undefined, stopOnApproval = tr
   return mapped === "succeeded" || mapped === "failed" || mapped === "cancelled" || mapped === "timeout";
 }
 
+/**
+ * Only override the host Agent Server LLM when BOTH a model id and a
+ * non-empty provider key are explicit. Local OPENAI_MODEL / empty
+ * OPENAI_API_KEY must never become the remote agent.llm.
+ */
+export function remoteLlmOverride(
+  input?: { model?: string; apiKey?: string },
+  cfg?: OpenHandsConfig,
+): { model: string; apiKey: string } | undefined {
+  const model = (input?.model || cfg?.llmModel || "").trim();
+  const apiKey = (input?.apiKey || cfg?.llmApiKey || "").trim();
+  if (!model || !apiKey) return undefined;
+  return { model, apiKey };
+}
+
+export function remoteConversationFailed(conv?: { status?: string; executionStatus?: string }): boolean {
+  if (!conv) return false;
+  const mapped = mapExecutionStatus(conv.executionStatus || conv.status);
+  return mapped === "failed" || mapped === "timeout" || mapped === "cancelled";
+}
+
 export function normalizeConversation(raw: unknown): OhConversation {
   const rec = isRecord(raw) ? raw : {};
   const id = String(rec.id || rec.conversation_id || rec.conversationId || "");
@@ -213,16 +234,14 @@ export class OpenHandsClient {
 
   async createConversation(input: CreateConversationInput, cfg?: OpenHandsConfig): Promise<OhConversation> {
     const workspaceDir = input.workspaceDir || cfg?.workspaceDir || "workspace/project";
-    const model = input.model || cfg?.llmModel || "openhands/default";
-    const apiKey = input.apiKey || cfg?.llmApiKey || "";
     const run = input.run !== false;
+    const remoteLlm = remoteLlmOverride(input, cfg);
     const payload: Record<string, unknown> = {
       agent: {
         kind: "Agent",
-        llm: {
-          model,
-          ...(apiKey ? { api_key: apiKey } : {}),
-        },
+        ...(remoteLlm
+          ? { llm: { model: remoteLlm.model, api_key: remoteLlm.apiKey } }
+          : {}),
         tools: DEFAULT_TOOLS,
       },
       workspace: {
