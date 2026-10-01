@@ -444,12 +444,14 @@
         el.className = "msg " + kind;
         const wrap = document.createElement("div");
         wrap.className = "bubble";
-        if (title) {
+        if (kind === "user") el.setAttribute("aria-label", "your message");
+        if (kind === "bot") el.setAttribute("aria-label", "assistant message");
+        if (title && kind !== "user" && kind !== "bot") {
           const h = document.createElement("h3");
           h.textContent = title;
           wrap.appendChild(h);
         }
-        const markdown = kind === "bot" && title === "Assistant";
+        const markdown = kind === "bot";
         const bodyEl = document.createElement(kind === "sys" ? "div" : markdown ? "div" : "pre");
         if (markdown) {
           bodyEl.className = "md";
@@ -586,8 +588,8 @@
         const text = box.value.trim();
         if (!text) return;
         box.value = "";
-        add("user", "You", text);
-        const out = add("bot", "Assistant", "");
+        add("user", "", text);
+        const out = add("bot", "", "");
         const bodyEl = out.querySelector(".md, pre");
         const av = out.querySelector(".avatar.assistant");
         let quiet = out.querySelector(".quiet");

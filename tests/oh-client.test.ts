@@ -399,8 +399,8 @@ describe("web → OpenHands (no worker)", () => {
     assert.match(html, /\/api\/settings/);
     assert.match(html, /\/api\/desktop/);
     assert.match(html, /直接开始对话/);
-    assert.match(html, /Assistant/);
-    assert.match(html, /"You"/);
+    assert.doesNotMatch(html, /add\("user",\s*"You"|add\("bot",\s*"Assistant"/);
+    assert.doesNotMatch(html, /textContent = "You"|textContent = "Assistant"/);
     assert.match(html, /class="avatar"/);
     assert.match(html, /avatar\.person/);
     assert.match(html, /faceEl\("person"\)/);

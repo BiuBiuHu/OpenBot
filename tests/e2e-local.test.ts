@@ -56,7 +56,8 @@ describe("local control plane + worker (no fake remote)", () => {
     assert.match(html, /faceEl\("person"\)/);
     assert.match(html, /faceEl\("assistant"\)/);
     assert.match(html, /直接开始对话/);
-    assert.match(html, /Assistant/);
+    assert.doesNotMatch(html, /add\("user",\s*"You"|add\("bot",\s*"Assistant"/);
+    assert.doesNotMatch(html, /textContent = "You"|textContent = "Assistant"/);
     assert.match(html, /\.msg\.user\s*\{[^}]*align-self:\s*flex-end/s);
     assert.match(html, /\.msg\.bot\s*\{[^}]*align-self:\s*flex-start/s);
     assert.match(html, /\.msg \.bubble\s*\{[^}]*border:/s);
