@@ -21,7 +21,12 @@ export interface MockOhServer {
 }
 
 export async function startMockOhServer(
-  opts: { sessionKey?: string; finishAfterPolls?: number; terminalStatus?: string } = {},
+  opts: {
+    sessionKey?: string;
+    finishAfterPolls?: number;
+    terminalStatus?: string;
+    replyFor?: (goal: string) => string;
+  } = {},
 ): Promise<MockOhServer> {
   const sessionKey = opts.sessionKey ?? "test-oh-session";
   const finishAfterPolls = opts.finishAfterPolls ?? 2;
@@ -158,7 +163,7 @@ export async function startMockOhServer(
             source: "agent",
             llm_message: {
               role: "assistant",
-              content: [{ type: "text", text: `done: ${conv.goal}` }],
+              content: [{ type: "text", text: opts.replyFor ? opts.replyFor(conv.goal) : `done: ${conv.goal}` }],
             },
           });
           items.push({

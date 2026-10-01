@@ -120,15 +120,56 @@
         text-transform: none;
         color: var(--muted);
       }
-      .msg.bot pre {
-        color: var(--ink);
-        font-family: var(--sans);
-        font-size: 1rem;
-      }
       .msg.user pre {
         color: var(--ink);
         font-family: var(--sans);
         font-size: 1rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .msg.bot .md {
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 1rem;
+        line-height: 1.5;
+        overflow-x: auto;
+      }
+      .msg.bot .md > *:first-child { margin-top: 0; }
+      .msg.bot .md > *:last-child { margin-bottom: 0; }
+      .msg.bot .md p, .msg.bot .md ul, .msg.bot .md ol { margin: 0.4rem 0; }
+      .msg.bot .md ul, .msg.bot .md ol { padding-left: 1.3rem; }
+      .msg.bot .md h1, .msg.bot .md h2, .msg.bot .md h3 {
+        margin: 0.5rem 0 0.3rem;
+        font-size: 1.05rem;
+        font-weight: 650;
+      }
+      .msg.bot .md a { color: var(--phosphor); }
+      .msg.bot .md strong { font-weight: 700; }
+      .msg.bot .md table {
+        border-collapse: collapse;
+        margin: 0.45rem 0;
+        font-size: 0.92rem;
+      }
+      .msg.bot .md th, .msg.bot .md td {
+        border: 1px solid var(--line);
+        padding: 0.28rem 0.5rem;
+        vertical-align: top;
+      }
+      .msg.bot .md th { color: var(--phosphor); font-weight: 650; }
+      .msg.bot .md pre {
+        margin: 0.45rem 0;
+        padding: 0.5rem 0.6rem;
+        background: #0e120d;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: var(--mono);
+        font-size: 0.82rem;
+        color: #d5e8b8;
+      }
+      .msg.bot .md code {
+        font-family: var(--mono);
+        font-size: 0.88em;
       }
       .quiet {
         margin-top: 0.35rem;
@@ -231,7 +272,9 @@
       <textarea id="box" rows="2" placeholder="发给这台电脑，直接开始对话。"></textarea>
       <button id="send" type="button">Send</button>
     </footer>
-    <script>
+    <script type="module">
+      import { createComposeGuard, renderMarkdown, shouldSendOnEnter } from "/chat-ui.js";
+
       const logEl = document.getElementById("log");
       const jobsEl = document.getElementById("jobs");
       const box = document.getElementById("box");
@@ -248,9 +291,15 @@
           h.textContent = title;
           el.appendChild(h);
         }
-        const pre = document.createElement(kind === "sys" ? "div" : "pre");
-        pre.textContent = body || "";
-        el.appendChild(pre);
+        const markdown = kind === "bot" && title === "Assistant";
+        const bodyEl = document.createElement(kind === "sys" ? "div" : markdown ? "div" : "pre");
+        if (markdown) {
+          bodyEl.className = "md";
+          bodyEl.innerHTML = renderMarkdown(body || "");
+        } else {
+          bodyEl.textContent = body || "";
+        }
+        el.appendChild(bodyEl);
         if (extra) el.appendChild(extra);
         logEl.appendChild(el);
         logEl.scrollTop = logEl.scrollHeight;
@@ -391,7 +440,7 @@
         const isRun = mode.value === "run";
         add("user", isRun ? "Run on host" : "You", text);
         const out = add("bot", isRun ? "Host" : "Assistant", "");
-        const pre = out.querySelector("pre");
+        const bodyEl = out.querySelector(".md, pre");
         let quiet = out.querySelector(".quiet");
         if (!quiet) {
           quiet = document.createElement("div");
@@ -405,8 +454,8 @@
           await consumeSse(url, payload, (ev) => {
             if (isRun) {
               if (ev.type === "token" || ev.type === "thought" || ev.type === "output") {
-                if (pre.textContent) pre.textContent += "\n";
-                pre.textContent += ev.text || ev.chunk || "";
+                if (bodyEl.textContent) bodyEl.textContent += "\n";
+                bodyEl.textContent += ev.text || ev.chunk || "";
                 logEl.scrollTop = logEl.scrollHeight;
               } else if (ev.type === "status") {
                 add("sys", "host", ev.text);
@@ -424,11 +473,11 @@
               return;
             }
             if (ev.type === "token") {
-              pre.textContent = ev.text || "";
+              bodyEl.innerHTML = renderMarkdown(ev.text || "");
               quiet.textContent = "";
               logEl.scrollTop = logEl.scrollHeight;
             } else if (ev.type === "status") {
-              if (!pre.textContent) quiet.textContent = ev.text === "thinking" ? "…" : ev.text;
+              if (!bodyEl.textContent) quiet.textContent = ev.text === "thinking" ? "…" : ev.text;
             } else if (ev.type === "error") {
               add("sys err", "error", ev.message);
             } else if (ev.type === "done") {
@@ -445,11 +494,13 @@
       }
 
       sendBtn.onclick = send;
+      const compose = createComposeGuard();
+      box.addEventListener("compositionstart", () => compose.onCompositionStart());
+      box.addEventListener("compositionend", () => compose.onCompositionEnd());
       box.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          send();
-        }
+        if (!shouldSendOnEnter(e, compose.active())) return;
+        e.preventDefault();
+        send();
       });
       refreshStatus();
       refreshJobs();
