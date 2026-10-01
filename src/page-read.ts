@@ -65,7 +65,7 @@ export function extractDocumentFacts(text: string): { title: string; sentences: 
     .split(/[。！？]/)
     .map((s) => s.replace(/\s+/g, " ").trim())
     .filter((s) => s.length >= 12 && s.length <= 96);
-  const preferred = all.filter((s) => /这一章|本章|用户记忆|知识库|检索增强|\bRAG\b|记住/.test(s));
+  const preferred = all.filter((s) => /这一章|本章|本文|这篇|本页|这一节|本节/.test(s));
   return { title, sentences: (preferred.length ? preferred : all).slice(0, 2) };
 }
 

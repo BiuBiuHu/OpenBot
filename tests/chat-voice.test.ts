@@ -9,6 +9,7 @@ import {
   needsLookup,
   voiceChatReply,
   voiceCodingReady,
+  voiceFromDocument,
   voiceFromSearch,
   voiceNow,
 } from "../src/chat-voice.js";
@@ -100,6 +101,10 @@ describe("chat voice", () => {
     assert.equal(needsLookup("今天的时间是什么时候"), false);
     assert.equal(needsLookup("你能帮我改代码吗"), false);
     assert.equal(needsLookup("改代码"), false);
+    assert.equal(
+      needsLookup("看看 https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个文档讲了什么?"),
+      false,
+    );
   });
 
   it("TC-VOICE-011: a clock ask is the Shanghai time, not a search dump", () => {
@@ -369,5 +374,79 @@ describe("chat voice", () => {
     } finally {
       await mock.stop();
     }
+  });
+
+  const DOC_ASK =
+    "看看 https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个文档讲了什么?";
+  const DOC_TEXT =
+    "# 用户记忆和知识库\n\n这一章讲用户记忆和共享知识库的差别，以及检索增强生成怎么把外部知识接到对话里。\n用户记忆是针对单个人长期保存的偏好和事实，知识库则是多人可复用的材料。\n";
+
+  it("TC-DOC-003: a fetched public document becomes a short Simplified answer", () => {
+    const shown = voiceFromDocument({
+      userMessage: DOC_ASK,
+      language: "zh-CN",
+      document: {
+        title: "用户记忆和知识库",
+        text: DOC_TEXT,
+        url: "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md",
+      },
+    });
+    assert.match(shown.text, /我看过了/);
+    assert.match(shown.text, /用户记忆/);
+    assert.match(shown.text, /知识库/);
+    assert.doesNotMatch(shown.text, /没在时限|再说一次|我是 OpenHands|网上查过了/);
+    assert.ok(shown.text.split(/[。！？]/).filter(Boolean).length <= 4);
+  });
+
+  it("TC-DOC-004: the live document question does not create an OpenHands conversation", async () => {
+    const mock = await startMockOhServer({
+      sessionKey: "voice-key",
+      replyFor: () => INTRO,
+    });
+    try {
+      const events: AgentEvent[] = [];
+      const result = await runThreadTurn(DOC_ASK, {
+        client: new OpenHandsClient(mock.baseUrl, "voice-key"),
+        store: new HandoffStore(),
+        emit: (e) => events.push(e),
+        forceHandoff: true,
+        timeoutMs: 2000,
+        pollMs: 20,
+        language: "zh-CN",
+        searchWeb: async () => {
+          throw new Error("document ask must not search");
+        },
+        readPublicDocument: async () => ({
+          title: "用户记忆和知识库",
+          text: DOC_TEXT,
+          url: "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md",
+        }),
+      });
+      assert.equal(result.path, "document");
+      assert.equal(mock.creates.length, 0);
+      const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+      assert.match(tokens, /我看过了/);
+      assert.match(tokens, /用户记忆/);
+      assert.doesNotMatch(tokens, /没在时限|再说一次|我是 OpenHands|网上查过了/);
+      assert.ok(!events.some((e) => e.type === "tool_start"));
+    } finally {
+      await mock.stop();
+    }
+  });
+
+  it("TC-DOC-005: a failed document fetch is one fail line, not the computer timeout", async () => {
+    const events: AgentEvent[] = [];
+    const result = await runThreadTurn(DOC_ASK, {
+      client: new OpenHandsClient("http://127.0.0.1:9", "x"),
+      store: new HandoffStore(),
+      emit: (e) => events.push(e),
+      forceHandoff: true,
+      language: "zh-CN",
+      readPublicDocument: async () => undefined,
+    });
+    assert.equal(result.path, "document");
+    const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+    assert.match(tokens, /没读成/);
+    assert.doesNotMatch(tokens, /没在时限|再说一次/);
   });
 });

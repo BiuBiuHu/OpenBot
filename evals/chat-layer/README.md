@@ -28,3 +28,4 @@ Cases that came from the live laptop:
 | `what-is-grok-bot` | canned intro, bare “I don't know”, empty 「还没找到」, or an English source paragraph for a Chinese question |
 | `todays-time` | search snippet or a CST clock that claims it has no real time |
 | `change-code` | 「先不背说明书。你具体想让这台电脑做什么？」 for a coding request |
+| `read-public-doc` | 把公开文档 URL 当电脑任务，只回超时套话 |

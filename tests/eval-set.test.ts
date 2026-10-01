@@ -33,6 +33,7 @@ describe("chat-layer eval set", () => {
       "analyze-other-product",
       "change-code",
       "links-render",
+      "read-public-doc",
       "timeout-is-short",
       "todays-time",
       "what-is-grok-bot",
@@ -86,5 +87,18 @@ describe("chat-layer eval set", () => {
       ).some((x) => !x.pass),
       "English source paragraph must fail a Chinese question",
     );
+  });
+
+  it("TC-EVAL-004: read-public-doc must not voice the computer-task timeout", () => {
+    const c = loadEvalCases().find((x) => x.id === "read-public-doc");
+    assert.ok(c);
+    assert.equal(c.documentRequired, true);
+    const shown = shownForCase(c);
+    assert.match(shown, /我看过了/);
+    assert.match(shown, /用户记忆/);
+    assert.match(shown, /知识库/);
+    assert.doesNotMatch(shown, /没在时限|再说一次|我是 OpenHands|网上查过了/);
+    assert.ok(scoreEvalCase(c, shown, false).every((x) => x.pass), JSON.stringify(scoreEvalCase(c, shown, false)));
+    assert.ok(scoreEvalCase(c, "这台电脑这轮没在时限里跑完。你再说一次就行。", false).some((x) => !x.pass));
   });
 });
