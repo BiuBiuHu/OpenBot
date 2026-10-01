@@ -152,9 +152,9 @@ export async function refreshDesktopStatus(
 export function injectDesktopViewer(html: string, opts: { showBar?: boolean } = {}): string {
   const showBar = Boolean(opts.showBar);
   const fill =
-    `html,body,#noVNC_container{width:100%!important;height:100%!important;margin:0!important;overflow:visible!important;background:#111!important;border-radius:0!important}
+    `html,body,#noVNC_container{width:100%!important;height:100%!important;margin:0!important;overflow:visible!important;background:#111!important;border-radius:0!important;clip-path:none!important;-webkit-clip-path:none!important;mask:none!important;-webkit-mask-image:none!important}
      #noVNC_container{position:fixed!important;inset:0!important}
-     #noVNC_container canvas{border-radius:0!important}`;
+     #noVNC_container canvas{border-radius:0!important;clip-path:none!important;-webkit-clip-path:none!important}`;
   const css = showBar
     ? fill
     : `${fill}
@@ -162,6 +162,15 @@ export function injectDesktopViewer(html: string, opts: { showBar?: boolean } = 
        #noVNC_status,#noVNC_status_bar,#noVNC_hint_anchor,#noVNC_transition,
        .noVNC_panel{display:none!important;visibility:hidden!important}`;
   const js = `(function(){
+    function clearClip(el){
+      if(!el||!el.style)return;
+      el.style.overflow="visible";
+      el.style.borderRadius="0";
+      el.style.clipPath="none";
+      el.style.webkitClipPath="none";
+      el.style.mask="none";
+      el.style.webkitMaskImage="none";
+    }
     function fit(){
       try{
         var rfb=window.UI&&UI.rfb;
@@ -170,6 +179,11 @@ export function injectDesktopViewer(html: string, opts: { showBar?: boolean } = 
           rfb.clipViewport=false;
           rfb.resizeSession=false;
         }
+        var canvas=document.querySelector("#noVNC_container canvas")||document.querySelector("canvas");
+        clearClip(canvas);
+        clearClip(document.documentElement);
+        clearClip(document.body);
+        clearClip(document.getElementById("noVNC_container"));
         if(window.UI&&UI.updateViewSetting){try{UI.updateViewSetting();}catch(e){}}
         window.dispatchEvent(new Event("resize"));
       }catch(e){}

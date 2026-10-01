@@ -73,16 +73,18 @@ describe("desktop pane (no live host)", () => {
       assert.match(html, /pointer-lock/);
       assert.doesNotMatch(html, /On this computer/);
       assert.doesNotMatch(html, /start a desktop/i);
+      assert.match(html, /\/novnc\/vnc\.html/);
       const view = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/desktop-view`)).text();
-      assert.match(view, /#vnc/);
-      assert.match(view, /inset:\s*0/);
-      assert.match(view, /width:\s*100%/);
-      assert.match(view, /height:\s*100%/);
+      assert.match(view, /location\.replace/);
+      assert.match(view, /\/novnc\/vnc\.html/);
+      assert.doesNotMatch(view, /<iframe/);
+      assert.doesNotMatch(view, /overflow:\s*hidden/);
       assert.doesNotMatch(view, /FRAME_W|transform-origin|scale\(/);
       const proxied = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/novnc/vnc.html`)).text();
       assert.match(proxied, /openbot-desk-fit/);
       assert.match(proxied, /noVNC_control_bar/);
       assert.match(proxied, /display:none/);
+      assert.match(proxied, /clip-path:none/);
       assert.doesNotMatch(proxied, /\b(?!127\.0\.0\.1)(?:\d{1,3}\.){3}\d{1,3}\b/);
     } finally {
       await plane.close();
@@ -189,6 +191,7 @@ describe("desktop pane (no live host)", () => {
     assert.match(hidden, /resizeSession=false/);
     assert.match(hidden, /overflow:visible/);
     assert.match(hidden, /border-radius:0/);
+    assert.match(hidden, /clip-path:none/);
     const shown = injectDesktopViewer("<html><head></head><body></body></html>", { showBar: true });
     assert.doesNotMatch(shown, /#noVNC_control_bar/);
   });

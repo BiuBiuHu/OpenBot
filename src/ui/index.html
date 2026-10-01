@@ -309,6 +309,8 @@
         border: 0;
         background: #111;
         border-radius: 0;
+        overflow: visible;
+        clip-path: none;
       }
       .desk-missing {
         padding: 0.7rem 0.15rem;
@@ -542,9 +544,17 @@
         }
       }
 
-      function deskSrc(viewerUrl) {
-        const base = String(viewerUrl || "/desktop-view");
-        return deskShowBar ? base + (base.includes("?") ? "&" : "?") + "bar=1" : base;
+      function deskSrc(desktop) {
+        const q = new URLSearchParams({
+          autoconnect: "1",
+          resize: "scale",
+          reconnect: "1",
+          encrypt: "0",
+          host: "127.0.0.1",
+          port: String((desktop && desktop.localPort) || 6080),
+          bar: deskShowBar ? "1" : "0",
+        });
+        return "/novnc/vnc.html?" + q.toString();
       }
 
       async function refreshDesktop() {
@@ -553,7 +563,7 @@
           if (d.ok && d.viewerUrl) {
             deskMissing.hidden = true;
             desk.hidden = false;
-            const src = deskSrc(d.viewerUrl);
+            const src = deskSrc(d);
             if (desk.getAttribute("src") !== src) desk.src = src;
           } else {
             desk.hidden = true;
@@ -732,9 +742,7 @@
         deskShowBar = !deskShowBar;
         deskBar.classList.toggle("on", deskShowBar);
         deskBar.setAttribute("aria-pressed", deskShowBar ? "true" : "false");
-        const current = desk.getAttribute("src") || "/desktop-view";
-        const base = current.split("?")[0];
-        if (!desk.hidden) desk.src = deskSrc(base);
+        if (!desk.hidden) desk.src = deskSrc({ localPort: Number(new URL(desk.src, location.href).searchParams.get("port") || 6080) });
       };
       sendBtn.onclick = send;
       const compose = createComposeGuard();
