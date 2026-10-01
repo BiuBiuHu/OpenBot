@@ -148,6 +148,7 @@ describe("settings HTTP (mocked OH, no live host)", { concurrency: false }, () =
   });
 
   it("TC-SET-006: GET/POST /api/settings persist path-only identity; reject pasted keys", async () => {
+    process.env.OPENBOT_HOME = home;
     const port = plane.config.controlPlane.port;
     const origin = `http://127.0.0.1:${port}`;
     const html = await (await fetch(`${origin}/`)).text();

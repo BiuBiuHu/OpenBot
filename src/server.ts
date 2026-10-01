@@ -112,7 +112,7 @@ export async function startControlPlane(
       if (req.method === "GET" && url.pathname === "/api/settings") {
         await json(res, {
           ok: true,
-          ...publicSettings(loadConfig()),
+          ...publicSettings(liveConfig),
           connect: lastConnect
             ? {
                 ready: lastConnect.ready,
@@ -127,7 +127,7 @@ export async function startControlPlane(
       if (req.method === "POST" && url.pathname === "/api/settings") {
         const body = await readJson(req);
         try {
-          const saved = applyHostSettings(loadConfig(), {
+          const saved = applyHostSettings(liveConfig, {
             hostname: body.hostname !== undefined ? String(body.hostname) : undefined,
             user: body.user !== undefined ? String(body.user) : undefined,
             port: body.port !== undefined ? (body.port as number | string) : undefined,
@@ -138,8 +138,13 @@ export async function startControlPlane(
           const sessionApiKey = body.sessionApiKey !== undefined ? String(body.sessionApiKey).trim() : "";
           if (sessionApiKey) {
             upsertHomeEnv({ OH_SESSION_API_KEY: sessionApiKey });
+            liveConfig = {
+              ...saved,
+              openhands: { ...saved.openhands, sessionApiKey },
+            };
+          } else {
+            liveConfig = saved;
           }
-          liveConfig = loadConfig();
           oh = OpenHandsClient.fromConfig(liveConfig);
           const shouldConnect = body.connect !== false && body.connect !== "false";
           if (shouldConnect) {
@@ -316,10 +321,8 @@ export async function startControlPlane(
           await json(res, { ok: false, error: "message required" }, 400);
           return;
         }
-        const live = loadConfig();
-        liveConfig = live;
-        oh = OpenHandsClient.fromConfig(live);
-          const threadId = String(body.thread_id || body.threadId || "chat_default");
+        const live = liveConfig;
+        const threadId = String(body.thread_id || body.threadId || "chat_default");
         await streamSse(req, res, async (emit) => {
           const result = await runThreadTurn(message, {
             client: oh,
