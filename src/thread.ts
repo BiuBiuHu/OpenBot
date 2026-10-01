@@ -5,6 +5,7 @@ import {
   lookupQuery,
   needsLookup,
   voiceCodingReady,
+  voiceFromDocument,
   voiceFromSearch,
   voiceNow,
 } from "./chat-voice.js";
@@ -15,6 +16,7 @@ import type { AgentEvent, ApprovalRequest, ChatMessage, LlmConfig } from "./type
 import type { WorkerClient } from "./worker-client.js";
 import type { OhConversation } from "./oh-client.js";
 import { browsePublicPage } from "./page-browse.js";
+import { isDocumentReadAsk, readPublicDocument, type PublicDocument } from "./page-read.js";
 import { searchWeb, type SearchHit } from "./web-search.js";
 
 export interface ThreadTurnDeps extends HandoffTurnDeps {
@@ -28,12 +30,14 @@ export interface ThreadTurnDeps extends HandoffTurnDeps {
   searchWeb?: (query: string) => Promise<SearchHit[]>;
   /** Last resort after HTTP pages are empty: OpenHands browser / page read. */
   browsePublicPage?: (query: string) => Promise<SearchHit[]>;
+  /** Public document URL the person asked to read. Tests inject a stub. */
+  readPublicDocument?: (url: string) => Promise<PublicDocument | undefined>;
   /** Saved chat language. Default zh-CN. */
   language?: string;
 }
 
 export interface ThreadTurnResult {
-  path: "handoff" | "local" | "worker" | "lookup" | "clock" | "coding";
+  path: "handoff" | "local" | "worker" | "lookup" | "clock" | "coding" | "document";
   conversation?: OhConversation;
   history: ChatMessage[];
 }
@@ -62,6 +66,18 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
     deps.emit({ type: "token", text: voiceCodingReady({ language }).text });
     deps.emit({ type: "done" });
     return { path: "coding", history: deps.history ?? [] };
+  }
+
+  if (isDocumentReadAsk(goal)) {
+    deps.emit({ type: "status", text: "thinking" });
+    const href = goal;
+    const doc = await (deps.readPublicDocument
+      ? deps.readPublicDocument(href)
+      : readPublicDocument(href));
+    const voiced = voiceFromDocument({ userMessage: goal, document: doc, language });
+    deps.emit({ type: "token", text: voiced.text });
+    deps.emit({ type: "done" });
+    return { path: "document", history: deps.history ?? [] };
   }
 
   if (needsLookup(goal)) {
