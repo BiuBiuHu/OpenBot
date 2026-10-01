@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>电脑</title>
+    <style>
+      html, body, #screen {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: #111;
+        overflow: hidden;
+        border-radius: 0;
+        clip-path: inset(0);
+        -webkit-clip-path: inset(0);
+      }
+      body { position: relative; }
+      #screen {
+        position: absolute;
+        inset: 0;
+      }
+      #screen canvas {
+        border-radius: 0 !important;
+        clip-path: inset(0) !important;
+        -webkit-clip-path: inset(0) !important;
+      }
+      #err {
+        display: none;
+        position: absolute;
+        inset: 0;
+        color: #e2b14a;
+        font: 14px/1.45 sans-serif;
+        padding: 12px;
+        background: #111;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="screen"></div>
+    <div id="err"></div>
+    <script type="module">
+      const params = new URLSearchParams(location.search);
+      let port = Number(params.get("port") || 0) || 0;
+
+      function tellParent(type) {
+        try {
+          parent.postMessage({ type }, location.origin);
+        } catch {
+          /* top-level */
+        }
+      }
+
+      function toggleMax() {
+        tellParent("openbot-desk-toggle");
+      }
+
+      const screen = document.getElementById("screen");
+      const err = document.getElementById("err");
+      screen.addEventListener("dblclick", (e) => {
+        e.preventDefault();
+        toggleMax();
+      });
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") tellParent("openbot-desk-close");
+      });
+
+      async function resolvePort() {
+        if (port) return port;
+        try {
+          const d = await (await fetch("/api/desktop")).json();
+          if (d.localPort) port = Number(d.localPort) || 6080;
+        } catch {
+          /* default */
+        }
+        return port || 6080;
+      }
+
+      function wsUrls(p) {
+        const proto = location.protocol === "https:" ? "wss" : "ws";
+        return [proto + "://127.0.0.1:" + p + "/websockify", proto + "://127.0.0.1:" + p + "/"];
+      }
+
+      async function loadRFB() {
+        for (const src of ["/novnc/core/rfb.js", "/novnc/lib/rfb.js"]) {
+          try {
+            const mod = await import(src);
+            if (mod && mod.default) return mod.default;
+          } catch {
+            /* try next build path */
+          }
+        }
+        return null;
+      }
+
+      function fail(msg) {
+        err.style.display = "block";
+        err.textContent = msg;
+      }
+
+      const RFB = await loadRFB();
+      if (!RFB) {
+        fail("桌面模块没读到。隧道通了再试。");
+      } else {
+        const p = await resolvePort();
+        const urls = wsUrls(p);
+        let urlIndex = 0;
+        let rfb;
+        let generation = 0;
+        function start() {
+          const gen = ++generation;
+          const url = urls[urlIndex];
+          if (rfb) {
+            try {
+              rfb.disconnect();
+            } catch {
+              /* already closed */
+            }
+            rfb = undefined;
+          }
+          try {
+            rfb = new RFB(screen, url, { shared: true });
+          } catch {
+            urlIndex = (urlIndex + 1) % urls.length;
+            setTimeout(start, 800);
+            return;
+          }
+          rfb.scaleViewport = true;
+          rfb.clipViewport = false;
+          rfb.resizeSession = false;
+          rfb.addEventListener("connect", () => {
+            err.style.display = "none";
+          });
+          rfb.addEventListener("disconnect", () => {
+            if (gen !== generation) return;
+            urlIndex = (urlIndex + 1) % urls.length;
+            setTimeout(start, 800);
+          });
+          rfb.addEventListener("credentialsrequired", () => {
+            try {
+              rfb.sendCredentials({ password: "" });
+            } catch {
+              /* no password prompt */
+            }
+          });
+        }
+        start();
+      }
+    </script>
+  </body>
+</html>

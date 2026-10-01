@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenBot — your machine</title>
+    <style>
+      :root {
+        --bg: #10140f;
+        --panel: #171d16;
+        --ink: #e7eedc;
+        --muted: #8b9778;
+        --line: #2b3526;
+        --phosphor: #b6e36a;
+        --amber: #e2b14a;
+        --danger: #e07a5f;
+        --ok: #7dce82;
+        --mono: "IBM Plex Mono", "ui-monospace", "SFMono-Regular", Menlo, Consolas, monospace;
+        --sans: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+      body {
+        font-family: var(--sans);
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 100dvh;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        padding: 1.1rem 1.4rem 0.9rem;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(180deg, #1a2217 0%, var(--bg) 100%);
+      }
+      .brand { display: flex; flex-direction: column; gap: 0.2rem; }
+      .brand h1 {
+        margin: 0;
+        font-size: 1.15rem;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+      }
+      .brand p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+      .lamp {
+        display: inline-block;
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+        background: var(--danger);
+        margin-right: 0.4rem;
+        box-shadow: 0 0 0 3px rgba(224, 122, 95, 0.15);
+      }
+      .lamp.ok {
+        background: var(--phosphor);
+        box-shadow: 0 0 0 3px rgba(182, 227, 106, 0.18);
+      }
+      .avatar {
+        width: 2.1rem;
+        height: 2.1rem;
+        border-radius: 999px;
+        background: var(--phosphor);
+        position: relative;
+        flex-shrink: 0;
+        box-shadow: inset 0 -6px 0 rgba(16, 20, 15, 0.12);
+      }
+      .avatar.person { background: #c4a15a; }
+      .avatar .eyes::before,
+      .avatar .eyes::after {
+        content: "";
+        position: absolute;
+        top: 0.68rem;
+        width: 0.28rem;
+        height: 0.28rem;
+        border-radius: 50%;
+        background: #10140f;
+      }
+      .avatar .eyes::before { left: 0.52rem; }
+      .avatar .eyes::after { right: 0.52rem; }
+      .avatar.waiting {
+        animation: wait-bob 0.7s ease-in-out infinite;
+      }
+      @keyframes wait-bob {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50% { transform: translateY(-4px) scale(1.06); }
+      }
+      .brand h1 { display: flex; align-items: center; gap: 0.5rem; }
+      .meta {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--muted);
+        text-align: right;
+        line-height: 1.55;
+      }
+      main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 36rem;
+        align-items: start;
+        min-height: 0;
+      }
+      @media (max-width: 840px) {
+        main { grid-template-columns: 1fr; }
+        aside { display: none; }
+      }
+      #log {
+        overflow: auto;
+        padding: 1.1rem 1.4rem 2rem;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.7rem;
+      }
+      .msg {
+        max-width: min(40rem, 92%);
+        width: fit-content;
+        display: flex;
+        flex-direction: row;
+        align-items: flex-end;
+        gap: 0.5rem;
+        padding: 0;
+        border: none;
+        background: transparent;
+      }
+      .msg .bubble {
+        min-width: 0;
+        max-width: 100%;
+        padding: 0.7rem 0.9rem;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 0.85rem;
+      }
+      .msg .avatar {
+        width: 1.85rem;
+        height: 1.85rem;
+      }
+      .msg.user {
+        align-self: flex-end;
+        margin-left: auto;
+      }
+      .msg.user .bubble {
+        border-color: #3a3420;
+        background: #222012;
+      }
+      .msg.user h3 { text-align: right; }
+      .msg.bot {
+        align-self: flex-start;
+        margin-right: auto;
+      }
+      .msg.bot .bubble { border-color: #2d3a22; }
+      .msg.sys {
+        align-self: center;
+        max-width: min(42rem, 92%);
+        width: auto;
+      }
+      .msg.sys .bubble {
+        border: none;
+        background: transparent;
+        padding: 0.2rem 0.4rem;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.8rem;
+      }
+      .msg h3 {
+        margin: 0 0 0.35rem;
+        font-family: var(--sans);
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--muted);
+      }
+      .msg.user pre {
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 1rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .msg.bot .md {
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 1rem;
+        line-height: 1.5;
+        overflow-x: auto;
+      }
+      .msg.bot .md > *:first-child { margin-top: 0; }
+      .msg.bot .md > *:last-child { margin-bottom: 0; }
+      .msg.bot .md p, .msg.bot .md ul, .msg.bot .md ol { margin: 0.4rem 0; }
+      .msg.bot .md ul, .msg.bot .md ol { padding-left: 1.3rem; }
+      .msg.bot .md h1, .msg.bot .md h2, .msg.bot .md h3 {
+        margin: 0.5rem 0 0.3rem;
+        font-size: 1.05rem;
+        font-weight: 650;
+      }
+      .msg.bot .md a { color: var(--phosphor); }
+      .msg.bot .md strong { font-weight: 700; }
+      .msg.bot .md table {
+        border-collapse: collapse;
+        margin: 0.45rem 0;
+        font-size: 0.92rem;
+      }
+      .msg.bot .md th, .msg.bot .md td {
+        border: 1px solid var(--line);
+        padding: 0.28rem 0.5rem;
+        vertical-align: top;
+      }
+      .msg.bot .md th { color: var(--phosphor); font-weight: 650; }
+      .msg.bot .md pre {
+        margin: 0.45rem 0;
+        padding: 0.5rem 0.6rem;
+        background: #0e120d;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: var(--mono);
+        font-size: 0.82rem;
+        color: #d5e8b8;
+      }
+      .msg.bot .md code {
+        font-family: var(--mono);
+        font-size: 0.88em;
+      }
+      .quiet {
+        margin-top: 0.35rem;
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        color: var(--muted);
+      }
+      .msg pre, .out {
+        margin: 0.4rem 0 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: var(--mono);
+        font-size: 0.82rem;
+        color: #d5e8b8;
+      }
+      .msg.approval {
+        align-self: stretch;
+        max-width: none;
+        width: auto;
+      }
+      .msg.approval .bubble {
+        width: 100%;
+        border-color: var(--amber);
+        background: #241c0e;
+        border-radius: 0.5rem;
+      }
+      .approval button {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        border: 1px solid var(--line);
+        background: #22291d;
+        color: var(--ink);
+        padding: 0.45rem 0.7rem;
+        cursor: pointer;
+      }
+      .approval button.yes { border-color: var(--phosphor); color: var(--phosphor); }
+      .approval button.no { border-color: var(--danger); color: var(--danger); }
+      aside {
+        align-self: start;
+        position: relative;
+        top: auto;
+        width: 36rem;
+        padding: 0.7rem 1.1rem 1rem 0.35rem;
+        overflow: visible;
+        background: transparent;
+        border: none;
+      }
+      aside h2 {
+        margin: 0 0 0.45rem;
+        font-size: 0.78rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-family: var(--mono);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+      aside h2 button {
+        font-size: 0.72rem;
+        padding: 0.2rem 0.45rem;
+      }
+      aside h2 button.on { border-color: var(--phosphor); color: var(--phosphor); }
+      .job {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        border: 1px solid var(--line);
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .job strong { color: var(--phosphor); }
+      .desk-wrap {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 1280 / 800;
+        border: 1px solid var(--line);
+        border-radius: 0;
+        background: #111;
+        overflow: hidden;
+        clip-path: inset(0);
+        -webkit-clip-path: inset(0);
+      }
+      .desk-wrap.max {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        width: 100vw;
+        height: 100dvh;
+        max-width: none;
+        aspect-ratio: auto;
+        border: none;
+        border-radius: 0;
+        overflow: hidden;
+        clip-path: inset(0);
+        -webkit-clip-path: inset(0);
+      }
+      body.desk-max { overflow: hidden; }
+      .desk {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: #111;
+        border-radius: 0;
+        overflow: hidden;
+        clip-path: inset(0);
+        -webkit-clip-path: inset(0);
+      }
+      .desk-close {
+        display: none;
+        position: absolute;
+        top: 0.55rem;
+        right: 0.55rem;
+        z-index: 41;
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        border: 1px solid var(--phosphor);
+        background: #22291d;
+        color: var(--phosphor);
+        padding: 0.3rem 0.65rem;
+        cursor: pointer;
+      }
+      .desk-wrap.max .desk-close { display: block; }
+      .desk-missing {
+        padding: 0.7rem 0.15rem;
+        color: var(--amber);
+        font-size: 0.88rem;
+        line-height: 1.45;
+      }
+      header .actions { display: flex; gap: 0.5rem; align-items: flex-start; }
+      header button, .sheet button, footer button {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        border: 1px solid var(--line);
+        background: #22291d;
+        color: var(--ink);
+        padding: 0.45rem 0.7rem;
+        cursor: pointer;
+      }
+      .sheet {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(8, 10, 7, 0.72);
+        z-index: 20;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 2.5rem 1rem 1rem;
+      }
+      .sheet.open { display: flex; }
+      .sheet form {
+        width: min(32rem, 100%);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        padding: 1rem 1.1rem 1.1rem;
+      }
+      .sheet h2 { margin: 0 0 0.35rem; font-size: 1.05rem; }
+      .sheet p.help { margin: 0 0 0.8rem; color: var(--muted); font-size: 0.88rem; }
+      .sheet label { display: block; margin: 0.45rem 0 0.2rem; color: var(--muted); font-size: 0.82rem; }
+      .sheet input,
+      .sheet select {
+        width: 100%;
+        background: #0e120d;
+        color: var(--ink);
+        border: 1px solid var(--line);
+        padding: 0.45rem 0.55rem;
+        font-family: var(--mono);
+        font-size: 0.82rem;
+      }
+      .sheet .row { display: flex; gap: 0.5rem; margin-top: 0.9rem; }
+      .sheet .next {
+        margin-top: 0.8rem;
+        font-size: 0.85rem;
+        color: var(--amber);
+        white-space: pre-wrap;
+      }
+      #banner {
+        display: none;
+        margin: 0 1.4rem;
+        padding: 0.55rem 0.7rem;
+        border: 1px solid #3a3420;
+        color: var(--amber);
+        font-size: 0.88rem;
+      }
+      #banner.show { display: block; }
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 0.8rem 1.2rem 1rem;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.5rem;
+        background: #141a12;
+      }
+      footer textarea {
+        resize: none;
+        min-height: 2.6rem;
+        max-height: 8rem;
+        border: 1px solid var(--line);
+        background: #0e120d;
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 1rem;
+        padding: 0.55rem 0.7rem;
+      }
+      footer textarea:focus { outline: 1px solid var(--phosphor); }
+      .err { color: var(--danger); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <h1><span id="lamp" class="lamp"></span><span id="face" class="avatar" title="OpenBot"><span class="eyes"></span></span>OpenBot</h1>
+        <p>SSH your own machine. The agent gets a computer — you keep the keys. <a href="/oh-test" style="color:var(--phosphor)">本机试连</a></p>
+      </div>
+      <div class="actions">
+        <button id="open-settings" type="button">Settings</button>
+        <div class="meta" id="meta">connecting…</div>
+      </div>
+    </header>
+    <div id="banner"></div>
+    <main>
+      <section id="log"></section>
+      <aside>
+        <h2>电脑 <button type="button" id="desk-max-btn" aria-pressed="false">放大</button></h2>
+        <div class="desk-wrap" id="desk-wrap">
+          <button type="button" id="desk-close" class="desk-close" hidden>收起</button>
+          <div id="desk-missing" class="desk-missing">Desktop not reachable yet.</div>
+          <iframe id="desk" class="desk" hidden title="Remote desktop" tabindex="0" allow="pointer-lock; fullscreen; clipboard-read; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups"></iframe>
+        </div>
+      </aside>
+    </main>
+    <footer>
+      <textarea id="box" rows="2" placeholder="发给这台电脑，直接开始对话。"></textarea>
+      <button id="send" type="button">Send</button>
+    </footer>
+    <div id="settings" class="sheet">
+      <form id="settings-form">
+        <h2>Connect your machine</h2>
+        <p class="help">Saved under ~/.openbot on this laptop (mode 0600). Point at a private key file — do not paste the key, and do not put it in git. Saving opens an SSH tunnel to OpenHands on that host.</p>
+        <label for="set-language">语言</label>
+        <select id="set-language" name="language">
+          <option value="zh-CN">简体中文</option>
+          <option value="zh-TW">繁體中文</option>
+          <option value="en">English</option>
+        </select>
+        <p class="help">聊天回复用这个语言。网上查到的繁体或英文也会转成这个。</p>
+        <label for="set-host">Host</label>
+        <input id="set-host" name="hostname" autocomplete="off" placeholder="hostname or IP" />
+        <label for="set-user">User</label>
+        <input id="set-user" name="user" autocomplete="off" placeholder="ubuntu" />
+        <label for="set-port">Port</label>
+        <input id="set-port" name="port" type="number" min="1" max="65535" value="22" />
+        <label for="set-identity">Identity file path</label>
+        <input id="set-identity" name="identityFile" autocomplete="off" placeholder="~/.ssh/id_ed25519" />
+        <label for="set-session">OpenHands session key (optional)</label>
+        <input id="set-session" name="sessionApiKey" type="password" autocomplete="off" placeholder="leave blank to keep" />
+        <p class="help">Writes OH_SESSION_API_KEY to ~/.openbot/.env only. Never committed.</p>
+        <div class="row">
+          <button id="save-settings" type="submit">Save and connect</button>
+          <button id="close-settings" type="button">Close</button>
+        </div>
+        <div class="next" id="settings-next"></div>
+      </form>
+    </div>
+    <script type="module">
+      import { createComposeGuard, renderMarkdown, shouldSendOnEnter } from "/chat-ui.js";
+
+      const logEl = document.getElementById("log");
+      const desk = document.getElementById("desk");
+      const deskMissing = document.getElementById("desk-missing");
+      const deskWrap = document.getElementById("desk-wrap");
+      const deskMaxBtn = document.getElementById("desk-max-btn");
+      const deskClose = document.getElementById("desk-close");
+      const box = document.getElementById("box");
+      const sendBtn = document.getElementById("send");
+      const meta = document.getElementById("meta");
+      const lamp = document.getElementById("lamp");
+      const face = document.getElementById("face");
+      const banner = document.getElementById("banner");
+      const settingsEl = document.getElementById("settings");
+      const settingsForm = document.getElementById("settings-form");
+      const settingsNext = document.getElementById("settings-next");
+
+      function faceEl(who) {
+        const av = document.createElement("div");
+        av.className = "avatar " + who;
+        av.setAttribute("aria-hidden", "true");
+        av.innerHTML = '<span class="eyes"></span>';
+        return av;
+      }
+
+      function add(kind, title, body, extra) {
+        const el = document.createElement("article");
+        el.className = "msg " + kind;
+        const wrap = document.createElement("div");
+        wrap.className = "bubble";
+        if (kind === "user") el.setAttribute("aria-label", "your message");
+        if (kind === "bot") el.setAttribute("aria-label", "assistant message");
+        if (title && kind !== "user" && kind !== "bot") {
+          const h = document.createElement("h3");
+          h.textContent = title;
+          wrap.appendChild(h);
+        }
+        const markdown = kind === "bot";
+        const bodyEl = document.createElement(kind === "sys" ? "div" : markdown ? "div" : "pre");
+        if (markdown) {
+          bodyEl.className = "md";
+          bodyEl.innerHTML = renderMarkdown(body || "");
+        } else {
+          bodyEl.textContent = body || "";
+        }
+        wrap.appendChild(bodyEl);
+        if (extra) wrap.appendChild(extra);
+        if (kind === "bot") {
+          el.appendChild(faceEl("assistant"));
+          el.appendChild(wrap);
+        } else if (kind === "user") {
+          el.appendChild(wrap);
+          el.appendChild(faceEl("person"));
+        } else {
+          el.appendChild(wrap);
+        }
+        logEl.appendChild(el);
+        logEl.scrollTop = logEl.scrollHeight;
+        return el;
+      }
+
+      async function refreshStatus() {
+        try {
+          const s = await (await fetch("/api/status")).json();
+          const ohOk = !!(s.openhands && s.openhands.ok);
+          lamp.classList.toggle("ok", ohOk && !!s.ready);
+          const host = s.host || {};
+          const hostLine = host.hostname ? host.user + "@" + host.hostname : "no host yet — open Settings";
+          meta.innerHTML =
+            escapeHtml(hostLine) +
+            (s.openhands
+              ? "<br>OH " +
+                (ohOk ? "ok" : "down") +
+                " " +
+                escapeHtml(s.openhands.baseUrl || "") +
+                (s.openhands.hasSessionKey ? "" : " · set session key")
+              : "<br>OH not configured") +
+            (s.nextStep && !s.ready ? "<br class='err'>" + escapeHtml(s.nextStep) : "");
+          if (s.nextStep && !s.ready) {
+            banner.textContent = s.nextStep;
+            banner.classList.add("show");
+          } else {
+            banner.textContent = "";
+            banner.classList.remove("show");
+          }
+        } catch (err) {
+          lamp.classList.remove("ok");
+          meta.textContent = String(err);
+        }
+      }
+
+      function deskSrc(desktop) {
+        const q = new URLSearchParams({
+          port: String((desktop && desktop.localPort) || 6080),
+        });
+        return "/desktop-view?" + q.toString();
+      }
+
+      function deskMaximized() {
+        return deskWrap.classList.contains("max");
+      }
+
+      function setDeskMax(on) {
+        deskWrap.classList.toggle("max", on);
+        document.body.classList.toggle("desk-max", on);
+        deskClose.hidden = !on;
+        deskMaxBtn.setAttribute("aria-pressed", on ? "true" : "false");
+        deskMaxBtn.textContent = on ? "收起" : "放大";
+      }
+
+      async function refreshDesktop() {
+        try {
+          const d = await (await fetch("/api/desktop")).json();
+          if (d.ok && d.viewerUrl) {
+            deskMissing.hidden = true;
+            desk.hidden = false;
+            const src = deskSrc(d);
+            if (desk.getAttribute("src") !== src) desk.src = src;
+          } else {
+            desk.hidden = true;
+            desk.removeAttribute("src");
+            deskMissing.hidden = false;
+            deskMissing.textContent =
+              d.missing ||
+              "The desktop tunnel is not open yet. Save and connect; the client forwards 127.0.0.1:6080.";
+          }
+        } catch {
+          desk.hidden = true;
+          deskMissing.hidden = false;
+          deskMissing.textContent = "Desktop not reachable yet.";
+        }
+      }
+
+      function escapeHtml(s) {
+        return String(s || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      async function consumeSse(url, payload, onEvent) {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok || !res.body) {
+          const t = await res.text();
+          throw new Error(t || res.status);
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const parts = buf.split("\n\n");
+          buf = parts.pop() || "";
+          for (const part of parts) {
+            const line = part.split("\n").find((l) => l.startsWith("data: "));
+            if (!line) continue;
+            onEvent(JSON.parse(line.slice(6)));
+          }
+        }
+      }
+
+      function decideCard(ev, extraLines) {
+        const actions = document.createElement("div");
+        const yes = document.createElement("button");
+        yes.className = "yes";
+        yes.textContent = "Approve";
+        const no = document.createElement("button");
+        no.className = "no";
+        no.textContent = "Deny";
+        actions.append(yes, no);
+        const card = add("approval", "approval gate", extraLines, actions);
+        const decide = async (allow) => {
+          yes.disabled = no.disabled = true;
+          await fetch("/api/approve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: ev.id, allow }),
+          });
+          card.querySelector("h3").textContent = allow ? "approved" : "denied";
+        };
+        yes.onclick = () => decide(true);
+        no.onclick = () => decide(false);
+      }
+
+      async function send() {
+        const text = box.value.trim();
+        if (!text) return;
+        box.value = "";
+        add("user", "", text);
+        const out = add("bot", "", "");
+        const bodyEl = out.querySelector(".md, pre");
+        const av = out.querySelector(".avatar.assistant");
+        let quiet = out.querySelector(".quiet");
+        if (!quiet) {
+          quiet = document.createElement("div");
+          quiet.className = "quiet";
+          out.querySelector(".bubble").appendChild(quiet);
+        }
+        sendBtn.disabled = true;
+        face.classList.add("waiting");
+        if (av) av.classList.add("waiting");
+        try {
+          await consumeSse("/api/chat", { message: text, handoff: true }, (ev) => {
+            if (ev.type === "token") {
+              bodyEl.innerHTML = renderMarkdown(ev.text || "");
+              quiet.textContent = "";
+              face.classList.remove("waiting");
+              if (av) av.classList.remove("waiting");
+              logEl.scrollTop = logEl.scrollHeight;
+            } else if (ev.type === "status") {
+              if (!bodyEl.textContent) quiet.textContent = ev.text === "thinking" ? "" : ev.text;
+            } else if (ev.type === "error") {
+              if (!bodyEl.innerHTML) bodyEl.innerHTML = renderMarkdown(ev.message || "");
+            } else if (ev.type === "done") {
+              quiet.textContent = "";
+              face.classList.remove("waiting");
+              if (av) av.classList.remove("waiting");
+              refreshDesktop();
+            }
+          });
+        } catch (err) {
+          bodyEl.innerHTML = renderMarkdown("这台电脑这轮没做成。你换一句再试。");
+        } finally {
+          face.classList.remove("waiting");
+          if (av) av.classList.remove("waiting");
+          sendBtn.disabled = false;
+          box.focus();
+        }
+      }
+
+      async function loadSettingsForm() {
+        const s = await (await fetch("/api/settings")).json();
+        const host = s.host || {};
+        settingsForm.hostname.value = host.hostname || "";
+        settingsForm.user.value = host.user || "";
+        settingsForm.port.value = host.port || 22;
+        settingsForm.identityFile.value = host.identityFile || "";
+        settingsForm.sessionApiKey.value = "";
+        settingsForm.sessionApiKey.placeholder = s.openhands && s.openhands.hasSessionKey ? "set — leave blank to keep" : "leave blank to keep";
+        settingsForm.language.value = s.language || "zh-CN";
+        settingsNext.textContent = (s.connect && s.connect.nextStep) || "";
+      }
+
+      document.getElementById("open-settings").onclick = async () => {
+        await loadSettingsForm();
+        settingsEl.classList.add("open");
+        settingsForm.hostname.focus();
+      };
+      document.getElementById("close-settings").onclick = () => settingsEl.classList.remove("open");
+      settingsEl.addEventListener("click", (e) => {
+        if (e.target === settingsEl) settingsEl.classList.remove("open");
+      });
+      settingsForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const saveBtn = document.getElementById("save-settings");
+        saveBtn.disabled = true;
+        settingsNext.textContent = "Saving…";
+        try {
+          const payload = {
+            hostname: settingsForm.hostname.value.trim(),
+            user: settingsForm.user.value.trim(),
+            port: Number(settingsForm.port.value || 22),
+            identityFile: settingsForm.identityFile.value.trim(),
+            sessionApiKey: settingsForm.sessionApiKey.value,
+            language: settingsForm.language.value,
+            connect: true,
+          };
+          const res = await fetch("/api/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || res.status);
+          settingsForm.sessionApiKey.value = "";
+          settingsNext.textContent = (data.connect && data.connect.nextStep) || "Saved to ~/.openbot.";
+          await refreshStatus();
+          await refreshDesktop();
+        } catch (err) {
+          settingsNext.textContent = String(err);
+        } finally {
+          saveBtn.disabled = false;
+        }
+      });
+
+      deskMaxBtn.onclick = (e) => {
+        e.stopPropagation();
+        setDeskMax(!deskMaximized());
+      };
+      deskClose.onclick = (e) => {
+        e.stopPropagation();
+        setDeskMax(false);
+      };
+      deskWrap.addEventListener("dblclick", (e) => {
+        if (e.target === deskClose || e.target === deskMaxBtn) return;
+        setDeskMax(!deskMaximized());
+      });
+      window.addEventListener("message", (e) => {
+        if (e.origin !== location.origin) return;
+        if (e.data && e.data.type === "openbot-desk-toggle") setDeskMax(!deskMaximized());
+        if (e.data && e.data.type === "openbot-desk-close") setDeskMax(false);
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && deskMaximized()) setDeskMax(false);
+      });
+      sendBtn.onclick = send;
+      const compose = createComposeGuard();
+      box.addEventListener("compositionstart", () => compose.onCompositionStart());
+      box.addEventListener("compositionend", () => compose.onCompositionEnd());
+      box.addEventListener("keydown", (e) => {
+        if (!shouldSendOnEnter(e, compose.active())) return;
+        e.preventDefault();
+        send();
+      });
+      refreshStatus();
+      refreshDesktop();
+      setInterval(refreshStatus, 8000);
+      setInterval(refreshDesktop, 5000);
+      add(
+        "sys",
+        "",
+        "发给这台电脑就会直接对话。先在 Settings 里填你自己的主机和本机私钥路径；密钥只留在 ~/.openbot，不会进 git。",
+      );
+    </script>
+  </body>
+</html>

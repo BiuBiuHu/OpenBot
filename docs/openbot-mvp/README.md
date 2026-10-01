@@ -1,0 +1,17 @@
+# Feature `openbot-mvp`
+
+opc-skills 文档根。Feature name：`openbot-mvp`。Project root：本仓库。
+
+目标运行时（**v0**）：本机 **Agent**（规划/编排）交接给远端 **OpenHands Agent Server**（Agent 循环 / 工具 / 事件）。一条线程，不是三个 mode。本仓库自建本机壳 + adapter + **扩展层**（OH 缺的能力；第一缺口是桌面/VNC，**不挡 v0**）。**不**为 v0 自建 `openbot-agent`，也 **不** fork OH。自建 native agent 延后。群组后置。决策：[03-architecture/runtime-decision-v0.md](03-architecture/runtime-decision-v0.md)。细节从 `03-architecture/` 读起。
+
+产品阶段（聊天 / 改代码 / 文档 / 电脑使用）以 [`docs/phases/`](../phases/README.md) 为准。与本卷宗冲突时，评审应否定其中一方并写明文件。
+
+| 目录 | 主文档 |
+|------|--------|
+| 00-research | [competitor-research.md](00-research/competitor-research.md) |
+| 01-product | [PRD.md](01-product/PRD.md)、[requirement-validation.md](01-product/requirement-validation.md) |
+| 02-ui | [markdown-prototype.md](02-ui/markdown-prototype.md) |
+| 03-architecture | [architecture.md](03-architecture/architecture.md)、[remote-agent.md](03-architecture/remote-agent.md)、[runtime-decision-v0.md](03-architecture/runtime-decision-v0.md) |
+| 04-engineering | implementation-plan / change-impact / evidence / code-review / backlog |
+| 05-testing | test-strategy / test-cases.json / test-report / integration-report |
+| 06-ops | [local-client.md](06-ops/local-client.md)（本机壳怎么连已运行的 OH）、[ops-runbook.md](06-ops/ops-runbook.md)、[release-plan.md](06-ops/release-plan.md)、[openhands-agent-server-trial.md](06-ops/openhands-agent-server-trial.md)、[oh-runtime-adapter.md](06-ops/oh-runtime-adapter.md) |

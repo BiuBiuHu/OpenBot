@@ -4,9 +4,11 @@
 >
 > 用 SSH 挂上你自己的机器；Agent 拥有一台电脑，钥匙在你手里。
 
-开源、BYOK。体验对齐 [Grok Bot](https://cursor.com) 的核心隐喻（持久电脑 + 聊天遥控），但电脑是用户的，不是托管 Firecracker。
+开源、BYOK。体验对齐 Grok Bot 的核心隐喻（**持久电脑 + 聊天遥控**），但电脑是**用户的**，不是托管 Firecracker，也不是像素桌面对等。
 
 Working title was HostPC; product name is **OpenBot**.
+
+本仓库按 [opc-skills](https://github.com/BiuBiuHu/opc-skills) 交付。MVP 主文档在 [`docs/openbot-mvp/`](docs/openbot-mvp/)。
 
 ---
 
@@ -16,10 +18,10 @@ Chat-only assistants stop when you close the laptop. Hosted “agent PCs” work
 
 OpenBot’s bet:
 
-1. A **remote execution environment** is the useful part of Grok Bot.  
-2. That environment should be **your machine** (VPS, mini PC, spare laptop) via SSH.  
-3. Models use **your API keys**.  
-4. Ship something people can clone, try on a 2C4G box, and talk about — community attention first, company later.
+1. A **remote execution environment** is the useful part of Grok Bot.
+2. That environment should be **your machine** (VPS, mini PC, spare laptop) via SSH.
+3. Models use **your API keys**.
+4. Ship something people can clone, try on a **2C4G headless** box, and talk about.
 
 ---
 
@@ -48,68 +50,103 @@ OpenHands can attach a remote box; OpenBot’s product language is different: **
 
 **Align on purpose**
 
-- Chat as the remote control  
-- Work survives closing the laptop  
-- Files and job state live on the host  
-- Risky actions ask before running  
+- Chat as the remote control
+- Work survives closing the laptop
+- Files and job state live on the host
+- Risky actions ask before running
 
 **Defer (don’t fake Grok parity day one)**
 
-- Full desktop / pixel computer-use  
-- Hosted Firecracker isolation  
-- Polished mobile + Auto Review depth  
+- Full desktop / pixel computer-use
+- Hosted Firecracker isolation
+- Polished mobile + Auto Review depth
 
 MVP truth: *bind SSH → leave a job running → lid down → reopen and see result or approval.*
 
 ---
 
-## Principles
+## Install (vertical slice)
 
-1. **Host first** — Onboarding = connect SSH, not pick a skin.  
-2. **BYOK** — No token resale.  
-3. **2C4G default** — Headless worker; browser phase 2.  
-4. **Approval on the wire** — Dangerous commands wait.  
-5. **Open by default** — Trust comes from readable code on *your* host.  
-6. **Thin vertical later** — Skills/marketplace after the host metaphor works.
+Requires **Node 20+** on the laptop, and **Python 3 + bash** on the Linux host. The current worker (and the future agent) has **zero pip deps**.
+
+```bash
+git clone https://github.com/BiuBiuHu/OpenBot.git
+cd OpenBot
+npm install
+npm run build
+
+npx openbot init --host YOUR_VPS --user ubuntu --identity ~/.ssh/id_ed25519
+# Optional chat: copy .env.example → ~/.openbot/.env and set OPENAI_API_KEY
+npx openbot bind
+npx openbot run 'uname -a'
+npx openbot serve          # http://127.0.0.1:3847
+
+# v0 remote runtime (OpenHands Agent Server via SSH tunnel):
+# ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host
+# export OH_BASE_URL=http://127.0.0.1:8000
+# export OH_SESSION_API_KEY=   # or gitignored .env / ~/.openbot/.env
+npx openbot oh health
+npx openbot serve            # http://127.0.0.1:3847/  same-thread handoff
+npx openbot chat 'summarize uname on this machine'
+```
+
+`uname -a` is executed on the **remote host**, not the browser and not as a fake local stub.
+
+Secrets live in `~/.openbot` (mode `0600`). Never commit them. See `.env.example`.
 
 ---
 
-## MVP scope
+## Persist after you close the laptop
 
-1. **Bind** — SSH key → “my computer”  
-2. **Persist** — Worker on the remote host  
-3. **Remote** — Chat dispatch + streamed output + approval gate  
+`openbot bind` copies `worker/worker.py` over SSH and starts it with, in order:
 
-Non-goals v0: team admin, marketplace, Firecracker fleet, coding-IDE war with OpenHands.
+1. **systemd --user** `openbot-worker.service` (enables linger when possible)
+2. **tmux** session `openbot-worker`
+3. **nohup** + `~/.openbot-worker/worker.pid`
+
+Jobs and logs stay under `~/.openbot-worker/jobs` on the host. Closing the UI only drops the SSH tunnel. **v0** moves the remote **model loop** onto **OpenHands Agent Server** (already trialled on 2C4G); a self-built `openbot-agent` is deferred. See [runtime-decision-v0.md](docs/openbot-mvp/03-architecture/runtime-decision-v0.md).
+
+```bash
+npx openbot status
+# on the host:
+systemctl --user status openbot-worker.service
+# or: tmux ls | grep openbot-worker
+```
+
+Details: [`docs/openbot-mvp/06-ops/ops-runbook.md`](docs/openbot-mvp/06-ops/ops-runbook.md).
+
+---
+
+## Approval gate
+
+Destructive or privileged commands (`rm -rf`, `sudo`, reboot, pipe-to-shell, …) pause until you approve in the UI or TTY. This is a product gate, **not** a sandbox.
 
 ---
 
 ## Shape
 
 ```text
-[ Phone / Desktop ]  --chat / approve-->  [ Control plane ]
-                                               |
-                                          SSH + worker
-                                               |
-                                        [ Your machine ]
-                                   files · jobs · shell
-                                 (browser optional later)
+[ One thread ]
+   local Agent (plan / draft)  --handoff-->  remote runtime (v0: OpenHands Agent Server)
+                         events back into the same thread
+                         then local Agent wraps up
 ```
+
+SSH is for **bind / bootstrap** and an optional tunnel — not the command channel.
+
+Today's runnable slice (PR#1) still uses a remote **worker** plus a laptop-side model loop. **v0** talks to OpenHands Agent Server through a thin local adapter — not a whole-repo fork, and not a self-built `openbot-agent`. Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`runtime-decision-v0.md`](docs/openbot-mvp/03-architecture/runtime-decision-v0.md), [`docs/openbot-mvp/03-architecture/architecture.md`](docs/openbot-mvp/03-architecture/architecture.md), [`docs/openbot-mvp/03-architecture/remote-agent.md`](docs/openbot-mvp/03-architecture/remote-agent.md). Trial ops: [`openhands-agent-server-trial.md`](docs/openbot-mvp/06-ops/openhands-agent-server-trial.md).
 
 ---
 
 ## Community goal
 
-Not “beat Grok Bot.”  
+Not “beat Grok Bot.”
 **Be the obvious open answer when someone asks:** *can I get a Grok-like agent PC on my own VPS?*
-
-Success metrics (first 90 days): cloneable MVP, clear README metaphor, demos on a real 2C4G host, issues/PRs from strangers.
 
 ---
 
 ## Status
 
-Positioning locked. Implementation not public yet.
+Runnable MVP vertical slice. Positioning + implementation live in this repo.
 
-License: TBD (lean MIT or Apache-2.0).  
-Repo name suggestion if `OpenBot` is taken: `openbot-pc` / `openbot-host`.
+License: [MIT](LICENSE).

@@ -1,0 +1,23 @@
+{
+  "id": "timeout-is-short",
+  "title": "A timeout is one short sentence, not a raw status line plus a long investigation log",
+  "userMessage": "帮我分析下 grokbot 的架构",
+  "remote": {
+    "status": "timeout",
+    "conversationId": "eval-timeout-is-short",
+    "rawReply": "conversation timed out while running\n我做了比较彻底的排查，结论是：当前环境里不存在名为 grokbot 的代码库。\n排查过程与结果\n1. 当前工作目录 /opt/openhands-agent/workspace/project 只有两个笔记文件。\n1. 整个工区 /opt/openhands-agent/workspace/ 下有 openbot-trial/。\n1. 全局关键词搜索 grep -ril grokbot。\n1. Git 仓库没有配置 remote。"
+  },
+  "expect": {
+    "remoteOutcome": "timeout",
+    "shownMustNotMatch": [
+      "conversation timed out",
+      "while running",
+      "/opt/",
+      "grep -ril",
+      "排查过程",
+      "workspace/project"
+    ],
+    "maxSentences": 2,
+    "maxChars": 80
+  }
+}
