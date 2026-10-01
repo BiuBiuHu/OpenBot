@@ -86,6 +86,7 @@ export interface HandoffTurnDeps {
   threadId?: string;
   /** Existing OpenHands conversation on this thread — continue instead of create. */
   conversationId?: string;
+  language?: string;
 }
 
 /**
@@ -144,7 +145,7 @@ export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promi
   }
   const raw = agentReplyText(lastItems);
   const outcome = outcomeFromRemote(last.status, timedOut);
-  const voiced = voiceChatReply({ userMessage: goal, remoteText: raw, outcome });
+  const voiced = voiceChatReply({ userMessage: goal, remoteText: raw, outcome, language: deps.language });
   deps.emit({ type: "token", text: voiced.text });
   if (voiced.kind === "fail") {
     deps.emit({ type: "error", message: voiced.text });

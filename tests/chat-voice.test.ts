@@ -139,6 +139,7 @@ describe("chat voice", () => {
     assert.ok(shown.text.length < 80);
     const english = voiceFromSearch({
       userMessage: "what is Grok Bot",
+      language: "en",
       hits: [
         {
           title: "Grok (chatbot)",
@@ -178,6 +179,40 @@ describe("chat voice", () => {
     assert.doesNotMatch(shown.text, /…|\.\.\./);
     assert.doesNotMatch(shown.text, /小白入门|一篇讲明白|本文依据|官方文档/);
     assert.ok(/[。！？]$/.test(shown.text));
+  });
+
+  it("TC-VOICE-010: saved zh-CN rewrites Traditional or English search into Simplified", () => {
+    const traditional = voiceFromSearch({
+      userMessage: "Grok 是什么",
+      language: "zh-CN",
+      hits: [
+        {
+          title: "Grok",
+          snippet: "Grok是xAI基于大型语言模型开发的生成式人工智慧聊天機器人,類似於ChatGPT。",
+          url: "https://zh.wikipedia.org/wiki/Grok",
+          source: "wikipedia",
+        },
+      ],
+    });
+    assert.match(traditional.text, /网上查过了/);
+    assert.match(traditional.text, /机器人|人工智能|类似于/);
+    assert.doesNotMatch(traditional.text, /機器人|類似於|人工智慧/);
+    const englishQ = voiceFromSearch({
+      userMessage: "what is Grok Bot",
+      language: "zh-CN",
+      hits: [
+        {
+          title: "Grok (chatbot)",
+          snippet: "Grok is a generative artificial intelligence chatbot developed by xAI.",
+          url: "https://en.wikipedia.org/wiki/Grok_(chatbot)",
+          source: "wikipedia",
+        },
+      ],
+    });
+    assert.match(englishQ.text, /网上查过了/);
+    assert.match(englishQ.text, /对话|聊天|机器人/);
+    assert.doesNotMatch(englishQ.text, /I looked it up/);
+    assert.doesNotMatch(englishQ.text, /generative artificial intelligence/);
   });
 
   it("TC-SEARCH-002: lookup skips OpenHands so a workspace dump is not search", async () => {

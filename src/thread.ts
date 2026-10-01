@@ -1,5 +1,6 @@
 import { runAgentTurn, runLocalChatTurn } from "./agent.js";
-import { needsLookup, lookupQuery, preferChinese, voiceFromSearch } from "./chat-voice.js";
+import { needsLookup, lookupQuery, voiceFromSearch } from "./chat-voice.js";
+import { DEFAULT_CHAT_LANGUAGE, normalizeChatLanguage, prefersChineseSearch } from "./language.js";
 import { hasLocalModelKey } from "./config.js";
 import { runHandoffTurn, type HandoffTurnDeps } from "./handoff.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, LlmConfig } from "./types.js";
@@ -19,6 +20,8 @@ export interface ThreadTurnDeps extends HandoffTurnDeps {
   searchWeb?: (query: string) => Promise<SearchHit[]>;
   /** Last resort after HTTP pages are empty: OpenHands browser / page read. */
   browsePublicPage?: (query: string) => Promise<SearchHit[]>;
+  /** Saved chat language. Default zh-CN. */
+  language?: string;
 }
 
 export interface ThreadTurnResult {
@@ -37,12 +40,14 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
   const goal = message.trim();
   if (!goal) throw new Error("message required");
 
+  const language = normalizeChatLanguage(deps.language ?? DEFAULT_CHAT_LANGUAGE);
+
   if (needsLookup(goal)) {
     deps.emit({ type: "status", text: "thinking" });
     const query = lookupQuery(goal);
     let hits = await (deps.searchWeb
       ? deps.searchWeb(query)
-      : searchWeb(query, { preferChinese: preferChinese(goal) }));
+      : searchWeb(query, { preferChinese: prefersChineseSearch(language) }));
     if (!hits.length) {
       hits = await (deps.browsePublicPage
         ? deps.browsePublicPage(query)
@@ -53,7 +58,7 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
             pollMs: deps.pollMs,
           }).catch(() => [] as SearchHit[]));
     }
-    const voiced = voiceFromSearch({ userMessage: goal, hits });
+    const voiced = voiceFromSearch({ userMessage: goal, hits, language });
     deps.emit({ type: "token", text: voiced.text });
     deps.emit({ type: "done" });
     return { path: "lookup", history: deps.history ?? [] };

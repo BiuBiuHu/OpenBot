@@ -182,6 +182,7 @@ export async function startControlPlane(
             port: body.port !== undefined ? (body.port as number | string) : undefined,
             identityFile: body.identityFile !== undefined ? String(body.identityFile) : undefined,
             name: body.name !== undefined ? String(body.name) : undefined,
+            language: body.language !== undefined ? String(body.language) : undefined,
           });
           saveConfig(saved);
           const sessionApiKey = body.sessionApiKey !== undefined ? String(body.sessionApiKey).trim() : "";
@@ -321,6 +322,7 @@ export async function startControlPlane(
             pollMs: typeof body.poll_ms === "number" ? body.poll_ms : 250,
             threadId,
             conversationId: threadConversations.get(threadId),
+            language: liveConfig.language,
           });
           if (conversation?.id) threadConversations.set(threadId, conversation.id);
         });
@@ -387,6 +389,7 @@ export async function startControlPlane(
             worker,
             store: handoffs,
             history,
+            language: live.language,
             emit: (event) => {
               if (event.type === "token") shown = event.text;
               emit(event);

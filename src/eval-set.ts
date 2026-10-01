@@ -166,9 +166,10 @@ export function scoreEvalCase(c: EvalCase, shown: string, remoteOk: boolean): Ev
       /\b(?:is a (?:series of )?(?:generative|chatbot)|generative artificial intelligence|developed by (?:xAI|SpaceXAI)|large language model)\b/i.test(
         shown,
       );
+    const pastedTraditional = /機器人|類似於|人工智慧|網上看過/.test(shown);
     checks.push({
       name: "same-language",
-      pass: hasZh && !pastedEnglish,
+      pass: hasZh && !pastedEnglish && !pastedTraditional,
       detail: shown.slice(0, 160),
     });
   }

@@ -312,6 +312,7 @@ async function cmdChat(rest: string[], flags: Record<string, string>): Promise<v
       timeoutMs,
       pollMs,
       threadId: flags.thread || "chat_default",
+      language: config.language,
     });
     process.stdout.write("\n");
     if (result.path === "handoff" && remoteConversationFailed(result.conversation)) {
@@ -329,6 +330,7 @@ async function cmdChat(rest: string[], flags: Record<string, string>): Promise<v
       store: new HandoffStore(),
       emit: printThreadEvent,
       forceHandoff: false,
+      language: config.language,
       waitForConfirm: async (proposal) => confirmHandoff(proposal.goal),
       waitForApproval: async (req) => confirmDangerous(req.command),
     });

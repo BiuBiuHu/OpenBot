@@ -67,6 +67,7 @@ describe("host settings (no live SSH)", () => {
     assert.match(raw, /laptop-id/);
     assert.doesNotMatch(raw, /BEGIN [A-Z0-9 ]*PRIVATE KEY/);
     const published = publicSettings(loadConfig());
+    assert.equal(published.language, "zh-CN");
     assert.equal(published.host.hostname, "192.0.2.10");
     assert.equal(published.host.identityFile, keyPath);
     assert.equal("sessionApiKey" in published.openhands, false);
@@ -125,6 +126,20 @@ describe("host settings (no live SSH)", () => {
     assert.match(leftover.nextStep, /SSH did not connect/);
   });
 
+  it("TC-SET-009: language is saved under ~/.openbot and defaults to zh-CN", () => {
+    const cfg = defaultConfig();
+    assert.equal(cfg.language, "zh-CN");
+    const next = applyHostSettings(cfg, { language: "en" });
+    const file = saveConfig(next);
+    const raw = fs.readFileSync(file, "utf8");
+    assert.match(raw, /"language": "en"/);
+    assert.equal(loadConfig().language, "en");
+    assert.equal(publicSettings(loadConfig()).language, "en");
+    const back = applyHostSettings(loadConfig(), { language: "zh-CN" });
+    saveConfig(back);
+    assert.equal(loadConfig().language, "zh-CN");
+  });
+
   it("TC-SET-005: OpenHands local forward port comes from baseUrl", () => {
     assert.equal(openHandsLocalPort("http://127.0.0.1:8000"), 8000);
     assert.equal(openHandsLocalPort("http://127.0.0.1:18000"), 18000);
@@ -162,6 +177,8 @@ describe("settings HTTP (mocked OH, no live host)", { concurrency: false }, () =
     const origin = `http://127.0.0.1:${port}`;
     const html = await (await fetch(`${origin}/`)).text();
     assert.match(html, /Settings/);
+    assert.match(html, /id="set-language"/);
+    assert.match(html, /简体中文/);
     assert.doesNotMatch(html, /<select id="mode"/);
 
     const rejected = await (
@@ -188,6 +205,7 @@ describe("settings HTTP (mocked OH, no live host)", { concurrency: false }, () =
           port: 22,
           identityFile: "~/.ssh/id_ed25519",
           sessionApiKey: "new-session",
+          language: "zh-CN",
           connect: false,
         }),
       })
@@ -198,6 +216,7 @@ describe("settings HTTP (mocked OH, no live host)", { concurrency: false }, () =
       connect?: { nextStep?: string };
     };
     assert.equal(saved.ok, true);
+    assert.equal((saved as { language?: string }).language, "zh-CN");
     assert.equal(saved.host?.hostname, "192.0.2.8");
     assert.equal(saved.host?.user, "deploy");
     assert.equal(saved.host?.identityFile, "~/.ssh/id_ed25519");

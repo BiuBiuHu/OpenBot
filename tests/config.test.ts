@@ -54,6 +54,7 @@ describe("REQ-OPENBOT-007 config isolation", () => {
     assert.equal(parsed.OPENAI_MODEL, "gpt-4o-mini");
 
     const cfg = defaultConfig();
+    assert.equal(cfg.language, "zh-CN");
     assert.equal(cfg.openhands.baseUrl, "http://127.0.0.1:8000");
     assert.equal(cfg.openhands.workspaceDir, "workspace/project");
     cfg.host.hostname = "203.0.113.10";

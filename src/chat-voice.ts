@@ -1,5 +1,11 @@
 /** Chat-layer voice: short, human replies. Remote dumps stay off the transcript. */
 
+import {
+  applyChatLanguage,
+  DEFAULT_CHAT_LANGUAGE,
+  normalizeChatLanguage,
+  type ChatLanguage,
+} from "./language.js";
 import { decodeHtmlEntities, type SearchHit } from "./web-search.js";
 
 export type ChatOutcome = "succeeded" | "failed" | "timeout" | "cancelled" | "running";
@@ -8,6 +14,7 @@ export interface VoiceInput {
   userMessage: string;
   remoteText?: string;
   outcome: ChatOutcome;
+  language?: ChatLanguage | string;
 }
 
 export interface VoiceReply {
@@ -132,17 +139,29 @@ function dumpLine(zh: boolean): string {
     : "I looked on the computer. Short version: nothing I can hand you as a conclusion yet.";
 }
 
-export function voiceFromSearch(input: { userMessage: string; hits: SearchHit[] }): VoiceReply {
-  const zh = preferChinese(input.userMessage);
+function voiceLanguage(input: { language?: string; userMessage?: string }): ChatLanguage {
+  if (input.language !== undefined && input.language !== "") {
+    return normalizeChatLanguage(input.language);
+  }
+  return DEFAULT_CHAT_LANGUAGE;
+}
+
+function speak(text: string, language: ChatLanguage): string {
+  return applyChatLanguage(linkifyReply(text), language);
+}
+
+export function voiceFromSearch(input: { userMessage: string; hits: SearchHit[]; language?: string }): VoiceReply {
+  const language = voiceLanguage(input);
+  const zh = language !== "en";
   const hits = (input.hits || []).filter((h) => String(h.snippet || h.title || "").trim());
   if (!hits.length) {
     return {
-      text: zh ? "网上没查成。" : "The lookup failed.",
+      text: speak(zh ? "网上没查成。" : "The lookup failed.", language),
       kind: "fail",
     };
   }
   if (zh) {
-    return { text: shortChineseFromHits(lookupQuery(input.userMessage), hits), kind: "ok" };
+    return { text: speak(shortChineseFromHits(lookupQuery(input.userMessage), hits), language), kind: "ok" };
   }
   const bits = hits
     .slice(0, 2)
@@ -156,7 +175,7 @@ export function voiceFromSearch(input: { userMessage: string; hits: SearchHit[] 
     .slice(0, 2);
   let text = sentences.join(". ");
   if (text && !/[。！？.!?]$/.test(text)) text += ".";
-  return { text: linkifyReply(`I looked it up. ${text}`.replace(/\s+/g, " ").trim()), kind: "ok" };
+  return { text: speak(`I looked it up. ${text}`.replace(/\s+/g, " ").trim(), language), kind: "ok" };
 }
 
 const SEARCH_JUNK =
@@ -205,48 +224,50 @@ function shortChineseFromHits(subject: string, hits: SearchHit[]): string {
 }
 
 export function voiceChatReply(input: VoiceInput): VoiceReply {
-  const zh = preferChinese(input.userMessage);
+  const language = voiceLanguage(input);
+  const zh = language !== "en";
   const remote = String(input.remoteText || "").trim();
   const outcome = input.outcome;
 
   if (outcome === "timeout" || outcome === "running") {
-    return { text: timeoutLine(zh), kind: "fail" };
+    return { text: speak(timeoutLine(zh), language), kind: "fail" };
   }
   if (outcome === "failed" || outcome === "cancelled") {
     if (looksLikeOpenHandsIntro(remote) && isWhoAreYou(input.userMessage) && !mentionsOtherProduct(input.userMessage)) {
-      return { text: whoLine(zh), kind: "ok" };
+      return { text: speak(whoLine(zh), language), kind: "ok" };
     }
-    return { text: failLine(zh), kind: "fail" };
+    return { text: speak(failLine(zh), language), kind: "fail" };
   }
 
   if (looksLikeOpenHandsIntro(remote)) {
     if (mentionsOtherProduct(input.userMessage)) {
-      return { text: otherProductLine(zh, input.userMessage), kind: "ok" };
+      return { text: speak(otherProductLine(zh, input.userMessage), language), kind: "ok" };
     }
     if (isWhoAreYou(input.userMessage)) {
-      return { text: whoLine(zh), kind: "ok" };
+      return { text: speak(whoLine(zh), language), kind: "ok" };
     }
     return {
-      text: zh
-        ? "先不背说明书。你具体想让这台电脑做什么？"
-        : "I'll skip the manual. What do you actually want this computer to do?",
+      text: speak(
+        zh ? "先不背说明书。你具体想让这台电脑做什么？" : "I'll skip the manual. What do you actually want this computer to do?",
+        language,
+      ),
       kind: "ok",
     };
   }
 
   if (!remote) {
-    return { text: dumpLine(zh), kind: "ok" };
+    return { text: speak(dumpLine(zh), language), kind: "ok" };
   }
 
   if (looksLikeTechnicalDump(remote) || sentenceCount(remote) > 4) {
     const conclusion = remote.match(/(?:结论[是：:]|short version[:：]|所以[，,]?)([^\n。]+[。]?)/);
     if (conclusion?.[1] && !looksLikeOpenHandsIntro(conclusion[1]) && !DUMP_MARK.test(conclusion[1])) {
-      return { text: linkifyReply(conclusion[1].trim()), kind: "ok" };
+      return { text: speak(conclusion[1].trim(), language), kind: "ok" };
     }
-    return { text: dumpLine(zh), kind: "ok" };
+    return { text: speak(dumpLine(zh), language), kind: "ok" };
   }
 
-  return { text: linkifyReply(remote), kind: "ok" };
+  return { text: speak(remote, language), kind: "ok" };
 }
 
 export function outcomeFromRemote(status?: string, timedOut = false): ChatOutcome {

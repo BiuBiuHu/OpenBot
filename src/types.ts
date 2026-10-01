@@ -57,6 +57,8 @@ export interface OpenBotConfig {
   controlPlane: ControlPlaneConfig;
   openhands: OpenHandsConfig;
   desktop: DesktopConfig;
+  /** Chat replies. Default zh-CN. Saved in ~/.openbot/config.json. */
+  language: "zh-CN" | "zh-TW" | "en";
 }
 
 export interface HandoffProposal {

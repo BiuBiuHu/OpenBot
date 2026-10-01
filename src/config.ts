@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { DEFAULT_CHAT_LANGUAGE, normalizeChatLanguage } from "./language.js";
 import type { OpenBotConfig } from "./types.js";
 import { ensureDir, expandHome, openbotHome } from "./paths.js";
 
@@ -106,6 +107,7 @@ export function defaultConfig(partial: Partial<OpenBotConfig> = {}): OpenBotConf
         partial.desktop?.remotePort ||
         Number(pick(env, "OPENBOT_DESKTOP_REMOTE_PORT", pick(env, "OPENBOT_DESKTOP_PORT", "6080"))),
     },
+    language: normalizeChatLanguage(partial.language ?? pick(env, "OPENBOT_LANGUAGE", DEFAULT_CHAT_LANGUAGE)),
     openhands: {
       baseUrl: (
         partial.openhands?.baseUrl ||
@@ -201,6 +203,11 @@ export function identityFileMissing(config: OpenBotConfig): boolean {
   return !fs.existsSync(file);
 }
 
+export function applyLanguageSetting(current: OpenBotConfig, language?: string): OpenBotConfig {
+  if (language === undefined) return current;
+  return { ...current, language: normalizeChatLanguage(language) };
+}
+
 export function applyHostSettings(
   current: OpenBotConfig,
   input: {
@@ -209,6 +216,7 @@ export function applyHostSettings(
     port?: number | string;
     identityFile?: string;
     name?: string;
+    language?: string;
   },
 ): OpenBotConfig {
   const identityFile =
@@ -219,7 +227,7 @@ export function applyHostSettings(
   if (!Number.isFinite(rawPort) || rawPort < 1 || rawPort > 65535) {
     throw new Error("SSH port must be 1–65535");
   }
-  return {
+  const next: OpenBotConfig = {
     ...current,
     host: {
       ...current.host,
@@ -230,10 +238,12 @@ export function applyHostSettings(
       name: input.name !== undefined ? trimValue(input.name) || current.host.name : current.host.name,
     },
   };
+  return applyLanguageSetting(next, input.language);
 }
 
 export function publicSettings(config: OpenBotConfig) {
   return {
+    language: normalizeChatLanguage(config.language),
     host: {
       name: config.host.name,
       hostname: config.host.hostname,
