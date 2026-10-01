@@ -113,7 +113,10 @@ export function isDocumentReadAsk(message: string): boolean {
   return false;
 }
 
-export function extractDocumentFacts(text: string): { title: string; sentences: string[] } {
+export function extractDocumentFacts(
+  text: string,
+  opts: { repo?: boolean } = {},
+): { title: string; sentences: string[] } {
   const raw = String(text || "").replace(/\r/g, "");
   let title = "";
   const heading = raw.match(/^#{1,3}\s+(.+)$/m);
@@ -130,8 +133,11 @@ export function extractDocumentFacts(text: string): { title: string; sentences: 
   const all = stripHtml(clean)
     .split(/[。！？]/)
     .map((s) => s.replace(/\s+/g, " ").trim())
-    .filter((s) => s.length >= 12 && s.length <= 96);
-  const preferred = all.filter((s) => /这一章|本章|本文|这篇|本页|这一节|本节/.test(s));
+    .filter((s) => s.length >= 12 && s.length <= 96)
+    .filter((s) => !/模型选型可参考|这篇指南/.test(s));
+  const preferred = opts.repo
+    ? all.filter((s) => /本书|本仓库|开源|核心公式|Agent\s*=/.test(s))
+    : all.filter((s) => /这一章|本章|本文|这篇|本页|这一节|本节/.test(s));
   return { title, sentences: (preferred.length ? preferred : all).slice(0, 2) };
 }
 
@@ -147,7 +153,7 @@ export async function readPublicDocument(
     for (const dest of githubReadmeRawUrls(href)) {
       const got = await fetchPublicText(dest, fetchFn, timeoutMs);
       if (!got) continue;
-      const facts = extractDocumentFacts(got.text);
+      const facts = extractDocumentFacts(got.text, { repo: true });
       return { title: facts.title, text: got.text, url: href, kind: "repo" };
     }
     return undefined;

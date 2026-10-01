@@ -265,7 +265,7 @@ export function voiceFromDocument(
   const href = input.document?.url || extractPublicHttpUrl(String(input.userMessage || "")) || "";
   const repo = input.document?.kind === "repo" || (!!href && isGithubRepoHome(href));
   const text = String(input.document?.text || input.text || "");
-  const facts = extractDocumentFacts(text);
+  const facts = extractDocumentFacts(text, { repo });
   const title = facts.title || input.document?.title || input.title || "";
   if (!facts.sentences.length && !title) {
     return {

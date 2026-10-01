@@ -112,6 +112,7 @@ export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promi
       try {
         last = await deps.client.getConversation(id);
         await deps.client.sendMessage(id, goal);
+        last = { ...last, executionStatus: "running", status: "running" };
       } catch {
         id = "";
         last = undefined;

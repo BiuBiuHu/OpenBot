@@ -34,7 +34,7 @@
 | TASK-CODE-001 | 具名改文件分发与评测 | thread / evals | P1 | pending | 另开从 main 拉的分支 |
 | TASK-WSDOC-001 | 工作区 notes.md 起草 | 未定 | P1 | pending | 先把验收写进本目录新版本 |
 | TASK-DESK-001 | 桌面回归（无工具条/放大） | desktop | P2 | pending | 不在本 PR 改代码 |
-| TASK-LIVE-001 | 分栏独立、交接等到终态、仓库 URL / 这是啥 | ui / handoff / page-read / voice | P0 | doing | 三条新评测先红后绿；七句旧门禁保持绿 |
+| TASK-LIVE-001 | 分栏独立、交接等到终态、仓库 URL / 这是啥 | ui / handoff / page-read / voice | P0 | done | 三条新评测先红后绿；七句旧门禁保持绿 |
 
 ## 4. 执行顺序和阻塞
 

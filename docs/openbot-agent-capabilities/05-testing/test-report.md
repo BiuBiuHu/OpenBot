@@ -48,6 +48,22 @@
   2. `whats-this-is-computer` **FAIL** shown=`先不背说明书。你具体想让这台电脑做什么？`
   3. `handoff-waits-until-terminal` **FAIL** shown=`这台电脑这轮没在时限里跑完。你再说一次就行。`
   假设成立：`runHandoffTurn` 默认 `timeoutMs = 60_000`，`voiceChatReply` 在 `timeout`/`running` 时用时限套话盖掉远端正文。
+- 改后命令：
+  - `npx tsc --noEmit`：通过
+  - `npm test`：102 pass / 0 fail
+  - `npx tsx src/cli.ts eval`：
+    1. `read-public-doc-exact` **pass**
+    2. `read-public-doc` **pass**
+    3. `todays-time` **pass**
+    4. `change-code` **pass**
+    5. `change-code-bare` **pass**
+    6. `who-are-you` **pass**
+    7. `what-is-grok-bot` **pass**
+    8. `repo-is-not-a-chapter` **pass**（这个仓库是「深入理解 AI Agent…」；无 模型选型 / 这一章）
+    9. `whats-this-is-computer` **pass**（无「先不背说明书」）
+    10. `handoff-waits-until-terminal` **pass**（仓库已经下好了；无时限套话）
+    另：`analyze-other-product` `links-render` `timeout-is-short` 仍 pass
+- 云 VM 不能打用户 Mac 活页；用户会把本分支拉到本机再跑那几句。
 - 环境：本地 Node，分支 `cursor/live-chat-eval-gate-74e9`，基线 `origin/main` = `0b445aa`。
 - 上一轮漏测（必须写进报告）：v0.2 绿跑的句子是「看看 … 这个文档讲了什么?」，JSON 里还塞了自编 `# 用户记忆和知识库` 两句。**不是**用户后打的「… 这个讲的是什么?」，也**没有**走真抓。所以那次绿不能证明活页。
 - 命令与结果（本分支）：

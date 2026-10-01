@@ -169,16 +169,12 @@ async function loadPublicDocument(c: EvalCase): Promise<PublicDocument | undefin
 
 export function installFakeClock(start = 1_000_000): { now: () => number; tick: (ms: number) => void; restore: () => void } {
   let current = start;
-  const realNow = Date.now;
-  Date.now = () => current;
   return {
     now: () => current,
     tick: (ms: number) => {
       current += Math.max(0, ms);
     },
-    restore: () => {
-      Date.now = realNow;
-    },
+    restore: () => undefined,
   };
 }
 
