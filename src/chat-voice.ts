@@ -6,7 +6,10 @@ import {
   normalizeChatLanguage,
   type ChatLanguage,
 } from "./language.js";
+import { extractDocumentFacts, isDocumentReadAsk, type PublicDocument } from "./page-read.js";
 import { decodeHtmlEntities, type SearchHit } from "./web-search.js";
+
+export { isDocumentReadAsk } from "./page-read.js";
 
 export type ChatOutcome = "succeeded" | "failed" | "timeout" | "cancelled" | "running";
 
@@ -89,6 +92,7 @@ export function needsLookup(message: string): boolean {
   if (isClockAsk(t)) return false;
   if (isCodingAsk(t)) return false;
   if (isComputerTask(t)) return false;
+  if (isDocumentReadAsk(t)) return false;
   return LOOKUP_ASK.test(t);
 }
 
@@ -230,6 +234,25 @@ function voiceLanguage(input: { language?: string; userMessage?: string }): Chat
 
 function speak(text: string, language: ChatLanguage): string {
   return applyChatLanguage(linkifyReply(text), language);
+}
+
+export function voiceFromDocument(
+  input: { userMessage?: string; document?: PublicDocument; title?: string; text?: string; language?: string },
+): VoiceReply {
+  const language = voiceLanguage(input);
+  const zh = language !== "en";
+  const text = String(input.document?.text || input.text || "");
+  const facts = extractDocumentFacts(text);
+  const title = facts.title || input.document?.title || input.title || "";
+  if (!facts.sentences.length && !title) {
+    return { text: speak(zh ? "这个链接我没读成。" : "I could not read that page.", language), kind: "fail" };
+  }
+  if (zh) {
+    const bits = [title ? `这一章是「${title}」` : "", ...facts.sentences].filter(Boolean);
+    return { text: speak(`我看过了。${bits.join("。")}。`.replace(/。+/g, "。"), language), kind: "ok" };
+  }
+  const bits = [title, ...facts.sentences].filter(Boolean);
+  return { text: speak(`I read it. ${bits.join(". ")}.`.replace(/\.\s*\./g, "."), language), kind: "ok" };
 }
 
 export function voiceFromSearch(input: { userMessage: string; hits: SearchHit[]; language?: string }): VoiceReply {

@@ -4,12 +4,15 @@ import {
   isClockAsk,
   looksLikeOpenHandsIntro,
   voiceChatReply,
+  voiceFromDocument,
   voiceFromSearch,
   voiceNow,
   type ChatOutcome,
 } from "./chat-voice.js";
+import { isDocumentReadAsk } from "./page-read.js";
 import { ensureDir, openbotHome, repoRoot } from "./paths.js";
 import type { SearchHit } from "./web-search.js";
+import type { PublicDocument } from "./page-read.js";
 
 export interface EvalRemoteFixture {
   status: ChatOutcome | "finished" | "error" | "succeeded";
@@ -25,6 +28,7 @@ export interface EvalExpect {
   maxChars?: number;
   shownEquals?: string;
   lookupRequired?: boolean;
+  documentRequired?: boolean;
 }
 
 export interface EvalCase {
@@ -36,6 +40,9 @@ export interface EvalCase {
   /** Replay a real search instead of voicing the remote dump. */
   lookupRequired?: boolean;
   search?: { hits: SearchHit[] };
+  /** Replay a fetched public document instead of a computer-task timeout. */
+  documentRequired?: boolean;
+  document?: PublicDocument;
 }
 
 export interface EvalCheck {
@@ -106,6 +113,13 @@ export function shownForCase(c: EvalCase): string {
   if (isClockAsk(c.userMessage)) {
     return voiceNow({ language: "zh-CN" }).text;
   }
+  if (c.documentRequired || c.document || isDocumentReadAsk(c.userMessage)) {
+    return voiceFromDocument({
+      userMessage: c.userMessage,
+      document: c.document,
+      language: "zh-CN",
+    }).text;
+  }
   if (c.lookupRequired || c.search) {
     return voiceFromSearch({
       userMessage: c.userMessage,
@@ -152,6 +166,18 @@ export function scoreEvalCase(c: EvalCase, shown: string, remoteOk: boolean): Ev
     checks.push({
       name: `must:${pat}`,
       pass: re.test(shown),
+      detail: shown.slice(0, 160),
+    });
+  }
+  if (c.documentRequired || c.expect.documentRequired) {
+    const timeoutVoice = /没在时限|再说一次|did not finish in time/i.test(shown);
+    checks.push({
+      name: "document-required",
+      pass:
+        !looksLikeOpenHandsIntro(shown) &&
+        !timeoutVoice &&
+        !/conversation timed out/i.test(shown) &&
+        !/不知道|I don't know|还没找到/.test(shown),
       detail: shown.slice(0, 160),
     });
   }

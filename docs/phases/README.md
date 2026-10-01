@@ -1,6 +1,10 @@
-# OpenBot 阶段文档
+# OpenBot 阶段文档（历史）
 
-评审用。每一份都应能单独打开、单独否定。本目录只写决策与验收，**不**在这里实现第 2–4 阶段。
+**决策源已迁移。** 2026-10-01 起，产品与技术决策以 [`docs/openbot-agent-capabilities/`](../openbot-agent-capabilities/01-product/PRD.md) 为准（opc-skills 一类一份主文档）。本目录只保留当时的阶段笔记，不再更新，也不再作为评审依据。若某句与 `openbot-agent-capabilities` 冲突，否定本目录。
+
+---
+
+以下为归档原文。每一份当时都应能单独打开、单独否定。本目录只写决策与验收，**不**在这里实现第 2–4 阶段。
 
 仓库路径：
 

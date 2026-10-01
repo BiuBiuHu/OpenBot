@@ -1,0 +1,119 @@
+{
+  "feature": "openbot-agent-capabilities",
+  "version": "v0.1",
+  "updated": "2026-10-01",
+  "cases": [
+    {
+      "id": "TC-DOC-001",
+      "system": "主服务",
+      "priority": "P0",
+      "req": ["REQ-DOC-001"],
+      "precondition": "无",
+      "steps": [
+        "调用 isDocumentReadAsk('看看 https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个文档讲了什么?')"
+      ],
+      "expected": "true",
+      "must_not": "被当成 needsLookup 或 isClockAsk",
+      "evidence": "tests/page-read.test.ts",
+      "automation": "node:test"
+    },
+    {
+      "id": "TC-DOC-002",
+      "system": "主服务",
+      "priority": "P0",
+      "req": ["REQ-DOC-003"],
+      "precondition": "无",
+      "steps": [
+        "调用 readableDocumentUrl(GitHub blob URL)"
+      ],
+      "expected": "https://raw.githubusercontent.com/bojieli/ai-agent-book/main/book/chapter3.md",
+      "must_not": "仍指向 github.com/.../blob/...",
+      "evidence": "tests/page-read.test.ts",
+      "automation": "node:test"
+    },
+    {
+      "id": "TC-DOC-003",
+      "system": "主服务",
+      "priority": "P0",
+      "req": ["REQ-DOC-001", "REQ-CAP-004"],
+      "precondition": "夹具正文含标题与本章句",
+      "steps": [
+        "voiceFromDocument({ language: 'zh-CN', document })"
+      ],
+      "expected": "以「我看过了」开头，含标题要点，简体，句子少",
+      "must_not": "OH 说明书、超时套话、整段英文源文",
+      "evidence": "tests/chat-voice.test.ts",
+      "automation": "node:test"
+    },
+    {
+      "id": "TC-DOC-004",
+      "system": "主服务",
+      "priority": "P0",
+      "req": ["REQ-DOC-001", "REQ-CAP-001"],
+      "precondition": "注入 readPublicDocument 与 mock OH",
+      "steps": [
+        "runThreadTurn(现场原句, { forceHandoff: true })"
+      ],
+      "expected": "path === 'document'，shown 来自夹具，mock.creates.length === 0，searchWeb 不被调用",
+      "must_not": "path 为 handoff/lookup",
+      "evidence": "tests/chat-voice.test.ts",
+      "automation": "node:test"
+    },
+    {
+      "id": "TC-DOC-005",
+      "system": "主服务",
+      "priority": "P0",
+      "req": ["REQ-DOC-002"],
+      "precondition": "readPublicDocument 返回 undefined",
+      "steps": [
+        "runThreadTurn(现场原句)"
+      ],
+      "expected": "shown 为读不成",
+      "must_not": "没在时限里跑完 / 再说一次",
+      "evidence": "tests/chat-voice.test.ts",
+      "automation": "node:test"
+    },
+    {
+      "id": "TC-DOC-006",
+      "system": "主服务",
+      "priority": "P0",
+      "req": ["REQ-DOC-003"],
+      "precondition": "本地或注入 fetch",
+      "steps": [
+        "readPublicDocument(blob URL) 观察实际请求 URL"
+      ],
+      "expected": "fetch 打到 raw.githubusercontent.com 等价地址",
+      "must_not": "把 blob HTML 当正文",
+      "evidence": "tests/page-read.test.ts",
+      "automation": "node:test"
+    },
+    {
+      "id": "EVAL-read-public-doc",
+      "system": "评测",
+      "priority": "P0",
+      "req": ["REQ-DOC-001", "REQ-DOC-002"],
+      "precondition": "evals/chat-layer/cases/read-public-doc.json",
+      "steps": [
+        "runEvalSuite()"
+      ],
+      "expected": "该案通过；shown 含我看过了与章节主题",
+      "must_not": "超时套话、OH 说明书、密钥",
+      "evidence": "tests/eval-set.test.ts",
+      "automation": "node:test"
+    },
+    {
+      "id": "TC-EVAL-001",
+      "system": "评测",
+      "priority": "P0",
+      "req": ["REQ-CHAT-001"],
+      "precondition": "cases/ 全套",
+      "steps": [
+        "loadEvalCases + runEvalSuite"
+      ],
+      "expected": "ID 列表含 read-public-doc 且全部 pass",
+      "must_not": "夹具含私钥或公网 IPv4",
+      "evidence": "tests/eval-set.test.ts",
+      "automation": "node:test"
+    }
+  ]
+}

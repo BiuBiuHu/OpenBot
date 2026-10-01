@@ -1,0 +1,38 @@
+{
+  "id": "read-public-doc",
+  "title": "公开文档 URL 必须抓正文短答，不得当成电脑任务超时",
+  "userMessage": "看看 https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md 这个文档讲了什么?",
+  "documentRequired": true,
+  "document": {
+    "title": "用户记忆和知识库",
+    "text": "# 用户记忆和知识库\n\n这一章讲用户记忆和共享知识库的差别，以及检索增强生成怎么把外部知识接到对话里。\n用户记忆是针对单个人长期保存的偏好和事实，知识库则是多人可复用的材料。\nAgent 要先读到这些材料，而不是只靠当轮上下文。\n",
+    "url": "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md"
+  },
+  "remote": {
+    "status": "timeout",
+    "conversationId": "eval-read-public-doc",
+    "rawReply": "这台电脑这轮没在时限里跑完。你再说一次就行。"
+  },
+  "expect": {
+    "remoteOutcome": "timeout",
+    "documentRequired": true,
+    "shownMustNotMatch": [
+      "没在时限",
+      "再说一次",
+      "我是 OpenHands",
+      "workspace/project",
+      "conversation timed out",
+      "网上查过了",
+      "I looked it up",
+      "不知道",
+      "I don't know"
+    ],
+    "shownMustMatch": [
+      "我看过了",
+      "用户记忆",
+      "知识库"
+    ],
+    "maxSentences": 4,
+    "maxChars": 400
+  }
+}
