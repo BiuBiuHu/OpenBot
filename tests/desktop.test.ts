@@ -62,7 +62,7 @@ describe("desktop pane (no live host)", () => {
       assert.match(html, /id="desk"/);
       assert.match(html, /desk-wrap/);
       assert.match(html, /aspect-ratio:\s*1280\s*\/\s*800/);
-      assert.match(html, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s*28rem/);
+      assert.match(html, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s*36rem/);
       assert.match(html, /id="desk-bar"/);
       assert.match(html, /工具条/);
       assert.match(html, /allow-pointer-lock/);
