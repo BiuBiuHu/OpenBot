@@ -14,7 +14,7 @@ import { Type } from "typebox";
 import { hasLocalModelKey } from "./config.js";
 import { normalizeChatLanguage } from "./language.js";
 import { textStream, userText } from "./pi-stream.js";
-import { connectionFailureText, type RemoteSkill } from "./remote-agent.js";
+import { connectionFailureText, remoteFailedText, type RemoteSkill, type RemoteTaskResult } from "./remote-agent.js";
 import type { SessionTools } from "./session-tools.js";
 import type { OhConversation } from "./oh-client.js";
 import type { LlmConfig } from "./types.js";
@@ -187,6 +187,22 @@ function noKeyStream(
   return textStream(zh ? NO_MODEL_KEY_TEXT : "No local model key.");
 }
 
+function skillToolText(result: RemoteTaskResult): string {
+  const text = String(result.text || "").trim();
+  if (text === connectionFailureText() || text === "连不上这台电脑。" || text === "Can't reach this computer.") {
+    return text === "Can't reach this computer." ? text : connectionFailureText();
+  }
+  if (result.transport === "a2a" && result.dispatched && !result.failed) return "做完了。";
+  if (result.failed) {
+    const alreadyBrief = text === remoteFailedText() || text === "The computer did not finish that.";
+    if (alreadyBrief) return text;
+    // A process log is more than one short sentence. Keep it off the model context.
+    if (!text || text.includes("\n") || text.length > 40) return remoteFailedText();
+    return text;
+  }
+  return text || connectionFailureText();
+}
+
 function piTools(tools: SessionTools, skills: RemoteSkill[]): ToolDefinition[] {
   const local: ToolDefinition[] = [
     {
@@ -239,12 +255,7 @@ function piTools(tools: SessionTools, skills: RemoteSkill[]): ToolDefinition[] {
     async execute(_id: string, params: unknown) {
       const goal = String((params as { goal?: string }).goal || "");
       const result = await tools.sendSkill(skill.id, goal);
-      const text =
-        result.transport === "a2a" && result.dispatched
-          ? result.failed
-            ? result.text
-            : "做完了。"
-          : result.text || connectionFailureText();
+      const text = skillToolText(result);
       return { content: [{ type: "text" as const, text }], details: {} };
     },
   }));

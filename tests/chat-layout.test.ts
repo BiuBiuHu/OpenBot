@@ -61,8 +61,11 @@ describe("chat column scroll", () => {
       assert.equal(narrow.lastMessageAboveInput, true, JSON.stringify(narrow));
       assert.equal(narrow.pageFixed, true, JSON.stringify(narrow));
     } finally {
-      await browser.close();
-      await plane.close();
+      try {
+        await browser.close();
+      } finally {
+        await plane.close();
+      }
     }
   });
 });
@@ -138,11 +141,24 @@ async function launchChrome(chrome: string): Promise<{
       return evaluated.result.value;
     },
     async close() {
-      pageWs.close();
-      browserWs.close();
-      child.kill("SIGKILL");
-      await new Promise((resolve) => child.once("exit", resolve));
-      fs.rmSync(userData, { recursive: true, force: true });
+      try {
+        pageWs.close();
+        browserWs.close();
+      } catch {
+        /* the sockets may already be closed */
+      }
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
+        await new Promise((resolve) => child.once("exit", resolve));
+      }
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        try {
+          fs.rmSync(userData, { recursive: true, force: true });
+          return;
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 40));
+        }
+      }
     },
   };
 }
