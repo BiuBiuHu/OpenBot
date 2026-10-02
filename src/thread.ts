@@ -1,8 +1,8 @@
-import { linkifyReply, looksLikeOpenHandsIntro, voiceChatReply } from "./chat-voice.js";
+import { briefChatText, linkifyReply, looksLikeOpenHandsIntro, voiceChatReply } from "./chat-voice.js";
 import { applyChatLanguage, DEFAULT_CHAT_LANGUAGE, normalizeChatLanguage } from "./language.js";
 import { type HandoffTurnDeps } from "./handoff.js";
 import { createOpenBotPiSession, type OpenBotPiOptions, type PiSession } from "./pi-kernel.js";
-import { connectionFailureText, isConnectError } from "./remote-agent.js";
+import { connectionFailureText, isConnectError, loadRemoteSkills } from "./remote-agent.js";
 import { createSessionTools, type SessionToolBag } from "./session-tools.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, LlmConfig } from "./types.js";
 import type { WorkerClient } from "./worker-client.js";
@@ -37,6 +37,8 @@ export interface ThreadTurnResult {
   path: "pi" | "handoff" | "local" | "worker" | "lookup" | "clock" | "coding" | "document";
   conversation?: OhConversation;
   history: ChatMessage[];
+  /** Long remote body kept off the transcript. */
+  kept?: string;
 }
 
 /**
@@ -57,7 +59,8 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
     (await createOpenBotPiSession({
       llm: deps.llm,
       language,
-        tools: createSessionTools({
+        remoteSkills: await loadRemoteSkills(deps.client.baseUrl),
+      tools: createSessionTools({
         client: () => deps.client,
         oh: () => deps.oh,
         language: () => language,
@@ -71,11 +74,12 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
       }),
       modelStream: deps.modelStream,
       conversation: () => bag.conversation,
+      kept: () => bag.remote?.fullText,
     }));
 
   try {
     const turn = await session.prompt(goal);
-    const text = presentPiText(goal, turn.text, language);
+    const text = presentPiText(goal, turn.text, language, turn.kept ?? bag.remote?.fullText);
     deps.emit({ type: "token", text });
     if (bag.remote?.failed) deps.emit({ type: "error", message: text });
     deps.emit({ type: "done" });
@@ -83,6 +87,7 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
       path: "pi",
       conversation: turn.conversation ?? bag.conversation,
       history: appendHistory(deps.history, goal, text),
+      kept: turn.kept ?? bag.remote?.fullText,
     };
   } catch (err) {
     const text = isConnectError(err) ? connectionFailureText(language) : localFailureText(language);
@@ -95,19 +100,20 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
   }
 }
 
-function presentPiText(userMessage: string, text: string, language: string): string {
+function presentPiText(userMessage: string, text: string, language: string, kept?: string): string {
   const raw = String(text || "").trim();
   const lang = normalizeChatLanguage(language);
   if (!raw) return lang === "en" ? "No reply." : "这轮没有答上来。";
-  if (looksLikeOpenHandsIntro(raw)) {
-    return voiceChatReply({
-      userMessage,
-      remoteText: raw,
-      outcome: "succeeded",
-      language: lang,
-    }).text;
-  }
-  return applyChatLanguage(linkifyReply(raw), lang);
+  if (raw === connectionFailureText(lang)) return raw;
+  const voiced = looksLikeOpenHandsIntro(raw)
+    ? voiceChatReply({
+        userMessage,
+        remoteText: raw,
+        outcome: "succeeded",
+        language: lang,
+      }).text
+    : applyChatLanguage(linkifyReply(raw), lang);
+  return briefChatText(voiced, kept);
 }
 
 function localFailureText(language: string): string {

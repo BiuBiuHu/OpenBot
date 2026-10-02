@@ -29,8 +29,51 @@ export interface RemoteTaskResult {
   conversation?: OhConversation;
   connected: boolean;
   failed: boolean;
-  /** Which transport actually ran the task. */
-  transport: "a2a" | "openhands";
+  /** Which transport actually ran the task. `none` means no A2A task was sent. */
+  transport: "a2a" | "openhands" | "none";
+  /** Long remote body. The chat keeps it and does not paste it. */
+  fullText?: string;
+  /** True only after an A2A message:send was issued. */
+  dispatched?: boolean;
+}
+
+export interface RemoteSkill {
+  id: string;
+  name: string;
+  description: string;
+}
+
+const SKILL_ID = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+
+/** Skills from a real agent card. A miss is an empty list, not a made-up A2A call. */
+export async function loadRemoteSkills(baseUrl: string, fetchImpl: typeof fetch = fetch): Promise<RemoteSkill[]> {
+  try {
+    const url = new URL("/.well-known/agent-card.json", baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+    const res = await fetchImpl(url, { signal: AbortSignal.timeout(2_000) });
+    if (!res.ok) return [];
+    const body = (await res.json()) as {
+      name?: unknown;
+      supportedInterfaces?: unknown;
+      skills?: unknown;
+    };
+    if (!body || typeof body.name !== "string" || !Array.isArray(body.supportedInterfaces) || !Array.isArray(body.skills)) {
+      return [];
+    }
+    const skills: RemoteSkill[] = [];
+    for (const skill of body.skills) {
+      if (!skill || typeof skill !== "object") continue;
+      const row = skill as { id?: unknown; name?: unknown; description?: unknown };
+      if (typeof row.id !== "string" || !SKILL_ID.test(row.id)) continue;
+      skills.push({
+        id: row.id,
+        name: typeof row.name === "string" && row.name.trim() ? row.name.trim() : row.id,
+        description: typeof row.description === "string" && row.description.trim() ? row.description.trim() : row.id,
+      });
+    }
+    return skills;
+  } catch {
+    return [];
+  }
 }
 
 const STOPPED_TASK = new Set<TaskState>([
@@ -179,7 +222,23 @@ async function runOpenHandsTask(goal: string, deps: RemoteTaskDeps): Promise<Rem
   };
 }
 
-async function runA2aTask(goal: string, deps: RemoteTaskDeps): Promise<RemoteTaskResult> {
+/** Send one card skill as an A2A task. Does not fall back to another channel. */
+export async function sendA2aSkill(skillId: string, goal: string, deps: RemoteTaskDeps): Promise<RemoteTaskResult> {
+  try {
+    return await runA2aTask(goal, deps, skillId);
+  } catch (err) {
+    const connected = !isConnectError(err);
+    return {
+      text: connected ? remoteFailedText(deps.language) : connectionFailureText(deps.language),
+      connected,
+      failed: true,
+      transport: "none",
+      dispatched: false,
+    };
+  }
+}
+
+async function runA2aTask(goal: string, deps: RemoteTaskDeps, skillId?: string): Promise<RemoteTaskResult> {
   const factory = new ClientFactory({
     transports: [new JsonRpcTransportFactory(), new RestTransportFactory()],
   });
@@ -187,19 +246,21 @@ async function runA2aTask(goal: string, deps: RemoteTaskDeps): Promise<RemoteTas
   const options = deps.client.sessionApiKey
     ? { serviceParameters: { "X-Session-API-Key": deps.client.sessionApiKey } }
     : undefined;
-  const sent = await client.sendMessage(a2aMessage(goal), options);
+  const sent = await client.sendMessage(a2aMessage(goal, skillId), options);
   const task = await settleA2a(client, sent, deps.pollMs ?? 250, options);
-  const text = task ? textFromTask(task) : textFromMessage(sent as Message);
-  const failed = task ? !completed(task) : !text;
+  const fullText = (task ? textFromTask(task) : textFromMessage(sent as Message)).trim();
+  const failed = task ? !completed(task) : !fullText;
   return {
-    text: text || remoteFailedText(deps.language),
+    text: fullText || remoteFailedText(deps.language),
+    fullText,
     connected: true,
     failed,
     transport: "a2a",
+    dispatched: true,
   };
 }
 
-function a2aMessage(goal: string) {
+function a2aMessage(goal: string, skillId?: string) {
   const message: Message = {
     messageId: randomUUID(),
     contextId: "",
@@ -213,7 +274,7 @@ function a2aMessage(goal: string) {
         mediaType: "text/plain",
       },
     ],
-    metadata: undefined,
+    metadata: skillId ? { skillId } : undefined,
     extensions: [],
     referenceTaskIds: [],
   };

@@ -54,6 +54,29 @@ const OTHER_PRODUCT = /grok\s*bot|grokbot|openclaw|chatgpt|claude\b|devin\b|curs
 const DUMP_MARK =
   /排查过程|conversation\s+timed out|execution_status|\/opt\/|grep\s+-r|workspace\/project|succeeded\s+[0-9a-f-]{8}/i;
 
+/** At most two sentences. Drops step lists and a kept remote dump. */
+export function briefChatText(text: string, drop?: string): string {
+  let raw = String(text || "").trim();
+  if (!raw) return raw;
+  const marker = String(drop || "").trim();
+  if (marker.length >= 12) {
+    if (raw.includes(marker)) raw = raw.replaceAll(marker, "").trim();
+    for (const line of marker.split(/\n+/)) {
+      const bit = line.trim();
+      if (bit.length >= 12 && raw.includes(bit)) raw = raw.replaceAll(bit, "").trim();
+    }
+  }
+  const lines = raw.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const prose = lines.filter((line) => !/^(?:\d+[.、)]\s*|[-*]\s+|步骤)/.test(line));
+  const source = (prose.length ? prose : lines.map((line) => line.replace(/^(?:\d+[.、)]\s*|[-*]\s+)/, ""))).join("");
+  const sentences = source
+    .split(/(?<=[。！？!?])/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const picked = (sentences.length ? sentences : [source || raw]).slice(0, 2).join("");
+  return picked.trim() || raw;
+}
+
 export function looksLikeOpenHandsIntro(text: string): boolean {
   const t = String(text || "");
   if (!OPENHANDS_INTRO.test(t)) return false;

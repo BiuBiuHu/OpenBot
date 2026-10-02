@@ -2,7 +2,7 @@ import { voiceFromDocument, voiceFromSearch, voiceNow } from "./chat-voice.js";
 import { normalizeChatLanguage, prefersChineseSearch } from "./language.js";
 import { browsePublicPage } from "./page-browse.js";
 import { readPublicDocument, type PublicDocument } from "./page-read.js";
-import { runRemoteTask, type RemoteTaskDeps, type RemoteTaskResult } from "./remote-agent.js";
+import { sendA2aSkill, type RemoteTaskDeps, type RemoteTaskResult } from "./remote-agent.js";
 import type { OhConversation } from "./oh-client.js";
 import { searchWeb, type SearchHit } from "./web-search.js";
 
@@ -30,7 +30,8 @@ export interface SessionTools {
   clock(now?: Date): string;
   readPublicDocument(request: string): Promise<string>;
   webSearch(query: string): Promise<string>;
-  askRemote(goal: string): Promise<string>;
+  /** Forwards one card skill. Does not run the skill in this process. */
+  sendSkill(skillId: string, goal: string): Promise<RemoteTaskResult>;
 }
 
 export function createSessionTools(deps: SessionToolDeps): SessionTools {
@@ -63,8 +64,8 @@ export function createSessionTools(deps: SessionToolDeps): SessionTools {
       }
       return voiceFromSearch({ userMessage: query, hits, language: lang }).text;
     },
-    async askRemote(goal) {
-      const result = await runRemoteTask(goal, {
+    async sendSkill(skillId, goal) {
+      const result = await sendA2aSkill(skillId, goal, {
         client: deps.client(),
         oh: deps.oh(),
         language: language(),
@@ -74,7 +75,7 @@ export function createSessionTools(deps: SessionToolDeps): SessionTools {
       });
       deps.bag.conversation = result.conversation;
       deps.bag.remote = result;
-      return result.text;
+      return result;
     },
   };
 }

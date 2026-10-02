@@ -4,13 +4,15 @@
 
 ## 当前事实
 
-写这篇时，仓库里已经有这些，还没有按本方案改完：
+一条对话。`runThreadTurn` 把用户原文交给 Pi 的 `createAgentSession`，不再用规则抢答。时钟、读公开文档、网页查询仍是 Pi 自己的工具。
 
-- 一条对话。`runThreadTurn` 把用户原文交给 Pi 的 `createAgentSession`，不再用规则抢答。
-- 时钟、读公开文档、网页查询是这个 Pi 会话上的工具。
-- 远端是一个写死的 `ask_remote_agent`。它先看 `/.well-known/agent-card.json`。没有这张卡时，走现有 OpenHands `POST /api/conversations`，结果记成 `openhands`，不记成 `a2a`。
-- 现在这份 OpenHands 不会发 agent card。上游没改。没有部署，没有 SSH。
-- 连不上时活路径只回「连不上这台电脑。」活路径不在 60 秒放弃。
+远端能力不再写死成 `ask_remote_agent`。`loadRemoteSkills` 读 agent card 的 `skills`，有卡才注册成 Pi 的工具。工具调用 `sendA2aSkill`，只发 A2A，不落到别的通道上冒充。没有合法卡时技能列表是空的，不发 A2A。
+
+旧的 `runRemoteTask` 在没有卡时仍会走 OpenHands 的 `/api/conversations`，结果记成 `openhands`，不记成 `a2a`。那是原来的 handoff，不是本方案里的远端工具。
+
+适配层源码在 `src/a2a-adapter/`。它发出 agent card，把任务转给现有的 OpenHands 对话接口，等到终态再交回。它自己不跑命令，也不改文件。这次没有把它部署到那台电脑上。现网那份 OpenHands 仍然不会发 agent card。上游没改。没有 SSH。
+
+连不上时活路径只回「连不上这台电脑。」活路径不在 60 秒放弃。还没有在用户的真实页面上验证。
 
 ## 一个对话
 

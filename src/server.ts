@@ -25,6 +25,7 @@ import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "./handoff
 import { conversationSnippet, OpenHandsClient } from "./oh-client.js";
 import { repoRoot } from "./paths.js";
 import { createOpenBotPiSession, type PiSession } from "./pi-kernel.js";
+import { loadRemoteSkills } from "./remote-agent.js";
 import { createSessionTools, type SessionToolBag } from "./session-tools.js";
 import { runThreadTurn } from "./thread.js";
 import { ensureWorkerAccess, type TunnelHandle } from "./tunnel.js";
@@ -87,12 +88,16 @@ export async function startControlPlane(
   }
 
   async function piSessionFor(threadId: string): Promise<PiSession> {
+    const remoteSkills = await loadRemoteSkills(oh.baseUrl);
+    const skillKey = remoteSkills.map((skill) => skill.id).join(",");
     const existing = piSessions.get(threadId);
-    if (existing) return existing;
+    if (existing && existing.skillKey === skillKey) return existing;
+    if (existing) existing.dispose();
     const bag: SessionToolBag = {};
     const session = await createOpenBotPiSession({
       llm: liveConfig.llm,
       language: liveConfig.language,
+      remoteSkills,
       tools: createSessionTools({
         client: () => oh,
         oh: () => liveConfig.openhands,
@@ -102,6 +107,7 @@ export async function startControlPlane(
         bag,
       }),
       conversation: () => bag.conversation,
+      kept: () => bag.remote?.fullText,
     });
     piSessions.set(threadId, session);
     return session;
