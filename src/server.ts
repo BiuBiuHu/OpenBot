@@ -24,6 +24,8 @@ import { appendLiveEvalRun } from "./eval-set.js";
 import { deliverConfirmedHandoff, HandoffStore, runHandoffTurn } from "./handoff.js";
 import { conversationSnippet, OpenHandsClient } from "./oh-client.js";
 import { repoRoot } from "./paths.js";
+import { createOpenBotPiSession, type PiSession } from "./pi-kernel.js";
+import { createSessionTools, type SessionToolBag } from "./session-tools.js";
 import { runThreadTurn } from "./thread.js";
 import { ensureWorkerAccess, type TunnelHandle } from "./tunnel.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, HandoffProposal, OpenBotConfig } from "./types.js";
@@ -63,6 +65,7 @@ export async function startControlPlane(
   const handoffs = new HandoffStore();
   const handoffWaiters = new Map<string, (allow: boolean) => void>();
   const threadConversations = new Map<string, string>();
+  const piSessions = new Map<string, PiSession>();
   let liveConfig = config;
   let oh = OpenHandsClient.fromConfig(liveConfig);
   let ohTunnel: TunnelHandle | undefined;
@@ -81,6 +84,27 @@ export async function startControlPlane(
     } catch {
       /* UI still serves; Settings shows the next step */
     }
+  }
+
+  async function piSessionFor(threadId: string): Promise<PiSession> {
+    const existing = piSessions.get(threadId);
+    if (existing) return existing;
+    const bag: SessionToolBag = {};
+    const session = await createOpenBotPiSession({
+      llm: liveConfig.llm,
+      language: liveConfig.language,
+      tools: createSessionTools({
+        client: () => oh,
+        oh: () => liveConfig.openhands,
+        language: () => liveConfig.language,
+        threadId,
+        conversationId: () => threadConversations.get(threadId),
+        bag,
+      }),
+      conversation: () => bag.conversation,
+    });
+    piSessions.set(threadId, session);
+    return session;
   }
 
   const uiFile = path.join(repoRoot(), "src/ui/index.html");
@@ -378,24 +402,23 @@ export async function startControlPlane(
           await json(res, { ok: false, error: "message required" }, 400);
           return;
         }
-        const live = liveConfig;
         const threadId = String(body.thread_id || body.threadId || "chat_default");
         await streamSse(req, res, async (emit) => {
           let shown = "";
+          const session = await piSessionFor(threadId);
           const result = await runThreadTurn(message, {
             client: oh,
-            oh: live.openhands,
-            llm: live.llm,
+            oh: liveConfig.openhands,
+            llm: liveConfig.llm,
             worker,
             store: handoffs,
             history,
-            language: live.language,
+            language: liveConfig.language,
+            pi: session,
             emit: (event) => {
               if (event.type === "token") shown = event.text;
               emit(event);
             },
-            forceHandoff: true,
-            timeoutMs: typeof body.timeout_ms === "number" ? body.timeout_ms : 60_000,
             pollMs: typeof body.poll_ms === "number" ? body.poll_ms : 250,
             threadId,
             conversationId: threadConversations.get(threadId),
@@ -448,6 +471,8 @@ export async function startControlPlane(
     worker,
     tunnel,
     close: async () => {
+      for (const session of piSessions.values()) session.dispose();
+      piSessions.clear();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await tunnel?.stop();
       await ohTunnel?.stop();

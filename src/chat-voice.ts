@@ -155,8 +155,11 @@ function markdownLink(url: string): string {
   }
 }
 
+/** Kept for offline eval fixtures. The live remote wait must not emit this. */
+export const REMOTE_TIMER_LINE = "这台电脑这轮没在时限里跑完。你再说一次就行。";
+
 function timeoutLine(zh: boolean): string {
-  return zh ? "这台电脑这轮没在时限里跑完。你再说一次就行。" : "The computer did not finish in time. Say it again if you want another try.";
+  return zh ? REMOTE_TIMER_LINE : "The computer did not finish in time. Say it again if you want another try.";
 }
 
 function failLine(zh: boolean): string {

@@ -358,13 +358,12 @@ export class OpenHandsClient {
   }
 
   async pollConversation(id: string, opts: PollOptions = {}): Promise<OhConversation> {
-    const timeoutMs = opts.timeoutMs ?? 60_000;
     const pollMs = opts.pollMs ?? 400;
     const stopOnApproval = opts.stopOnApproval !== false;
-    const deadline = Date.now() + timeoutMs;
+    const deadline = typeof opts.timeoutMs === "number" ? Date.now() + opts.timeoutMs : undefined;
     let last = await this.getConversation(id);
     while (!isTerminalStatus(last.executionStatus, stopOnApproval)) {
-      if (Date.now() >= deadline) return last;
+      if (deadline !== undefined && Date.now() >= deadline) return last;
       await sleep(pollMs);
       last = await this.getConversation(id);
     }
