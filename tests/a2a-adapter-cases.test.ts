@@ -21,6 +21,9 @@ const BROWSE_ASK = "用那台电脑上的浏览器打开 https://example.com/doc
 const MIXED_ASK = "谢谢，顺便把 README.md 改成一行：你好。";
 const EDIT_ASK = "把 README.md 改成一行：你好";
 const DUMP = "REMOTE-DUMP-MARKER\n先列目录。\n再打开文件。\n最后写回磁盘。这段过程不该出现在聊天里。";
+const SEARCH_BODY = "Grok 是 xAI 做的对话机器人。";
+const DOC_BODY = "这个仓库讲 AI agent，第三章写用户记忆。";
+const PAGE_BODY = "页面写着示例文档。";
 const OH_INTRO = "我是 OpenHands，一个可以操作计算机来帮你完成软件工程任务的 AI 智能体。工作目录是 workspace/project。";
 
 function toolCall(name: string, args: Record<string, unknown>) {
@@ -242,7 +245,7 @@ describe("A2A behavior cases", () => {
     const mock = await startMockOhServer({
       sessionKey: "search-key",
       finishAfterPolls: 1,
-      replyFor: () => DUMP,
+      replyFor: () => `${DUMP}\n${SEARCH_BODY}`,
     });
     const adapter = await startOpenHandsAdapter({ client: new OpenHandsClient(mock.baseUrl, "search-key"), pollMs: 5 });
     const bag: SessionToolBag = {};
@@ -268,8 +271,11 @@ describe("A2A behavior cases", () => {
             step += 1;
             return toolCall("web_search", { goal: "Grok Bot 是什么" });
           }
-          assert.equal(toolResultText(context), "做完了。");
-          assert.doesNotMatch(toolResultText(context), /网上查过了|REMOTE-DUMP-MARKER/);
+          const toolText = toolResultText(context);
+          assert.match(toolText, /Grok 是 xAI 做的对话机器人/);
+          assert.notEqual(toolText, "做完了。");
+          assert.doesNotMatch(toolText, /^做完了。?$/);
+          assert.doesNotMatch(toolText, /REMOTE-DUMP-MARKER/);
           return say("Grok Bot 是 xAI 的对话机器人。");
         },
       });
@@ -286,6 +292,7 @@ describe("A2A behavior cases", () => {
         assert.equal(shown, "Grok Bot 是 xAI 的对话机器人。");
         assert.doesNotMatch(shown, /1\.|网上查过了|REMOTE-DUMP-MARKER/);
         assert.match(result.kept || "", /REMOTE-DUMP-MARKER/);
+        assert.match(result.kept || "", /Grok 是 xAI 做的对话机器人/);
       } finally {
         session.dispose();
       }
@@ -299,7 +306,7 @@ describe("A2A behavior cases", () => {
     const mock = await startMockOhServer({
       sessionKey: "doc-key",
       finishAfterPolls: 1,
-      replyFor: () => DUMP,
+      replyFor: () => `${DUMP}\n${DOC_BODY}`,
     });
     const adapter = await startOpenHandsAdapter({ client: new OpenHandsClient(mock.baseUrl, "doc-key"), pollMs: 5 });
     const bag: SessionToolBag = {};
@@ -325,8 +332,10 @@ describe("A2A behavior cases", () => {
             step += 1;
             return toolCall("read_public_document", { goal: DOC_ASK });
           }
-          assert.equal(toolResultText(context), "做完了。");
-          assert.doesNotMatch(JSON.stringify(context.messages), /REMOTE-DUMP-MARKER/);
+          const toolText = toolResultText(context);
+          assert.match(toolText, /这个仓库讲 AI agent，第三章写用户记忆/);
+          assert.notEqual(toolText, "做完了。");
+          assert.doesNotMatch(toolText, /REMOTE-DUMP-MARKER/);
           return say("我看过了。这一章讲用户记忆。");
         },
       });
@@ -346,6 +355,7 @@ describe("A2A behavior cases", () => {
         assert.equal(shown, "我看过了。这一章讲用户记忆。");
         assert.doesNotMatch(shown, /改成|REMOTE-DUMP-MARKER/);
         assert.match(result.kept || "", /REMOTE-DUMP-MARKER/);
+        assert.match(result.kept || "", /这个仓库讲 AI agent/);
       } finally {
         session.dispose();
       }
@@ -359,7 +369,7 @@ describe("A2A behavior cases", () => {
     const mock = await startMockOhServer({
       sessionKey: "browse-key",
       finishAfterPolls: 1,
-      replyFor: () => DUMP,
+      replyFor: () => `${DUMP}\n${PAGE_BODY}`,
     });
     const adapter = await startOpenHandsAdapter({ client: new OpenHandsClient(mock.baseUrl, "browse-key"), pollMs: 5 });
     const bag: SessionToolBag = {};
@@ -381,7 +391,10 @@ describe("A2A behavior cases", () => {
             step += 1;
             return toolCall("browse_on_computer", { goal: BROWSE_ASK });
           }
-          assert.doesNotMatch(JSON.stringify(context.messages), /REMOTE-DUMP-MARKER/);
+          const toolText = toolResultText(context);
+          assert.match(toolText, /页面写着示例文档/);
+          assert.notEqual(toolText, "做完了。");
+          assert.doesNotMatch(toolText, /REMOTE-DUMP-MARKER/);
           return say("打开了。页面在那台电脑上。");
         },
       });
@@ -399,6 +412,7 @@ describe("A2A behavior cases", () => {
         assert.equal(shown, "打开了。页面在那台电脑上。");
         assert.doesNotMatch(shown, /REMOTE-DUMP-MARKER/);
         assert.match(result.kept || "", /REMOTE-DUMP-MARKER/);
+        assert.match(result.kept || "", /页面写着示例文档/);
       } finally {
         session.dispose();
       }

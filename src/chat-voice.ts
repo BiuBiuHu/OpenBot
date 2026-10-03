@@ -59,12 +59,10 @@ export function briefChatText(text: string, drop?: string): string {
   let raw = String(text || "").trim();
   if (!raw) return raw;
   const marker = String(drop || "").trim();
-  if (marker.length >= 12) {
-    if (raw.includes(marker)) raw = raw.replaceAll(marker, "").trim();
-    for (const line of marker.split(/\n+/)) {
-      const bit = line.trim();
-      if (bit.length >= 12 && raw.includes(bit)) raw = raw.replaceAll(bit, "").trim();
-    }
+  if (marker.length >= 12 && raw.includes(marker)) {
+    const without = raw.replaceAll(marker, "").trim();
+    // A pasted process log comes off. A reply that is the remote summary stays.
+    if (without) raw = without;
   }
   const lines = raw.split(/\n+/).map((line) => line.trim()).filter(Boolean);
   const prose = lines.filter((line) => !/^(?:\d+[.、)]\s*|[-*]\s+|步骤)/.test(line));

@@ -67,7 +67,7 @@ function systemPrompt(skills: RemoteSkill[]): string {
 ${listed}
 哪一项对得上，就调用同名工具，把用户原话放进 goal。这些工具只把任务发给远端，不在本进程里做。
 工具如果回「连不上这台电脑。」，你就只回这一句。
-远端做完后用一两句说结果。长结果已经留下，不要原样贴出。
+远端做完后用一两句说出带回的内容。长过程不要原样贴出。不要只说做完了。
 不要说「这台电脑这轮没在时限里跑完。你再说一次就行。」`;
 }
 
@@ -187,12 +187,16 @@ function noKeyStream(
   return textStream(zh ? NO_MODEL_KEY_TEXT : "No local model key.");
 }
 
-function skillToolText(result: RemoteTaskResult): string {
+const CONTENT_SKILL = new Set(["read_public_document", "web_search", "browse_on_computer"]);
+
+function skillToolText(skillId: string, result: RemoteTaskResult): string {
   const text = String(result.text || "").trim();
   if (text === connectionFailureText() || text === "连不上这台电脑。" || text === "Can't reach this computer.") {
     return text === "Can't reach this computer." ? text : connectionFailureText();
   }
-  if (result.transport === "a2a" && result.dispatched && !result.failed) return "做完了。";
+  const delivered = result.transport === "a2a" && result.dispatched && !result.failed;
+  if (delivered && CONTENT_SKILL.has(skillId)) return substantiveRemoteText(text);
+  if (delivered) return "做完了。";
   if (result.failed) {
     const alreadyBrief = text === remoteFailedText() || text === "The computer did not finish that.";
     if (alreadyBrief) return text;
@@ -201,6 +205,19 @@ function skillToolText(result: RemoteTaskResult): string {
     return text;
   }
   return text || connectionFailureText();
+}
+
+/** Page, repo, or search text for Pi. A done-status phrase is not a result. */
+function substantiveRemoteText(text: string): string {
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line && line !== "REMOTE-DUMP-MARKER" && line !== "做完了。" && line !== "做完了");
+  const prose = lines.filter((line) => !/^(?:\d+[.、)]\s*|[-*]\s+)/.test(line));
+  const body = (prose.length ? prose : lines).join("\n").trim();
+  if (!body) return "远端没有带回正文。";
+  if (body.length <= 600) return body;
+  return body.slice(body.length - 600).trim();
 }
 
 function piTools(tools: SessionTools, skills: RemoteSkill[]): ToolDefinition[] {
@@ -227,7 +244,7 @@ function piTools(tools: SessionTools, skills: RemoteSkill[]): ToolDefinition[] {
     async execute(_id: string, params: unknown) {
       const goal = String((params as { goal?: string }).goal || "");
       const result = await tools.sendSkill(skill.id, goal);
-      const text = skillToolText(result);
+      const text = skillToolText(skill.id, result);
       return { content: [{ type: "text" as const, text }], details: {} };
     },
   }));
