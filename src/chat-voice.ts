@@ -54,6 +54,27 @@ const OTHER_PRODUCT = /grok\s*bot|grokbot|openclaw|chatgpt|claude\b|devin\b|curs
 const DUMP_MARK =
   /排查过程|conversation\s+timed out|execution_status|\/opt\/|grep\s+-r|workspace\/project|succeeded\s+[0-9a-f-]{8}/i;
 
+/** At most two sentences. Drops step lists and a kept remote dump. */
+export function briefChatText(text: string, drop?: string): string {
+  let raw = String(text || "").trim();
+  if (!raw) return raw;
+  const marker = String(drop || "").trim();
+  if (marker.length >= 12 && raw.includes(marker)) {
+    const without = raw.replaceAll(marker, "").trim();
+    // A pasted process log comes off. A reply that is the remote summary stays.
+    if (without) raw = without;
+  }
+  const lines = raw.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const prose = lines.filter((line) => !/^(?:\d+[.、)]\s*|[-*]\s+|步骤)/.test(line));
+  const source = (prose.length ? prose : lines.map((line) => line.replace(/^(?:\d+[.、)]\s*|[-*]\s+)/, ""))).join("");
+  const sentences = source
+    .split(/(?<=[。！？!?])/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const picked = (sentences.length ? sentences : [source || raw]).slice(0, 2).join("");
+  return picked.trim() || raw;
+}
+
 export function looksLikeOpenHandsIntro(text: string): boolean {
   const t = String(text || "");
   if (!OPENHANDS_INTRO.test(t)) return false;
@@ -155,8 +176,11 @@ function markdownLink(url: string): string {
   }
 }
 
+/** Kept for offline eval fixtures. The live remote wait must not emit this. */
+export const REMOTE_TIMER_LINE = "这台电脑这轮没在时限里跑完。你再说一次就行。";
+
 function timeoutLine(zh: boolean): string {
-  return zh ? "这台电脑这轮没在时限里跑完。你再说一次就行。" : "The computer did not finish in time. Say it again if you want another try.";
+  return zh ? REMOTE_TIMER_LINE : "The computer did not finish in time. Say it again if you want another try.";
 }
 
 function failLine(zh: boolean): string {

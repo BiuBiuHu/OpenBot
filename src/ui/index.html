@@ -23,8 +23,10 @@
       body {
         font-family: var(--sans);
         display: grid;
-        grid-template-rows: auto 1fr auto;
-        min-height: 100dvh;
+        grid-template-rows: auto minmax(0, 1fr);
+        height: 100dvh;
+        max-height: 100dvh;
+        overflow: hidden;
       }
       header {
         display: flex;
@@ -96,16 +98,33 @@
       main {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 36rem;
-        align-items: start;
+        grid-template-rows: auto minmax(0, 1fr);
+        align-items: stretch;
         min-height: 0;
+        min-width: 0;
+        overflow: hidden;
       }
       @media (max-width: 840px) {
-        main { grid-template-columns: 1fr; }
+        main { grid-template-columns: minmax(0, 1fr); }
         aside { display: none; }
       }
+      .chat-col {
+        grid-column: 1;
+        grid-row: 2;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        height: 100%;
+        overflow: hidden;
+      }
       #log {
-        overflow: auto;
-        padding: 1.1rem 1.4rem 2rem;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 1.1rem 1.4rem 1rem;
         display: flex;
         flex-direction: column;
         align-items: stretch;
@@ -258,12 +277,15 @@
       .approval button.yes { border-color: var(--phosphor); color: var(--phosphor); }
       .approval button.no { border-color: var(--danger); color: var(--danger); }
       aside {
-        align-self: start;
+        grid-column: 2;
+        grid-row: 2;
+        align-self: stretch;
         position: relative;
-        top: auto;
-        width: 36rem;
+        min-width: 0;
+        min-height: 0;
+        width: auto;
         padding: 0.7rem 1.1rem 1rem 0.35rem;
-        overflow: visible;
+        overflow: auto;
         background: transparent;
         border: none;
       }
@@ -400,6 +422,8 @@
       }
       #banner {
         display: none;
+        grid-column: 1 / -1;
+        grid-row: 1;
         margin: 0 1.4rem;
         padding: 0.55rem 0.7rem;
         border: 1px solid #3a3420;
@@ -408,6 +432,7 @@
       }
       #banner.show { display: block; }
       footer {
+        flex: 0 0 auto;
         border-top: 1px solid var(--line);
         padding: 0.8rem 1.2rem 1rem;
         display: grid;
@@ -441,9 +466,15 @@
         <div class="meta" id="meta">connecting…</div>
       </div>
     </header>
-    <div id="banner"></div>
     <main>
-      <section id="log"></section>
+      <div id="banner"></div>
+      <section class="chat-col">
+        <section id="log"></section>
+        <footer>
+          <textarea id="box" rows="2" placeholder="发给这台电脑，直接开始对话。"></textarea>
+          <button id="send" type="button">Send</button>
+        </footer>
+      </section>
       <aside>
         <h2>电脑 <button type="button" id="desk-max-btn" aria-pressed="false">放大</button></h2>
         <div class="desk-wrap" id="desk-wrap">
@@ -453,10 +484,6 @@
         </div>
       </aside>
     </main>
-    <footer>
-      <textarea id="box" rows="2" placeholder="发给这台电脑，直接开始对话。"></textarea>
-      <button id="send" type="button">Send</button>
-    </footer>
     <div id="settings" class="sheet">
       <form id="settings-form">
         <h2>Connect your machine</h2>

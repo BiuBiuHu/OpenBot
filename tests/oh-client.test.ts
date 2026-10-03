@@ -189,6 +189,7 @@ describe("OpenHandsClient against mock HTTP", () => {
       assert.equal(llm.model, DEFAULT_REMOTE_LLM_MODEL);
       assert.ok(!Object.hasOwn(llm, "api_key"), "empty OpenAI key must not be sent");
 
+      const beforeThread = mock.creates.length;
       const events: AgentEvent[] = [];
       const result = await runThreadTurn("uname from file env", {
         client,
@@ -200,7 +201,10 @@ describe("OpenHandsClient against mock HTTP", () => {
         timeoutMs: 2000,
         pollMs: 20,
       });
-      assert.equal(result.path, "handoff");
+      assert.equal(result.path, "pi");
+      assert.equal(mock.creates.length, beforeThread);
+      const threadText = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+      assert.doesNotMatch(threadText, /没在时限里跑完/);
 
       const cli = path.join(repoRoot(), "src/cli.ts");
       const env = {
@@ -211,11 +215,12 @@ describe("OpenHandsClient against mock HTTP", () => {
       };
       delete env.OPENAI_API_KEY;
       delete env.OPENAI_MODEL;
+      const beforeCli = mock.creates.length;
       const run = await runCli([cli, "chat", "uname from file env", "--timeout", "5", "--poll-ms", "20"], env);
       assert.equal(run.code, 0, run.out);
-      const cliCreate = mock.creates.at(-1);
-      assert.equal(cliCreate?.llm?.model, DEFAULT_REMOTE_LLM_MODEL);
-      assert.equal(cliCreate?.llm?.api_key, undefined);
+      assert.equal(mock.creates.length, beforeCli);
+      assert.match(run.out, /本地模型还没配密钥/);
+      assert.doesNotMatch(run.out, /没在时限里跑完/);
     } finally {
       if (prevHome === undefined) delete process.env.OPENBOT_HOME;
       else process.env.OPENBOT_HOME = prevHome;
@@ -451,6 +456,7 @@ describe("web → OpenHands (no worker)", () => {
 
   it("TC-OH-011: /api/chat without worker streams the same-thread reply", async () => {
     const port = plane.config.controlPlane.port;
+    const before = mock.creates.length;
     const events = await readSse(`http://127.0.0.1:${port}/api/chat`, {
       message: "uname and summarize",
       handoff: true,
@@ -458,7 +464,9 @@ describe("web → OpenHands (no worker)", () => {
       poll_ms: 20,
     });
     assert.ok(!events.some((e) => e.type === "handoff_proposal"));
-    assert.ok(events.some((e) => e.type === "token" && /uname and summarize/.test(String(e.text || ""))));
+    assert.ok(events.some((e) => e.type === "token" && /本地模型还没配密钥/.test(String(e.text || ""))));
+    assert.ok(!events.some((e) => e.type === "token" && /没在时限里跑完/.test(String(e.text || ""))));
+    assert.equal(mock.creates.length, before);
     assert.ok(events.some((e) => e.type === "done"));
     assert.ok(!events.some((e) => e.type === "error" && String(e.message || "").includes("worker not bound")));
   });
@@ -475,11 +483,9 @@ describe("web → OpenHands (no worker)", () => {
       poll_ms: 20,
     });
     assert.ok(!first.some((e) => e.type === "handoff_proposal"));
-    assert.ok(first.some((e) => e.type === "token" && /done: first turn/.test(String(e.text || ""))));
+    assert.ok(first.some((e) => e.type === "token" && /本地模型还没配密钥/.test(String(e.text || ""))));
     assert.ok(first.some((e) => e.type === "done"));
-    assert.equal(mock.creates.length, beforeCreates + 1);
-    const convId = mock.creates[mock.creates.length - 1]?.id;
-    assert.ok(convId);
+    assert.equal(mock.creates.length, beforeCreates);
 
     const second = await readSse(`http://127.0.0.1:${port}/api/chat`, {
       message: "second turn",
@@ -488,10 +494,10 @@ describe("web → OpenHands (no worker)", () => {
       timeout_ms: 3000,
       poll_ms: 20,
     });
-    assert.equal(mock.creates.length, beforeCreates + 1);
-    assert.ok(mock.messages.some((m) => m.id === convId && m.text === "second turn"));
+    assert.equal(mock.creates.length, beforeCreates);
     assert.ok(!second.some((e) => e.type === "handoff_proposal"));
-    assert.ok(second.some((e) => e.type === "token" && /done: second turn/.test(String(e.text || ""))));
+    assert.ok(second.some((e) => e.type === "token" && /本地模型还没配密钥/.test(String(e.text || ""))));
+    assert.ok(!second.some((e) => e.type === "token" && /没在时限里跑完/.test(String(e.text || ""))));
     assert.ok(second.some((e) => e.type === "done"));
   });
 });
@@ -659,12 +665,15 @@ describe("handoff error and chat CLI against mock", () => {
         OPENHANDS_LLM_MODEL: "test/mock",
       };
       delete env.OPENAI_API_KEY;
+      const before = okMock.creates.length;
       const run = await runCli(
         [cli, "chat", "summarize uname", "--handoff", "true", "--timeout", "5", "--poll-ms", "20"],
         env,
       );
       assert.equal(run.code, 0, run.out);
-      assert.match(run.out, /done: summarize uname|summarize uname/);
+      assert.equal(okMock.creates.length, before);
+      assert.match(run.out, /本地模型还没配密钥/);
+      assert.doesNotMatch(run.out, /没在时限里跑完/);
     } finally {
       await okMock.stop();
     }
@@ -682,9 +691,12 @@ describe("handoff error and chat CLI against mock", () => {
       timeoutMs: 2000,
       pollMs: 20,
     });
-    assert.equal(result.path, "handoff");
+    assert.equal(result.path, "pi");
     assert.ok(!events.some((e) => e.type === "handoff_proposal"));
     assert.ok(!events.some((e) => e.type === "status" && /no local model key/.test(e.text)));
+    const shown = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
+    assert.match(shown, /本地模型还没配密钥/);
+    assert.doesNotMatch(shown, /没在时限里跑完/);
   });
 
   it("TC-OH-018: openbot chat exits non-zero when remote conversation fails", async () => {
@@ -702,11 +714,12 @@ describe("handoff error and chat CLI against mock", () => {
     delete env.OH_LLM_MODEL;
     delete env.OH_LLM_API_KEY;
     const run = await runCli(
-      [cli, "chat", "this should fail", "--handoff", "true", "--timeout", "5", "--poll-ms", "20"],
+      [cli, "oh", "run", "this should fail", "--timeout", "5", "--poll-ms", "20"],
       env,
     );
     assert.notEqual(run.code, 0, run.out);
     assert.match(run.out, /error|failed/i);
+    assert.doesNotMatch(run.out, /没在时限里跑完/);
   });
 });
 
