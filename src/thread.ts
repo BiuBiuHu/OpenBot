@@ -23,11 +23,14 @@ export interface ThreadTurnDeps extends HandoffTurnDeps {
   /** Injected Pi session. Production creates one with createAgentSession. */
   pi?: PiSession;
   modelStream?: OpenBotPiOptions["modelStream"];
-  /** Real HTTP search. Tests inject a stub; production fetches APIs then public result pages. */
+  /**
+   * Ignored. Web search is not a local Pi tool. Older tests inject this to
+   * fail if a router calls it before Pi.
+   */
   searchWeb?: (query: string) => Promise<SearchHit[]>;
-  /** Last resort after HTTP pages are empty: OpenHands browser / page read. */
+  /** Ignored. Public pages are not read in this process. */
   browsePublicPage?: (query: string) => Promise<SearchHit[]>;
-  /** Public document URL the person asked to read. Tests inject a stub. */
+  /** Ignored. Public documents are not read in this process. */
   readPublicDocument?: (url: string) => Promise<PublicDocument | undefined>;
   /** Saved chat language. Default zh-CN. */
   language?: string;
@@ -43,8 +46,9 @@ export interface ThreadTurnResult {
 
 /**
  * One local chat thread, owned by the Pi session.
- * The user's sentence is prompted as-is. Clock, public documents, and web
- * search are tools on that session. The remote computer is a separate agent.
+ * The user's sentence is prompted as-is. Clock is the local tool. Public
+ * documents and web search are remote card skills when the agent card lists
+ * them. The remote computer is a separate agent.
  */
 export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Promise<ThreadTurnResult> {
   const goal = message.trim();
@@ -68,9 +72,6 @@ export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Prom
         threadId: deps.threadId,
         conversationId: () => deps.conversationId,
         bag,
-        searchWeb: deps.searchWeb,
-        browsePublicPage: deps.browsePublicPage,
-        readPublicDocument: deps.readPublicDocument,
       }),
       modelStream: deps.modelStream,
       conversation: () => bag.conversation,

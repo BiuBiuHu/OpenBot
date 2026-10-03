@@ -12,7 +12,6 @@ import { loadRemoteSkills, runRemoteTask, type RemoteSkill } from "../src/remote
 import { createSessionTools, type SessionToolBag, type SessionTools } from "../src/session-tools.js";
 import { runThreadTurn, type ThreadTurnResult } from "../src/thread.js";
 import type { AgentEvent } from "../src/types.js";
-import type { SearchHit } from "../src/web-search.js";
 import { freePort } from "./helpers.js";
 import { startMockOhServer, type MockOhServer } from "./oh-mock.js";
 
@@ -135,11 +134,6 @@ function localTools(opts: {
   bag: SessionToolBag;
   now?: Date;
   onClock?: () => void;
-  onSearch?: (query: string) => void;
-  onRead?: (request: string) => void;
-  onBrowse?: (query: string) => void;
-  searchHit?: SearchHit[];
-  document?: { title: string; text: string; url: string };
 }): SessionTools {
   const tools = createSessionTools({
     client: () => opts.client,
@@ -149,27 +143,6 @@ function localTools(opts: {
     pollMs: 5,
     conversationId: () => undefined,
     bag: opts.bag,
-    searchWeb: async (query) => {
-      opts.onSearch?.(query);
-      return (
-        opts.searchHit ?? [
-          {
-            title: "Grok (chatbot)",
-            snippet: "Grok is a generative artificial intelligence chatbot developed by xAI.",
-            url: "https://en.wikipedia.org/wiki/Grok_(chatbot)",
-            source: "wikipedia",
-          },
-        ]
-      );
-    },
-    readPublicDocument: async (request) => {
-      opts.onRead?.(request);
-      return opts.document ?? { title: "用户记忆和知识库", text: "这一章讲用户记忆和共享知识库的差别。", url: DOC_URL };
-    },
-    browsePublicPage: async (query) => {
-      opts.onBrowse?.(query);
-      return [];
-    },
   });
   if (opts.onClock) {
     const clock = tools.clock.bind(tools);
@@ -188,7 +161,6 @@ describe("A2A behavior cases", () => {
     const bag: SessionToolBag = {};
     const order: string[] = [];
     let clocks = 0;
-    let searches = 0;
     try {
       const skills = await loadRemoteSkills(adapter.baseUrl);
       let step = 0;
@@ -202,9 +174,6 @@ describe("A2A behavior cases", () => {
           onClock: () => {
             clocks += 1;
             order.push("tool:clock");
-          },
-          onSearch: () => {
-            searches += 1;
           },
         }),
         modelStream: (_model, context) => {
@@ -224,7 +193,6 @@ describe("A2A behavior cases", () => {
         assert.ok(order.indexOf("tool:clock") > 0);
         assert.ok(order.indexOf("pi-after") > order.indexOf("tool:clock"));
         assert.equal(clocks, 1);
-        assert.equal(searches, 0);
         assert.equal(adapter.tasks.length, 0);
         assert.equal(mock.creates.length, 0);
         assert.match(shown, /现在是/);
@@ -270,48 +238,54 @@ describe("A2A behavior cases", () => {
     }
   });
 
-  it("TC-A2A-006: 问公开产品走网页查询，不叫远端", async () => {
-    const mock = await startMockOhServer({ sessionKey: "search-key" });
+  it("TC-A2A-006: a public product question is the web_search card skill, not a local search", async () => {
+    const mock = await startMockOhServer({
+      sessionKey: "search-key",
+      finishAfterPolls: 1,
+      replyFor: () => DUMP,
+    });
     const adapter = await startOpenHandsAdapter({ client: new OpenHandsClient(mock.baseUrl, "search-key"), pollMs: 5 });
     const bag: SessionToolBag = {};
-    const queries: string[] = [];
-    const reads: string[] = [];
     const seen: string[] = [];
     try {
       const skills = await loadRemoteSkills(adapter.baseUrl);
+      assert.ok(skills.some((skill) => skill.id === "web_search"));
       let step = 0;
       const session = await createOpenBotPiSession({
         language: "zh-CN",
         llm: { baseUrl: "http://127.0.0.1:9/v1", model: "stub", apiKey: "test-key" },
         remoteSkills: skills,
-        tools: localTools({
-          client: new OpenHandsClient(adapter.baseUrl, "search-key"),
-          bag,
-          onSearch: (query) => queries.push(query),
-          onRead: (request) => reads.push(request),
-        }),
+        kept: () => bag.remote?.fullText,
+        tools: localTools({ client: new OpenHandsClient(adapter.baseUrl, "search-key"), bag }),
         modelStream: (_model, context) => {
           const user = lastUser(context);
           if (user) seen.push(user);
+          const blob = JSON.stringify(context.messages);
+          assert.match(blob, /web_search/);
+          assert.match(blob, /查询公开网页/);
+          assert.doesNotMatch(blob, /网页查询是你自己|读公开文档、网页查询|公开网页留在|不要把公开/);
           if (step === 0) {
             step += 1;
-            return toolCall("web_search", { query: "Grok Bot 是什么" });
+            return toolCall("web_search", { goal: "Grok Bot 是什么" });
           }
-          const blob = JSON.stringify(context.messages);
-          assert.match(blob, /网上查过了/);
-          assert.doesNotMatch(blob, /REMOTE-DUMP/);
+          assert.equal(toolResultText(context), "做完了。");
+          assert.doesNotMatch(toolResultText(context), /网上查过了|REMOTE-DUMP-MARKER/);
           return say("Grok Bot 是 xAI 的对话机器人。");
         },
       });
       try {
-        const { shown } = await turn("Grok Bot 是什么", session, new OpenHandsClient(adapter.baseUrl, "search-key"));
+        assert.equal(session.toolNames().includes("web_search"), true);
+        const { shown, result } = await turn("Grok Bot 是什么", session, new OpenHandsClient(adapter.baseUrl, "search-key"));
         assert.equal(seen[0], "Grok Bot 是什么");
-        assert.deepEqual(queries, ["Grok Bot 是什么"]);
-        assert.deepEqual(reads, []);
-        assert.equal(adapter.tasks.length, 0);
-        assert.equal(mock.creates.length, 0);
+        assert.equal(adapter.tasks[0]?.skillId, "web_search");
+        assert.equal(adapter.tasks[0]?.goal, "Grok Bot 是什么");
+        assert.equal(mock.creates.length, 1);
+        assert.match(JSON.stringify(mock.creates[0]?.body), /Grok Bot 是什么/);
+        assert.equal(bag.remote?.transport, "a2a");
+        assert.equal(bag.remote?.dispatched, true);
         assert.equal(shown, "Grok Bot 是 xAI 的对话机器人。");
-        assert.doesNotMatch(shown, /1\.|网上查过了/);
+        assert.doesNotMatch(shown, /1\.|网上查过了|REMOTE-DUMP-MARKER/);
+        assert.match(result.kept || "", /REMOTE-DUMP-MARKER/);
       } finally {
         session.dispose();
       }
@@ -321,49 +295,57 @@ describe("A2A behavior cases", () => {
     }
   });
 
-  it("TC-A2A-007: a public GitHub link is read as a document, not searched or edited", async () => {
-    const mock = await startMockOhServer({ sessionKey: "doc-key" });
+  it("TC-A2A-007: a public GitHub link is the read_public_document card skill, not a local read", async () => {
+    const mock = await startMockOhServer({
+      sessionKey: "doc-key",
+      finishAfterPolls: 1,
+      replyFor: () => DUMP,
+    });
     const adapter = await startOpenHandsAdapter({ client: new OpenHandsClient(mock.baseUrl, "doc-key"), pollMs: 5 });
     const bag: SessionToolBag = {};
-    const queries: string[] = [];
-    const reads: string[] = [];
-    const browses: string[] = [];
     const seen: string[] = [];
     try {
       const skills = await loadRemoteSkills(adapter.baseUrl);
+      assert.ok(skills.some((skill) => skill.id === "read_public_document"));
       let step = 0;
       const session = await createOpenBotPiSession({
         language: "zh-CN",
         llm: { baseUrl: "http://127.0.0.1:9/v1", model: "stub", apiKey: "test-key" },
         remoteSkills: skills,
-        tools: localTools({
-          client: new OpenHandsClient(adapter.baseUrl, "doc-key"),
-          bag,
-          onSearch: (query) => queries.push(query),
-          onRead: (request) => reads.push(request),
-          onBrowse: (query) => browses.push(query),
-        }),
+        kept: () => bag.remote?.fullText,
+        tools: localTools({ client: new OpenHandsClient(adapter.baseUrl, "doc-key"), bag }),
         modelStream: (_model, context) => {
           const user = lastUser(context);
           if (user) seen.push(user);
+          const blob = JSON.stringify(context.messages);
+          assert.match(blob, /read_public_document/);
+          assert.match(blob, /读取用户给出的公开文档/);
+          assert.doesNotMatch(blob, /读公开文档是你自己|公开文档留在|不要交给远端/);
           if (step === 0) {
             step += 1;
-            return toolCall("read_public_document", { request: DOC_ASK });
+            return toolCall("read_public_document", { goal: DOC_ASK });
           }
+          assert.equal(toolResultText(context), "做完了。");
+          assert.doesNotMatch(JSON.stringify(context.messages), /REMOTE-DUMP-MARKER/);
           return say("我看过了。这一章讲用户记忆。");
         },
       });
       try {
-        const { shown } = await turn(DOC_ASK, session, new OpenHandsClient(adapter.baseUrl, "doc-key"));
+        const { shown, result } = await turn(DOC_ASK, session, new OpenHandsClient(adapter.baseUrl, "doc-key"));
         assert.equal(seen[0], DOC_ASK);
-        assert.deepEqual(reads, [DOC_ASK]);
-        assert.match(reads[0], new RegExp(DOC_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-        assert.deepEqual(queries, []);
-        assert.deepEqual(browses, []);
-        assert.equal(adapter.tasks.length, 0);
-        assert.equal(mock.creates.length, 0);
+        assert.equal(adapter.tasks.length, 1);
+        assert.equal(adapter.tasks[0]?.skillId, "read_public_document");
+        assert.equal(adapter.tasks[0]?.goal, DOC_ASK);
+        assert.match(adapter.tasks[0]?.goal || "", new RegExp(DOC_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        assert.notEqual(adapter.tasks[0]?.skillId, "web_search");
+        assert.notEqual(adapter.tasks[0]?.skillId, "edit_file");
+        assert.equal(mock.creates.length, 1);
+        assert.match(JSON.stringify(mock.creates[0]?.body), /github\.com\/bojieli\/ai-agent-book/);
+        assert.equal(bag.remote?.transport, "a2a");
+        assert.equal(bag.remote?.dispatched, true);
         assert.equal(shown, "我看过了。这一章讲用户记忆。");
-        assert.doesNotMatch(shown, /改成|edit_file/);
+        assert.doesNotMatch(shown, /改成|REMOTE-DUMP-MARKER/);
+        assert.match(result.kept || "", /REMOTE-DUMP-MARKER/);
       } finally {
         session.dispose();
       }
@@ -381,7 +363,6 @@ describe("A2A behavior cases", () => {
     });
     const adapter = await startOpenHandsAdapter({ client: new OpenHandsClient(mock.baseUrl, "browse-key"), pollMs: 5 });
     const bag: SessionToolBag = {};
-    const browses: string[] = [];
     const seen: string[] = [];
     try {
       const skills = await loadRemoteSkills(adapter.baseUrl);
@@ -392,11 +373,7 @@ describe("A2A behavior cases", () => {
         llm: { baseUrl: "http://127.0.0.1:9/v1", model: "stub", apiKey: "test-key" },
         remoteSkills: skills,
         kept: () => bag.remote?.fullText,
-        tools: localTools({
-          client: new OpenHandsClient(adapter.baseUrl, "browse-key"),
-          bag,
-          onBrowse: (query) => browses.push(query),
-        }),
+        tools: localTools({ client: new OpenHandsClient(adapter.baseUrl, "browse-key"), bag }),
         modelStream: (_model, context) => {
           const user = lastUser(context);
           if (user) seen.push(user);
@@ -413,7 +390,6 @@ describe("A2A behavior cases", () => {
         assert.equal(session.toolNames().includes("ask_remote_agent"), false);
         const { shown, result } = await turn(BROWSE_ASK, session, new OpenHandsClient(adapter.baseUrl, "browse-key"));
         assert.equal(seen[0], BROWSE_ASK);
-        assert.deepEqual(browses, []);
         assert.equal(adapter.tasks[0]?.skillId, "browse_on_computer");
         assert.equal(adapter.tasks[0]?.goal, BROWSE_ASK);
         assert.equal(mock.creates.length, 1);
@@ -657,7 +633,7 @@ describe("A2A behavior cases", () => {
           const blob = JSON.stringify(context.messages);
           sawPrompt = /MARKER-PARTIAL-EDIT/.test(blob);
           assert.match(blob, /MARKER-PARTIAL-EDIT/);
-          assert.doesNotMatch(blob, /run_command|browse_on_computer|ask_remote_agent|bad skill/);
+          assert.doesNotMatch(blob, /run_command|browse_on_computer|ask_remote_agent|bad skill|web_search|read_public_document/);
           return say("这张卡上没有跑命令。");
         },
       });
@@ -670,8 +646,8 @@ describe("A2A behavior cases", () => {
         assert.equal(names.includes("bad skill"), false);
         assert.equal(names.includes("1nope"), false);
         assert.equal(names.includes("clock"), true);
-        assert.equal(names.includes("web_search"), true);
-        assert.equal(names.includes("read_public_document"), true);
+        assert.equal(names.includes("web_search"), false);
+        assert.equal(names.includes("read_public_document"), false);
         const { shown } = await turn("跑一下 uname", session, new OpenHandsClient(card.baseUrl, "partial"));
         assert.equal(sawPrompt, true);
         assert.equal(shown, "这张卡上没有跑命令。");
@@ -699,7 +675,13 @@ describe("A2A behavior cases", () => {
       });
       try {
         const names = session.toolNames();
-        assert.deepEqual(skills.map((skill) => skill.id).sort(), ["browse_on_computer", "edit_file", "run_command"]);
+        assert.deepEqual(skills.map((skill) => skill.id).sort(), [
+          "browse_on_computer",
+          "edit_file",
+          "read_public_document",
+          "run_command",
+          "web_search",
+        ]);
         for (const skill of skills) assert.equal(names.includes(skill.id), true);
         assert.equal(names.includes("ask_remote_agent"), false);
         assert.equal(names.filter((name) => name === "ask_remote_agent").length, 0);
@@ -782,7 +764,7 @@ describe("A2A behavior cases", () => {
     }
   });
 
-  it("TC-A2A-019: the adapter card is the only source of the three remote skills", async () => {
+  it("TC-A2A-019: the adapter card is the only source of the remote skills", async () => {
     const mock = await startMockOhServer({ sessionKey: "card-only" });
     const adapter = await startOpenHandsAdapter({ client: new OpenHandsClient(mock.baseUrl, "card-only"), pollMs: 5 });
     try {
@@ -791,9 +773,21 @@ describe("A2A behavior cases", () => {
       const body = (await res.json()) as { name?: string; supportedInterfaces?: Array<{ protocolBinding?: string }>; skills?: Array<{ id?: string }> };
       assert.equal(body.name, "OpenHands");
       assert.equal(body.supportedInterfaces?.[0]?.protocolBinding, "HTTP+JSON");
-      assert.deepEqual((body.skills || []).map((skill) => skill.id).sort(), ["browse_on_computer", "edit_file", "run_command"]);
+      assert.deepEqual((body.skills || []).map((skill) => skill.id).sort(), [
+        "browse_on_computer",
+        "edit_file",
+        "read_public_document",
+        "run_command",
+        "web_search",
+      ]);
       const skills = await loadRemoteSkills(adapter.baseUrl);
-      assert.deepEqual(skills.map((skill) => skill.id).sort(), ["browse_on_computer", "edit_file", "run_command"]);
+      assert.deepEqual(skills.map((skill) => skill.id).sort(), [
+        "browse_on_computer",
+        "edit_file",
+        "read_public_document",
+        "run_command",
+        "web_search",
+      ]);
     } finally {
       await adapter.stop();
       await mock.stop();
@@ -876,13 +870,18 @@ describe("A2A behavior cases", () => {
       llm: { baseUrl: "http://127.0.0.1:9/v1", model: "stub", apiKey: "test-key" },
       remoteSkills: [],
       tools: localTools({ client: new OpenHandsClient("http://127.0.0.1:9", "x"), bag }),
-      modelStream: () => say("在。"),
+      modelStream: (_model, context) => {
+        const blob = JSON.stringify(context.messages);
+        assert.match(blob, /时钟是你自己的小工具/);
+        assert.doesNotMatch(blob, /read_public_document|web_search|查询公开网页|读取用户给出的公开文档/);
+        return say("在。");
+      },
     });
     try {
       const names = session.toolNames();
       assert.equal(names.includes("clock"), true);
-      assert.equal(names.includes("read_public_document"), true);
-      assert.equal(names.includes("web_search"), true);
+      assert.equal(names.includes("read_public_document"), false);
+      assert.equal(names.includes("web_search"), false);
       assert.equal(names.includes("edit_file"), false);
       assert.equal(names.includes("run_command"), false);
       assert.equal(names.includes("browse_on_computer"), false);

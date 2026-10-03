@@ -35,6 +35,26 @@ export const ADAPTER_SKILLS: AgentSkill[] = [
     outputModes: ["text/plain"],
     securityRequirements: [],
   },
+  {
+    id: "read_public_document",
+    name: "读公开文档",
+    description: "读取用户给出的公开文档。",
+    tags: ["document"],
+    examples: ["读一份公开文档"],
+    inputModes: ["text/plain"],
+    outputModes: ["text/plain"],
+    securityRequirements: [],
+  },
+  {
+    id: "web_search",
+    name: "网页查询",
+    description: "查询公开网页。",
+    tags: ["search"],
+    examples: ["查一个公开事实"],
+    inputModes: ["text/plain"],
+    outputModes: ["text/plain"],
+    securityRequirements: [],
+  },
 ];
 
 export function adapterCard(baseUrl: string): AgentCard {

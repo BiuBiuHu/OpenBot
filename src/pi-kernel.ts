@@ -62,10 +62,10 @@ function systemPrompt(skills: RemoteSkill[]): string {
   return `你是 OpenBot。用简体中文，像人聊天。
 基础问答自己回，一两句就停。不列步骤，不复述工具原文。对方没问的不展开。
 你不是 OpenHands。有人问「你是谁」，就说你是 OpenBot。
-时钟、读公开文档、网页查询是你自己的小工具。需要时再调用，不要在调用之前编造结果。
+时钟是你自己的小工具。需要时再调用，不要在调用之前编造结果。
 下面这些能力来自远端 agent card，不是写死在你这里的清单：
 ${listed}
-对得上的，调用同名工具，把用户原话放进 goal。工具只把任务发出去。你不要自己跑命令、改文件，也不要自己打开那台电脑的浏览器。
+哪一项对得上，就调用同名工具，把用户原话放进 goal。这些工具只把任务发给远端，不在本进程里做。
 工具如果回「连不上这台电脑。」，你就只回这一句。
 远端做完后用一两句说结果。长结果已经留下，不要原样贴出。
 不要说「这台电脑这轮没在时限里跑完。你再说一次就行。」`;
@@ -208,39 +208,11 @@ function piTools(tools: SessionTools, skills: RemoteSkill[]): ToolDefinition[] {
     {
       name: "clock",
       label: "时钟",
-      description: "读取上海时区的当前时间。用户问现在几点、今天的时间时调用。",
+      description: "读取上海时区的当前时间。",
       promptSnippet: "时钟：上海当前时间",
       parameters: Type.Object({}),
       async execute() {
         return { content: [{ type: "text", text: tools.clock() }], details: {} };
-      },
-    },
-    {
-      name: "read_public_document",
-      label: "公开文档",
-      description: "读取用户给出的公开 http(s) 文档，并返回简短中文。",
-      promptSnippet: "读公开文档",
-      parameters: Type.Object({
-        request: Type.String({ description: "用户原话，或其中的公开文档 URL" }),
-      }),
-      async execute(_id, params) {
-        const request = String((params as { request?: string }).request || "");
-        const text = await tools.readPublicDocument(request);
-        return { content: [{ type: "text", text }], details: {} };
-      },
-    },
-    {
-      name: "web_search",
-      label: "网页查询",
-      description: "查询公开网页。用户问某个公开产品或事实是什么时调用。",
-      promptSnippet: "网页查询",
-      parameters: Type.Object({
-        query: Type.String({ description: "检索词" }),
-      }),
-      async execute(_id, params) {
-        const query = String((params as { query?: string }).query || "");
-        const text = await tools.webSearch(query);
-        return { content: [{ type: "text", text }], details: {} };
       },
     },
   ];

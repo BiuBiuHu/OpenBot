@@ -52,14 +52,6 @@ describe("Pi kernel", () => {
         language: () => "zh-CN",
         conversationId: () => undefined,
         bag,
-        searchWeb: async () => {
-          toolCalls += 1;
-          return [];
-        },
-        readPublicDocument: async () => {
-          toolCalls += 1;
-          return undefined;
-        },
       }),
       modelStream: (_model, context) => {
         const blob = JSON.stringify(context.messages);
@@ -176,48 +168,39 @@ describe("Pi kernel", () => {
     assert.doesNotMatch(shown, /现在是|没在时限里跑完/);
   });
 
-  it("TC-PI-004: document and search tools answer only when called", async () => {
+  it("TC-PI-004: public document and web search are not local Pi tools", async () => {
     const bag: SessionToolBag = {};
-    let reads = 0;
-    let searches = 0;
     const tools = createSessionTools({
       client: () => new OpenHandsClient("http://127.0.0.1:9", "x"),
       oh: () => undefined,
       language: () => "zh-CN",
       conversationId: () => undefined,
       bag,
-      searchWeb: async () => {
-        searches += 1;
-        return [
-          {
-            title: "Grok (chatbot)",
-            snippet: "Grok is a generative artificial intelligence chatbot developed by xAI.",
-            url: "https://en.wikipedia.org/wiki/Grok_(chatbot)",
-            source: "wikipedia",
-          },
-        ];
-      },
-      readPublicDocument: async () => {
-        reads += 1;
-        return {
-          title: "用户记忆和知识库",
-          text: "这一章讲用户记忆和共享知识库的差别。",
-          url: "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md",
-        };
+    });
+    assert.equal("readPublicDocument" in tools, false);
+    assert.equal("webSearch" in tools, false);
+    const session = await createOpenBotPiSession({
+      language: "zh-CN",
+      llm: { baseUrl: "http://127.0.0.1:9/v1", model: "stub", apiKey: "test-key" },
+      remoteSkills: [],
+      tools,
+      modelStream: () => {
+        const stream = createAssistantMessageEventStream();
+        emitAssistantMessage(stream, assistantTextMessage("在。"));
+        return stream;
       },
     });
-    assert.equal(reads, 0);
-    assert.equal(searches, 0);
-    const doc = await tools.readPublicDocument(DOC_ASK);
-    assert.equal(reads, 1);
-    assert.match(doc, /我看过了/);
-    assert.match(doc, /用户记忆/);
-    const looked = await tools.webSearch("Grok Bot 是什么");
-    assert.equal(searches, 1);
-    assert.match(looked, /网上查过了/);
-    const clock = tools.clock(new Date("2026-10-01T20:41:00+08:00"));
-    assert.match(clock, /现在是/);
-    assert.match(clock, /上海/);
+    try {
+      const names = session.toolNames();
+      assert.equal(names.includes("clock"), true);
+      assert.equal(names.includes("read_public_document"), false);
+      assert.equal(names.includes("web_search"), false);
+      const clock = tools.clock(new Date("2026-10-01T20:41:00+08:00"));
+      assert.match(clock, /现在是/);
+      assert.match(clock, /上海/);
+    } finally {
+      session.dispose();
+    }
   });
 
   it("TC-PI-005: a remote task still running past the old 60s cutoff is not the timer line", async () => {
