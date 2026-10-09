@@ -61,6 +61,7 @@ describe("desktop pane (no live host)", () => {
       const html = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/`)).text();
       assert.match(html, /电脑/);
       assert.match(html, /id="desk"/);
+      assert.match(html, /id="desk-col"/);
       assert.match(html, /desk-wrap/);
       assert.match(html, /aspect-ratio:\s*1280\s*\/\s*800/);
       assert.match(html, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s*36rem/);

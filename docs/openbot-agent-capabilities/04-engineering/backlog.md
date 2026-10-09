@@ -34,7 +34,7 @@
 | TASK-CODE-001 | 具名改文件分发与评测 | thread / evals | P1 | pending | 另开从 main 拉的分支 |
 | TASK-WSDOC-001 | 工作区 notes.md 起草 | 未定 | P1 | pending | 先把验收写进本目录新版本 |
 | TASK-DESK-001 | 桌面回归（无工具条/放大） | desktop | P2 | pending | 不在本 PR 改代码 |
-| TASK-DESK-002 | 电脑列看不见时断 RFB，留隧道 | desk-stream / desktop-view / index | P0 | doing | TC-DESK-009/010 绿；不 stop 隧道 |
+| TASK-DESK-002 | 电脑列看不见时断 RFB，留隧道 | desk-stream / desktop-view / index | P0 | done | TC-DESK-009/010 绿；不 stop 隧道 |
 
 ## 4. 执行顺序和阻塞
 

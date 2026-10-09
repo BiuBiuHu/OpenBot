@@ -444,7 +444,7 @@
     <div id="banner"></div>
     <main>
       <section id="log"></section>
-      <aside>
+      <aside class="desk-col" id="desk-col">
         <h2>电脑 <button type="button" id="desk-max-btn" aria-pressed="false">放大</button></h2>
         <div class="desk-wrap" id="desk-wrap">
           <button type="button" id="desk-close" class="desk-close" hidden>收起</button>
@@ -588,7 +588,7 @@
       }
 
       function deskColumnBox() {
-        const col = document.getElementById("desk-col");
+        const col = document.getElementById("desk-col") || document.querySelector("aside");
         if (!col) return { display: "none", visibility: "hidden", width: 0, height: 0 };
         const cs = getComputedStyle(col);
         const r = col.getBoundingClientRect();

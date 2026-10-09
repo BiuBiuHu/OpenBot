@@ -39,6 +39,8 @@
 
 ## 3. 环节核心内容
 
+- 环境：本地 Node，分支 `cursor/desk-rfb-idle-74e9`，基线 `origin/main` = `0d5eb94`。
+- 本增量：`npx tsc --noEmit` 通过。`npm test` **98 pass / 0 fail**（含 TC-DESK-009/010）。无真 ECS 桌面。
 - 环境：本地 Node，分支 `cursor/live-chat-eval-gate-74e9`，基线 `origin/main` = `0b445aa`。
 - 上一轮漏测（必须写进报告）：v0.2 绿跑的句子是「看看 … 这个文档讲了什么?」，JSON 里还塞了自编 `# 用户记忆和知识库` 两句。**不是**用户后打的「… 这个讲的是什么?」，也**没有**走真抓。所以那次绿不能证明活页。
 - 命令与结果（本分支）：
