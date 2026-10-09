@@ -5,6 +5,7 @@
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-10-01 | 首版。最小充分集=文档路径+旧聊天评测 | 风险在分流误判与超时套话，不在全仓无关模块 | 默认不跑发布级全环境；`npm test` 为门禁 |
+| v0.2 | 2026-10-09 | 加 TC-DESK-009/010 | 闲置 RFB | 单测几何与 paused 重连；不测真 VNC 像素 |
 
 ## 1. 当前决策
 
@@ -23,6 +24,7 @@
 | REQ-CAP-004 | 简体短答，禁繁体 | TC-EVAL-003 what-is-grok-bot | 单测 | 待测 |
 | REQ-CHAT-001 | 你是谁 / 超时 / 链接 | who-are-you timeout-is-short links-render | eval-set | 待测 |
 | REQ-CAP-001 | 无新 mode | TC-UI 单输入 | 代码+测试 | 待测 |
+| REQ-DESK-003 | 看不见电脑列断 RFB，留隧道 | TC-DESK-009 TC-DESK-010 | desk-stream + desktop HTML | 待测 |
 
 ## 3. 测试范围
 
