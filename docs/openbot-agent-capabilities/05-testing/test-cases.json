@@ -1,7 +1,7 @@
 {
   "feature": "openbot-agent-capabilities",
-  "version": "v0.2",
-  "updated": "2026-10-01",
+  "version": "v0.3",
+  "updated": "2026-10-09",
   "cases": [
     {
       "id": "TC-DOC-001",
@@ -113,6 +113,34 @@
       "expected": "ID 列表含 read-public-doc 且全部 pass",
       "must_not": "夹具含私钥或公网 IPv4",
       "evidence": "tests/eval-set.test.ts",
+      "automation": "node:test"
+    },
+    {
+      "id": "TC-DESK-009",
+      "system": "本机页",
+      "priority": "P0",
+      "req": ["REQ-DESK-003"],
+      "precondition": "无真机",
+      "steps": [
+        "shouldStreamDesktop(标签 hidden / 列 display none / 无 src)"
+      ],
+      "expected": "false，deskStreamType 为 openbot-desk-pause",
+      "must_not": "拆 SSH 隧道",
+      "evidence": "tests/desk-stream.test.ts",
+      "automation": "node:test"
+    },
+    {
+      "id": "TC-DESK-010",
+      "system": "本机页",
+      "priority": "P0",
+      "req": ["REQ-DESK-003"],
+      "precondition": "无真机",
+      "steps": [
+        "shouldReconnectRfb({ paused: true })"
+      ],
+      "expected": "false",
+      "must_not": "paused 仍 800ms 重连",
+      "evidence": "tests/desk-stream.test.ts",
       "automation": "node:test"
     }
   ]

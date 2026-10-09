@@ -5,6 +5,7 @@
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-10-01 | 首版。本增量只取文档 URL；其余四能力分期 | 防止把未实现阶段标绿 | 改代码/工作区文稿/新桌面保持 pending |
+| v0.2 | 2026-10-09 | TASK-DESK-002 闲置断 RFB | 用户确认继续 | 只本增量；TASK-DESK-001 仍 pending |
 
 ## 1. 当前决策
 
@@ -33,6 +34,7 @@
 | TASK-CODE-001 | 具名改文件分发与评测 | thread / evals | P1 | pending | 另开从 main 拉的分支 |
 | TASK-WSDOC-001 | 工作区 notes.md 起草 | 未定 | P1 | pending | 先把验收写进本目录新版本 |
 | TASK-DESK-001 | 桌面回归（无工具条/放大） | desktop | P2 | pending | 不在本 PR 改代码 |
+| TASK-DESK-002 | 电脑列看不见时断 RFB，留隧道 | desk-stream / desktop-view / index | P0 | done | TC-DESK-009/010 绿；不 stop 隧道 |
 
 ## 4. 执行顺序和阻塞
 

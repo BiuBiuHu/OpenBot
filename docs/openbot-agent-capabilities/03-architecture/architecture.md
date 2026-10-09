@@ -5,12 +5,13 @@
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-10-01 | 首版。文档路径落在本机主服务，不进 ECS | 现场把文档问句交接导致超时；调研拒绝 BrowserTool 作本增量 | `src/page-read.ts` 成为公开文档读取的唯一实现点 |
+| v0.2 | 2026-10-09 | 电脑列不可见时停 RFB | ECS 出站是画面流不是心跳 | `desk-stream.js` + `desktop-view.html`；不拆 `desktopTunnel` |
 
 ## 1. 当前决策
 
 - 当前技术决策：笔记本 OpenBot 进程是唯一对外契约（页面、`/api/chat`、桌面代理）。公开文档由该进程 HTTP GET。ECS OpenHands 只在交接路径出现。
 - 当前自研边界：分流规则与口吻自研；传输复用 `fetch` + 已有 `stripHtml`。
-- 当前实施边界：本增量只加 document 路径。不改 SSH、不改桌面代理、不改 OH 客户端协议。
+- 当前实施边界：本增量只停闲置 RFB。不拆 SSH 隧道，不改 VNC 协议，不改 OH 客户端。
 
 ## 2. 分层架构
 
@@ -63,6 +64,7 @@ flowchart TB
 | REQ-CAP-004 | 语言 | `language.ts` `voiceFromDocument` | `~/.openbot/config.json` | 已有语言测试 + 新用例 |
 | REQ-CHAT-001 | 交接后润色 | `voiceChatReply` | 无 | 旧 eval |
 | REQ-CODE-001 | 交接 OH | `handoff.ts` | ECS 工作区 | 本增量不新做 |
+| REQ-DESK-003 | 闲置停 RFB | `desk-stream.js` `desktop-view.html` | 无 | TC-DESK-009/010 |
 
 ## 4. 调用关系
 

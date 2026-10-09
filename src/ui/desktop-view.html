@@ -107,8 +107,40 @@
         let urlIndex = 0;
         let rfb;
         let generation = 0;
+        let paused = document.visibilityState === "hidden";
+        let reconnectTimer;
+        function clearReconnect() {
+          if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = undefined;
+          }
+        }
+        function stopRfb() {
+          clearReconnect();
+          generation += 1;
+          if (rfb) {
+            try {
+              rfb.disconnect();
+            } catch {
+              /* already closed */
+            }
+            rfb = undefined;
+          }
+        }
+        function setDeskPaused(on) {
+          if (on) {
+            paused = true;
+            stopRfb();
+            return;
+          }
+          if (!paused && rfb) return;
+          paused = false;
+          start();
+        }
         function start() {
+          if (paused) return;
           const gen = ++generation;
+          clearReconnect();
           const url = urls[urlIndex];
           if (rfb) {
             try {
@@ -122,7 +154,7 @@
             rfb = new RFB(screen, url, { shared: true });
           } catch {
             urlIndex = (urlIndex + 1) % urls.length;
-            setTimeout(start, 800);
+            reconnectTimer = setTimeout(start, 800);
             return;
           }
           rfb.scaleViewport = true;
@@ -132,9 +164,9 @@
             err.style.display = "none";
           });
           rfb.addEventListener("disconnect", () => {
-            if (gen !== generation) return;
+            if (gen !== generation || paused) return;
             urlIndex = (urlIndex + 1) % urls.length;
-            setTimeout(start, 800);
+            reconnectTimer = setTimeout(start, 800);
           });
           rfb.addEventListener("credentialsrequired", () => {
             try {
@@ -144,7 +176,25 @@
             }
           });
         }
-        start();
+        document.addEventListener("visibilitychange", () => {
+          setDeskPaused(document.visibilityState === "hidden");
+        });
+        window.addEventListener("pagehide", () => setDeskPaused(true));
+        window.addEventListener("pageshow", () => {
+          if (document.visibilityState !== "hidden") setDeskPaused(false);
+        });
+        window.addEventListener("message", (e) => {
+          if (e.origin !== location.origin) return;
+          if (e.data && e.data.type === "openbot-desk-pause") setDeskPaused(true);
+          if (e.data && e.data.type === "openbot-desk-resume") setDeskPaused(false);
+        });
+        window.openbotDeskStream = {
+          pause: () => setDeskPaused(true),
+          resume: () => setDeskPaused(false),
+          paused: () => paused,
+          connected: () => Boolean(rfb),
+        };
+        if (!paused) start();
       }
     </script>
   </body>

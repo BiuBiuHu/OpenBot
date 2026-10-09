@@ -5,10 +5,11 @@
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-10-01 | 首版。单仓、无迁移、无发布 | 编码前影响面盘点 | 只动 OpenBot 本机聊天层与评测 |
+| v0.2 | 2026-10-09 | 闲置时断 RFB | 开着页推画面吃 ECS 出站 | 页/iframe；不拆 SSH `-L` |
 
 ## 1. 当前结论
 
-- 影响范围：单仓库 `BiuBiuHu/OpenBot`。模块：`thread`、`chat-voice`、`page-read`、`eval-set`、chat-layer 评测、本 feature 文档。`docs/phases/` 仅加替代声明。
+- 影响范围：单仓库。本增量模块：`src/ui/desk-stream.js`、`desktop-view.html`、`index.html`、`server.ts` 静态 `/desk-stream.js`。不拆 `desktopTunnel`。不改 `/api/chat`。
 - 是否跨 repo：否。
 - 是否改接口契约：否。`POST /api/chat` 入参出参不变。
 - 是否需要迁移：否。

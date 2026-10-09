@@ -444,7 +444,7 @@
     <div id="banner"></div>
     <main>
       <section id="log"></section>
-      <aside>
+      <aside class="desk-col" id="desk-col">
         <h2>电脑 <button type="button" id="desk-max-btn" aria-pressed="false">放大</button></h2>
         <div class="desk-wrap" id="desk-wrap">
           <button type="button" id="desk-close" class="desk-close" hidden>收起</button>
@@ -488,6 +488,7 @@
     </div>
     <script type="module">
       import { createComposeGuard, renderMarkdown, shouldSendOnEnter } from "/chat-ui.js";
+      import { deskStreamType, shouldStreamDesktop } from "/desk-stream.js";
 
       const logEl = document.getElementById("log");
       const desk = document.getElementById("desk");
@@ -586,6 +587,39 @@
         return "/desktop-view?" + q.toString();
       }
 
+      function deskColumnBox() {
+        const col = document.getElementById("desk-col") || document.querySelector("aside");
+        if (!col) return { display: "none", visibility: "hidden", width: 0, height: 0 };
+        const cs = getComputedStyle(col);
+        const r = col.getBoundingClientRect();
+        return { display: cs.display, visibility: cs.visibility, width: r.width, height: r.height };
+      }
+
+      function deskLive() {
+        const col = deskColumnBox();
+        return shouldStreamDesktop({
+          visibilityState: document.visibilityState,
+          deskHidden: desk.hidden,
+          hasSrc: Boolean(desk.getAttribute("src")),
+          columnDisplay: col.display,
+          columnVisibility: col.visibility,
+          columnWidth: col.width,
+          columnHeight: col.height,
+        });
+      }
+
+      function tellDesk(type) {
+        try {
+          if (desk.contentWindow) desk.contentWindow.postMessage({ type }, location.origin);
+        } catch {
+          /* iframe not ready */
+        }
+      }
+
+      function syncDeskStream() {
+        tellDesk(deskStreamType(deskLive()));
+      }
+
       function deskMaximized() {
         return deskWrap.classList.contains("max");
       }
@@ -605,7 +639,13 @@
             deskMissing.hidden = true;
             desk.hidden = false;
             const src = deskSrc(d);
-            if (desk.getAttribute("src") !== src) desk.src = src;
+            if (document.visibilityState === "hidden") {
+              syncDeskStream();
+            } else if (desk.getAttribute("src") !== src) {
+              desk.src = src;
+            } else {
+              syncDeskStream();
+            }
           } else {
             desk.hidden = true;
             desk.removeAttribute("src");
@@ -613,11 +653,13 @@
             deskMissing.textContent =
               d.missing ||
               "The desktop tunnel is not open yet. Save and connect; the client forwards 127.0.0.1:6080.";
+            syncDeskStream();
           }
         } catch {
           desk.hidden = true;
           deskMissing.hidden = false;
           deskMissing.textContent = "Desktop not reachable yet.";
+          syncDeskStream();
         }
       }
 
@@ -808,10 +850,19 @@
         e.preventDefault();
         send();
       });
+      desk.addEventListener("load", syncDeskStream);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") refreshDesktop();
+        else syncDeskStream();
+      });
+      window.addEventListener("resize", syncDeskStream);
       refreshStatus();
       refreshDesktop();
       setInterval(refreshStatus, 8000);
-      setInterval(refreshDesktop, 5000);
+      setInterval(() => {
+        if (document.visibilityState === "hidden") return;
+        refreshDesktop();
+      }, 5000);
       add(
         "sys",
         "",

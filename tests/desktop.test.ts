@@ -61,6 +61,7 @@ describe("desktop pane (no live host)", () => {
       const html = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/`)).text();
       assert.match(html, /电脑/);
       assert.match(html, /id="desk"/);
+      assert.match(html, /id="desk-col"/);
       assert.match(html, /desk-wrap/);
       assert.match(html, /aspect-ratio:\s*1280\s*\/\s*800/);
       assert.match(html, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s*36rem/);
@@ -75,6 +76,11 @@ describe("desktop pane (no live host)", () => {
       assert.match(html, /收起/);
       assert.match(html, /openbot-desk-toggle/);
       assert.match(html, /openbot-desk-close/);
+      assert.match(html, /desk-stream\.js/);
+      assert.match(html, /shouldStreamDesktop/);
+      assert.match(html, /syncDeskStream/);
+      assert.match(html, /visibilityState === "hidden"/);
+      assert.doesNotMatch(html, /desktopTunnel\.stop/);
       assert.match(html, /allow-pointer-lock/);
       assert.match(html, /pointer-lock/);
       assert.doesNotMatch(html, /On this computer/);
@@ -82,10 +88,18 @@ describe("desktop pane (no live host)", () => {
       assert.doesNotMatch(html, /工具条/);
       assert.doesNotMatch(html, /\/novnc\/vnc\.html/);
       assert.match(html, /\/desktop-view/);
+      const streamJs = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/desk-stream.js`)).text();
+      assert.match(streamJs, /export function shouldStreamDesktop/);
       const view = await (await fetch(`http://127.0.0.1:${config.controlPlane.port}/desktop-view`)).text();
       assert.match(view, /\/novnc\/core\/rfb\.js/);
       assert.match(view, /openbot-desk-toggle/);
       assert.match(view, /openbot-desk-close/);
+      assert.match(view, /openbot-desk-pause/);
+      assert.match(view, /openbot-desk-resume/);
+      assert.match(view, /setDeskPaused/);
+      assert.match(view, /if \(gen !== generation \|\| paused\) return/);
+      assert.match(view, /visibilitychange/);
+      assert.doesNotMatch(view, /desktopTunnel\.stop/);
       assert.match(view, /clip-path:\s*inset\(0\)/);
       assert.doesNotMatch(view, /<iframe/);
       assert.doesNotMatch(view, /noVNC_control_bar/);
