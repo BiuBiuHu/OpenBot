@@ -44,6 +44,12 @@ class InstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'not healthy'): i.install_locked('lock-v2')
         self.assertEqual((self.root/'current').readlink(), old)
         self.assertEqual((self.root/'service').read_text(), unit)
+    def test_failed_first_file_smoke_removes_active_service(self):
+        with patch.object(i, 'verify_execution', side_effect=RuntimeError('file smoke failed')):
+            with self.assertRaisesRegex(RuntimeError, 'file smoke failed'): i.install_locked('lock-v1')
+        self.assertFalse((self.root/'current').exists())
+        self.assertFalse((self.root/'service').exists())
+
     def test_dependency_failure_keeps_current_service(self):
         i.install_locked('lock-v1')
         old = (self.root/'current').readlink()
