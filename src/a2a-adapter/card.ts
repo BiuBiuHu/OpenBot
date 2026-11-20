@@ -18,9 +18,9 @@ export const ADAPTER_SKILLS: AgentSkill[] = [
   {
     id: "edit_file",
     name: "改文件",
-    description: "在那台电脑上改文件。用户要说改哪个文件、写成什么。",
+    description: "在那台电脑的工作区里写或改文件，包括 notes.md 这类文稿。用户要说文件名和写成什么。",
     tags: ["file"],
-    examples: ["把 README.md 改成一行：你好"],
+    examples: ["把 README.md 改成一行：你好", "在工作区写一份 notes.md，三句说明今天聊了什么。"],
     inputModes: ["text/plain"],
     outputModes: ["text/plain"],
     securityRequirements: [],

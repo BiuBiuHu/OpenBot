@@ -5,6 +5,7 @@
 | 版本 | 日期 | 变更内容 | 变更原因 | 影响 |
 |------|------|----------|----------|------|
 | v0.1 | 2026-10-01 | 首版。本增量只取文档 URL；其余四能力分期 | 防止把未实现阶段标绿 | 改代码/工作区文稿/新桌面保持 pending |
+| v0.2 | 2026-10-29 | TASK-WSDOC-001 写入验收 | 沿用阶段 3：同一条聊天，文稿在那台电脑的工作区 | 本地契约有测试；没有 ECS 不算交付 |
 
 ## 1. 当前决策
 
@@ -31,7 +32,7 @@
 | TASK-DOC-005 | 现场原句 + 七句门禁 | evals | P0 | done | 1–5、7 绿；6 保持绿 |
 | TASK-DOC-004 | phases 替代声明 | `docs/phases/README.md` | P0 | done | 写明决策源已迁移 |
 | TASK-CODE-001 | 具名改文件分发与评测 | thread / evals | P1 | pending | 另开从 main 拉的分支 |
-| TASK-WSDOC-001 | 工作区 notes.md 起草 | 未定 | P1 | pending | 先把验收写进本目录新版本 |
+| TASK-WSDOC-001 | 工作区 notes.md 起草 | Pi / agent card `edit_file` | P1 | 本地契约已测，现场未绿 | 有卡时原话发给远端改文件；无卡不说写好了；无 ECS 不标绿 |
 | TASK-DESK-001 | 桌面回归（无工具条/放大） | desktop | P2 | pending | 不在本 PR 改代码 |
 
 ## 4. 执行顺序和阻塞
@@ -51,4 +52,4 @@
 
 ## 6. 未解决问题
 
-- CAP-CODE / CAP-WSDOC 的失败测试尚未按「先红后绿」写入。到点时改本 backlog 状态，并给 PRD 加版本，不新建散装阶段文件。
+- CAP-CODE 的失败测试还没按「先红后绿」写入。CAP-WSDOC 的本地契约在 `TC-WSDOC-001` 到 `TC-WSDOC-003`。没有 ECS 时不标绿。

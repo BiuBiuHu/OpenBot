@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
 import { describe, it } from "node:test";
 import { createAssistantMessageEventStream, type AssistantMessage } from "@earendil-works/pi-ai";
 import { startOpenHandsAdapter } from "../src/a2a-adapter/server.js";
@@ -921,6 +923,160 @@ describe("A2A behavior cases", () => {
       );
       assert.equal(mock.creates.length, 0);
     } finally {
+      await mock.stop();
+    }
+  });
+
+  it("TC-WSDOC-001: a named workspace note is an edit on that computer", async () => {
+    const draft = "在工作区写一份 notes.md，三句说明今天聊了什么。";
+    const revise = "把 notes.md 第一段改短。";
+    const notes = path.join(process.cwd(), "notes.md");
+    const notesBefore = fs.existsSync(notes) ? fs.readFileSync(notes, "utf8") : undefined;
+    const mock = await startMockOhServer({
+      sessionKey: "notes-key",
+      finishAfterPolls: 1,
+      replyFor: (goal) => `${DUMP}\n${goal}`,
+    });
+    const adapter = await startOpenHandsAdapter({ client: new OpenHandsClient(mock.baseUrl, "notes-key"), pollMs: 5 });
+    const bag: SessionToolBag = {};
+    let step = 0;
+    try {
+      const skills = await loadRemoteSkills(adapter.baseUrl);
+      const edit = skills.find((skill) => skill.id === "edit_file");
+      assert.match(edit?.description || "", /notes\.md/);
+      assert.match(edit?.description || "", /工作区/);
+      const session = await createOpenBotPiSession({
+        language: "zh-CN",
+        llm: { baseUrl: "http://127.0.0.1:9/v1", model: "stub", apiKey: "test-key" },
+        remoteSkills: skills,
+        kept: () => bag.remote?.fullText,
+        tools: localTools({ client: new OpenHandsClient(adapter.baseUrl, "notes-key"), bag }),
+        modelStream: (_model, context) => {
+          const blob = JSON.stringify(context.messages);
+          assert.match(blob, /工作区里的文稿在那台电脑上/);
+          assert.match(blob, /notes\.md/);
+          if (step === 0) {
+            step += 1;
+            return toolCall("edit_file", { goal: draft });
+          }
+          if (step === 1) {
+            step += 1;
+            assert.match(toolResultText(context), /notes\.md/);
+            assert.doesNotMatch(toolResultText(context), /REMOTE-DUMP-MARKER/);
+            return say("写好了。notes.md 在那台电脑上。");
+          }
+          if (step === 2) {
+            step += 1;
+            return toolCall("edit_file", { goal: revise });
+          }
+          if (step === 3) {
+            step += 1;
+            return say("改好了。就改了这一处。");
+          }
+          return say("我是 OpenBot。");
+        },
+      });
+      try {
+        const wrote = await turn(draft, session, new OpenHandsClient(adapter.baseUrl, "notes-key"));
+        assert.equal(wrote.shown, "写好了。notes.md 在那台电脑上。");
+        assert.doesNotMatch(wrote.shown, /REMOTE-DUMP-MARKER|我是 OpenHands|网上查过了/);
+        assert.match(wrote.result.kept || "", /REMOTE-DUMP-MARKER/);
+        assert.equal(adapter.tasks[0]?.skillId, "edit_file");
+        assert.equal(adapter.tasks[0]?.goal, draft);
+        assert.match(JSON.stringify(mock.creates[0]?.body), /notes\.md/);
+
+        const changed = await turn(revise, session, new OpenHandsClient(adapter.baseUrl, "notes-key"));
+        assert.equal(changed.shown, "改好了。就改了这一处。");
+        assert.equal(adapter.tasks[1]?.skillId, "edit_file");
+        assert.equal(adapter.tasks[1]?.goal, revise);
+        assert.doesNotMatch(changed.shown, /第一段改短/);
+
+        const who = await turn("你是谁", session, new OpenHandsClient(adapter.baseUrl, "notes-key"));
+        assert.equal(who.shown, "我是 OpenBot。");
+        assert.equal(adapter.tasks.length, 2);
+        assert.equal(fs.existsSync(notes) ? fs.readFileSync(notes, "utf8") : undefined, notesBefore);
+      } finally {
+        session.dispose();
+      }
+    } finally {
+      await adapter.stop();
+      await mock.stop();
+    }
+  });
+
+  it("TC-WSDOC-002: without a card a workspace note is not written", async () => {
+    const draft = "在工作区写一份 notes.md，三句说明今天聊了什么。";
+    const notes = path.join(process.cwd(), "notes.md");
+    const notesBefore = fs.existsSync(notes) ? fs.readFileSync(notes, "utf8") : undefined;
+    const mock = await startMockOhServer({ sessionKey: "notes-none" });
+    const bag: SessionToolBag = {};
+    try {
+      const skills = await loadRemoteSkills(mock.baseUrl);
+      assert.deepEqual(skills, []);
+      const session = await createOpenBotPiSession({
+        language: "zh-CN",
+        llm: { baseUrl: "http://127.0.0.1:9/v1", model: "stub", apiKey: "test-key" },
+        remoteSkills: skills,
+        tools: localTools({ client: new OpenHandsClient(mock.baseUrl, "notes-none"), bag }),
+        modelStream: (_model, context) => {
+          const blob = JSON.stringify(context.messages);
+          assert.match(blob, /不要说已经写好了/);
+          assert.doesNotMatch(blob, /edit_file/);
+          return say("这会儿没有远端能力，我这边改不了那个文件。");
+        },
+      });
+      try {
+        const { shown } = await turn(draft, session, new OpenHandsClient(mock.baseUrl, "notes-none"));
+        assert.equal(shown, "这会儿没有远端能力，我这边改不了那个文件。");
+        assert.doesNotMatch(shown, /写好了|文档已写好/);
+        assert.equal(bag.remote, undefined);
+        assert.equal(mock.creates.length, 0);
+        assert.equal(fs.existsSync(notes) ? fs.readFileSync(notes, "utf8") : undefined, notesBefore);
+      } finally {
+        session.dispose();
+      }
+    } finally {
+      await mock.stop();
+    }
+  });
+
+  it("TC-WSDOC-003: an encyclopedia snippet is not a written note", async () => {
+    const draft = "在工作区写一份 notes.md，三句说明今天聊了什么。";
+    const snippet = "维基上写着一段介绍。";
+    const mock = await startMockOhServer({
+      sessionKey: "notes-web",
+      finishAfterPolls: 1,
+      replyFor: () => snippet,
+    });
+    const adapter = await startOpenHandsAdapter({ client: new OpenHandsClient(mock.baseUrl, "notes-web"), pollMs: 5 });
+    const bag: SessionToolBag = {};
+    let step = 0;
+    try {
+      const skills = await loadRemoteSkills(adapter.baseUrl);
+      const session = await createOpenBotPiSession({
+        language: "zh-CN",
+        llm: { baseUrl: "http://127.0.0.1:9/v1", model: "stub", apiKey: "test-key" },
+        remoteSkills: skills,
+        tools: localTools({ client: new OpenHandsClient(adapter.baseUrl, "notes-web"), bag }),
+        modelStream: (_model, context) => {
+          if (step === 0) {
+            step += 1;
+            return toolCall("web_search", { goal: draft });
+          }
+          assert.match(toolResultText(context), /维基上写着一段介绍/);
+          return say(snippet);
+        },
+      });
+      try {
+        const { shown } = await turn(draft, session, new OpenHandsClient(adapter.baseUrl, "notes-web"));
+        assert.equal(adapter.tasks[0]?.skillId, "web_search");
+        assert.equal(shown, snippet);
+        assert.doesNotMatch(shown, /文档已写好|写好了/);
+      } finally {
+        session.dispose();
+      }
+    } finally {
+      await adapter.stop();
       await mock.stop();
     }
   });

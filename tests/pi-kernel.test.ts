@@ -56,6 +56,10 @@ describe("Pi kernel", () => {
       modelStream: (_model, context) => {
         const blob = JSON.stringify(context.messages);
         assert.match(blob, /你是 OpenBot/);
+        assert.match(blob, /说一下改哪个文件/);
+        assert.match(blob, /工作区里的文稿在那台电脑上/);
+        assert.match(blob, /这会儿没有远端能力，我这边改不了那个文件/);
+        assert.match(blob, /不要说已经写好了/);
         const last = [...context.messages].reverse().find((message) => message.role === "user");
         seen.push(userText(last?.content));
         const stream = createAssistantMessageEventStream();
