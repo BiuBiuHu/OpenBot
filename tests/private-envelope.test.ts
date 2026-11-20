@@ -15,3 +15,12 @@ it('tampering, expiry, target change and unknown delivery cannot replay input',a
  await assert.rejects(()=>broker.consume(binding,env,['password'],async()=>{throw Error('browser response lost');}),/response lost/);await assert.rejects(()=>broker.consume(binding,env,['password'],apply),/consumed/);
  const expired=await seal(broker.issue(binding),{password:'canary'});now+=600001;await assert.rejects(()=>broker.consume(binding,expired,['password'],apply),/expired/);
 });
+it('public account is readable on the wire, password remains encrypted, and account substitution is rejected',async()=>{
+ const {sealPrivateInput}=await import('../src/ui/private-input.js');
+ const broker=new PrivateEnvelopes();const challenge=broker.issue(binding);
+ const envelope=await sealPrivateInput(challenge,{password:'TEST-PASSWORD-NEVER-PLAIN'},{account:'test-account'});
+ assert.equal(envelope.publicValues.account,'test-account');assert.ok(!JSON.stringify(envelope).includes('TEST-PASSWORD-NEVER-PLAIN'));
+ await assert.rejects(()=>broker.consume(binding,{...envelope,publicValues:{account:'another-account'}},['password'],async()=>assert.fail('tampered account must not fill'),['account']),/Invalid/);
+ await assert.rejects(()=>broker.consume(binding,{...envelope,publicValues:{password:'unprotected'}},['password'],async()=>assert.fail('password cannot be public'),['account']),/Invalid/);
+ const result=await broker.consume(binding,envelope,['password'],async values=>({account:values.account,password:values.password}),['account']);assert.deepEqual(result,{account:'test-account',password:'TEST-PASSWORD-NEVER-PLAIN'});
+});

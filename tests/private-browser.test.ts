@@ -20,3 +20,9 @@ it('ordinary computer tasks can request takeover but cannot use the private brow
 it('protected browsing does not expose loopback CDP or private network pages by default',async()=>{
  const {isPublicBrowserAddress}=await import('../src/bot/browser-cdp.js');for(const host of ['127.0.0.1','10.0.0.1','172.16.0.1','192.168.1.1','169.254.169.254','::1','::ffff:127.0.0.1','fc00::1'])assert.equal(isPublicBrowserAddress(host),false,host);assert.equal(isPublicBrowserAddress('8.8.8.8'),true);const browser=new BrowserCDP('http://127.0.0.1:1',[]);await assert.rejects(()=>browser.navigate('http://127.0.0.1:9322/json'),/Private network/);
 });
+it('the remote password input cannot be downgraded to an ordinary field',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'field-policy-'));const store=new TaskStore(root);
+ const browser={fieldTarget:async(id:string)=>({origin:'https://example.test',type:id==='password'?'password':'text'}),beginManualCapture:()=>{},close:async()=>{}} as unknown as BrowserCDP;
+ const broker=new PrivateBrowsers(store,'http://127.0.0.1:9322',()=> 'http://127.0.0.1:3850',()=>browser);
+ try{const t=store.create({requestId:'r',threadId:'t',goal:'login',executionProfile:'private_browser'});store.save({...t,status:'running'});broker.prepare(t);await broker.call(t.id,'request_private_input',{reason:'login',fields:[{elementId:'account',label:'账号',sensitive:false},{elementId:'password',label:'密码',sensitive:false}]});assert.deepEqual(store.get(t.id).interaction?.fields?.map(f=>f.sensitive),[false,true]);}finally{await broker.close();store.close();fs.rmSync(root,{recursive:true,force:true})}
+});

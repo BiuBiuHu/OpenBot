@@ -4,7 +4,7 @@ export type ObservationPolicy = 'confirm_all' | 'auto_browser_reads' | 'autonomo
 export interface HumanInteraction {
   id: string; kind: 'private_input' | 'takeover'; state: 'waiting' | 'applying' | 'completed';
   reason: string; origin?: string; createdAt: string;
-  fields?: Array<{ id: string; label: string; elementId: string }>;
+  fields?: Array<{ id: string; label: string; elementId: string; sensitive?: boolean }>;
 }
 export interface BotTask {
   executionProfile?: 'computer' | 'private_browser'; interaction?: HumanInteraction;

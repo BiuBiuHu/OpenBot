@@ -3,9 +3,9 @@ import { BotError } from './contracts.js';
 
 export interface EnvelopeBinding { taskId: string; requestId: string; origin: string }
 export interface EnvelopeChallenge extends EnvelopeBinding { id: string; expiresAt: number; publicKey: JsonWebKey }
-export interface SealedEnvelope { challengeId: string; wrappedKey: string; iv: string; ciphertext: string }
+export interface SealedEnvelope { challengeId: string; wrappedKey: string; iv: string; ciphertext: string; publicValues?: Record<string, string> }
 interface Entry { challenge: EnvelopeChallenge; key: KeyObject; used: boolean }
-/** Only ciphertext crosses the UI/gateway boundary. No values are logged or persisted here. */
+/** Secret values cross the UI/gateway boundary only as ciphertext; public fields are authenticated AAD. No values are logged or persisted here. */
 export class PrivateEnvelopes {
   private entries = new Map<string, Entry>();
   constructor(private now = () => Date.now()) {}
@@ -18,10 +18,12 @@ export class PrivateEnvelopes {
     this.entries.set(challenge.id, { challenge, key: privateKey, used: false });
     return challenge;
   }
-  async consume<T>(binding: EnvelopeBinding, envelope: SealedEnvelope, fields: string[], apply: (values: Record<string, string>) => Promise<T>): Promise<T> {
+  async consume<T>(binding: EnvelopeBinding, envelope: SealedEnvelope, fields: string[], apply: (values: Record<string, string>) => Promise<T>, publicFields: string[] = []): Promise<T> {
     const entry = this.entries.get(envelope?.challengeId);
     if (!entry || entry.used || entry.challenge.expiresAt <= this.now()) throw new BotError('Private input expired or already consumed', 409);
     if (Object.keys(binding).some(k => binding[k as keyof EnvelopeBinding] !== entry.challenge[k as keyof EnvelopeBinding])) throw new BotError('Private input target changed', 409);
+    const publicValues = envelope.publicValues || {};
+    if (typeof publicValues !== 'object' || Array.isArray(publicValues) || Object.keys(publicValues).length !== publicFields.length || publicFields.some(f => typeof publicValues[f] !== 'string' || !publicValues[f].length || publicValues[f].length > 4096)) throw new BotError('Invalid public input fields');
     let key: Buffer | undefined, plaintext: Buffer | undefined;
     let values: Record<string, string>;
     try {
@@ -29,12 +31,12 @@ export class PrivateEnvelopes {
       if (key.length !== 32) throw new Error();
       const iv = decode(envelope.iv, 12, 12), encrypted = decode(envelope.ciphertext, 17, 32768);
       const decipher = createDecipheriv('aes-256-gcm', key, iv);
-      decipher.setAAD(Buffer.from(envelopeAAD(entry.challenge)));
+      decipher.setAAD(Buffer.from(envelopeAAD(entry.challenge, envelope.publicValues)));
       decipher.setAuthTag(encrypted.subarray(-16));
       plaintext = Buffer.concat([decipher.update(encrypted.subarray(0, -16)), decipher.final()]);
       const input = JSON.parse(plaintext.toString('utf8'));
       if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length !== fields.length || fields.some(f => typeof input[f] !== 'string' || !input[f].length || input[f].length > 4096)) throw new Error();
-      values = input;
+      values = { ...publicValues, ...input };
     } catch { throw new BotError('Invalid private input envelope', 400); }
     finally { key?.fill(0); plaintext?.fill(0); }
     // Consume before any browser side effect, including when delivery outcome is unknown.
@@ -44,8 +46,8 @@ export class PrivateEnvelopes {
   }
   clear() { this.entries.clear(); }
 }
-export function envelopeAAD(c: EnvelopeChallenge): string {
-  return JSON.stringify({ id: c.id, taskId: c.taskId, requestId: c.requestId, origin: c.origin, expiresAt: c.expiresAt });
+export function envelopeAAD(c: EnvelopeChallenge, publicValues?: Record<string, string>): string {
+  return JSON.stringify({ id: c.id, taskId: c.taskId, requestId: c.requestId, origin: c.origin, expiresAt: c.expiresAt, ...(publicValues ? { publicValues: Object.fromEntries(Object.entries(publicValues).sort(([a],[b])=>a.localeCompare(b))) } : {}) });
 }
 function decode(value: string, min: number, max: number): Buffer {
   if (typeof value !== 'string' || value.length > max * 2 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) throw new Error();
