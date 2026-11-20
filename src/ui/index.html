@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <meta name="bot-session" content="__BOT_SESSION__">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OpenBot — your machine</title>
@@ -453,6 +454,19 @@
       }
       footer textarea:focus { outline: 1px solid var(--phosphor); }
       .err { color: var(--danger); }
+      #bot-connect, #home-files { font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.6; }
+      #bot-connect details, #home-files { margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--panel); }
+      #bot-connect summary, #home-files summary { cursor: pointer; color: var(--phosphor); }
+      #bot-connect button, #home-files button, [data-task-id] button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; cursor: pointer; font: inherit; }
+      #bot-connect button:hover, #home-files button:hover, [data-task-id] button:hover { border-color: var(--phosphor); }
+      #bot-connect input, #home-files input { min-width: 0; width: 100%; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 8px; margin: 5px 0; }
+      #home-browse { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+      #home-browse button { white-space: nowrap; }
+      #home-file-list button { width: 100%; text-align: left; margin: 4px 0; }
+      #home-file-preview { overflow-wrap: anywhere; }
+      [data-task-id] [role="status"] { color: var(--phosphor); font-size: 13px; }
+      [data-task-id] button:disabled { opacity: .5; cursor: wait; }
+      @media (max-width: 840px) { header { display: block; padding: 12px; } header .actions { display: flex; justify-content: space-between; margin-top: 8px; } header .meta { max-width: none; text-align: right; } main { grid-template-rows: auto minmax(180px, 1fr) auto; } aside { display: block; grid-column: 1; grid-row: 3; max-height: 32vh; overflow: auto; border-top: 1px solid var(--line); } }
     </style>
   </head>
   <body>
@@ -473,16 +487,22 @@
         <section id="log"></section>
         <footer>
           <textarea id="box" rows="2" placeholder="发给这台电脑，直接开始对话。"></textarea>
-          <button id="send" type="button">Send</button>
+          <button id="send" type="button">发送</button>
         </footer>
       </section>
       <aside>
+        <div id="bot-connect" style="margin-bottom:12px">
+          <button id="bot-reconnect" type="button">恢复连接</button>
+          <span id="bot-status" role="status">正在连接远端电脑…</span>
+          <details><summary>执行服务连接设置</summary><label>服务令牌<input id="home-token" type="password" autocomplete="off" placeholder="已保存可留空"></label><label>远端端口<input id="home-port" type="number" value="3850" min="1" max="65535"></label><button id="home-connect-save" type="button">保存并连接</button></details>
+        </div>
         <h2>电脑 <button type="button" id="desk-max-btn" aria-pressed="false">放大</button></h2>
         <div class="desk-wrap" id="desk-wrap">
           <button type="button" id="desk-close" class="desk-close" hidden>收起</button>
           <div id="desk-missing" class="desk-missing">Desktop not reachable yet.</div>
           <iframe id="desk" class="desk" hidden title="Remote desktop" tabindex="0" allow="pointer-lock; fullscreen; clipboard-read; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups"></iframe>
         </div>
+        <details id="home-files"><summary>工作区文件</summary><form id="home-browse"><input id="home-directory" placeholder="相对目录，留空查看工作区"><button>查看文件</button></form><div id="home-file-list"></div><pre id="home-file-preview" style="white-space:pre-wrap;overflow:auto;max-height:260px"></pre></details>
       </aside>
     </main>
     <div id="settings" class="sheet">
@@ -515,6 +535,7 @@
       </form>
     </div>
     <script type="module">
+      import { createHomeBot } from "/home-bot.js";
       import { createComposeGuard, renderMarkdown, shouldSendOnEnter } from "/chat-ui.js";
 
       const logEl = document.getElementById("log");
@@ -577,35 +598,7 @@
         return el;
       }
 
-      async function refreshStatus() {
-        try {
-          const s = await (await fetch("/api/status")).json();
-          const ohOk = !!(s.openhands && s.openhands.ok);
-          lamp.classList.toggle("ok", ohOk && !!s.ready);
-          const host = s.host || {};
-          const hostLine = host.hostname ? host.user + "@" + host.hostname : "no host yet — open Settings";
-          meta.innerHTML =
-            escapeHtml(hostLine) +
-            (s.openhands
-              ? "<br>OH " +
-                (ohOk ? "ok" : "down") +
-                " " +
-                escapeHtml(s.openhands.baseUrl || "") +
-                (s.openhands.hasSessionKey ? "" : " · set session key")
-              : "<br>OH not configured") +
-            (s.nextStep && !s.ready ? "<br class='err'>" + escapeHtml(s.nextStep) : "");
-          if (s.nextStep && !s.ready) {
-            banner.textContent = s.nextStep;
-            banner.classList.add("show");
-          } else {
-            banner.textContent = "";
-            banner.classList.remove("show");
-          }
-        } catch (err) {
-          lamp.classList.remove("ok");
-          meta.textContent = String(err);
-        }
-      }
+      async function refreshStatus() { await homeBot.reconnect(); }
 
       function deskSrc(desktop) {
         const q = new URLSearchParams({
@@ -706,51 +699,7 @@
         no.onclick = () => decide(false);
       }
 
-      async function send() {
-        const text = box.value.trim();
-        if (!text) return;
-        box.value = "";
-        add("user", "", text);
-        const out = add("bot", "", "");
-        const bodyEl = out.querySelector(".md, pre");
-        const av = out.querySelector(".avatar.assistant");
-        let quiet = out.querySelector(".quiet");
-        if (!quiet) {
-          quiet = document.createElement("div");
-          quiet.className = "quiet";
-          out.querySelector(".bubble").appendChild(quiet);
-        }
-        sendBtn.disabled = true;
-        face.classList.add("waiting");
-        if (av) av.classList.add("waiting");
-        try {
-          await consumeSse("/api/chat", { message: text, handoff: true }, (ev) => {
-            if (ev.type === "token") {
-              bodyEl.innerHTML = renderMarkdown(ev.text || "");
-              quiet.textContent = "";
-              face.classList.remove("waiting");
-              if (av) av.classList.remove("waiting");
-              logEl.scrollTop = logEl.scrollHeight;
-            } else if (ev.type === "status") {
-              if (!bodyEl.textContent) quiet.textContent = ev.text === "thinking" ? "" : ev.text;
-            } else if (ev.type === "error") {
-              if (!bodyEl.innerHTML) bodyEl.innerHTML = renderMarkdown(ev.message || "");
-            } else if (ev.type === "done") {
-              quiet.textContent = "";
-              face.classList.remove("waiting");
-              if (av) av.classList.remove("waiting");
-              refreshDesktop();
-            }
-          });
-        } catch (err) {
-          bodyEl.innerHTML = renderMarkdown("这台电脑这轮没做成。你换一句再试。");
-        } finally {
-          face.classList.remove("waiting");
-          if (av) av.classList.remove("waiting");
-          sendBtn.disabled = false;
-          box.focus();
-        }
-      }
+      async function send() { await homeBot.send(); }
 
       async function loadSettingsForm() {
         const s = await (await fetch("/api/settings")).json();
@@ -836,14 +785,14 @@
         e.preventDefault();
         send();
       });
-      refreshStatus();
+      const homeBot = createHomeBot({ add, renderMarkdown, refreshDesktop });
+      homeBot.start();
       refreshDesktop();
-      setInterval(refreshStatus, 8000);
       setInterval(refreshDesktop, 5000);
       add(
         "sys",
         "",
-        "发给这台电脑就会直接对话。先在 Settings 里填你自己的主机和本机私钥路径；密钥只留在 ~/.openbot，不会进 git。",
+        "直接告诉我想在远端电脑上做什么。任务保存在 ECS，刷新或断线后可以恢复；待执行动作会在这里请你确认。",
       );
     </script>
   </body>

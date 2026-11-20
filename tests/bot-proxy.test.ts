@@ -11,6 +11,10 @@ it('plugin UI uses a session boundary; foreign origins cannot invoke the remote 
   try{
     const html=await (await fetch(url+'/bot')).text();assert.match(html,/独立测试入口/);
     const session=html.match(/const session='([a-f0-9]+)'/)![1];
+    const home=await (await fetch(url+'/')).text();
+    assert.ok(home.includes('content="'+session+'"'));
+    assert.ok(home.includes('/home-bot.js'));
+    assert.equal((await fetch(url+'/home-bot.js')).status,200);
     assert.equal((await fetch(url+'/api/bot/tasks')).status,403);
     assert.equal((await fetch(url+'/api/bot/connect',{method:'POST',headers:{'X-OpenBot-Session':session,Origin:'https://untrusted.example','Content-Type':'application/json'},body:'{}'})).status,403);
     const connection=await fetch(url+'/api/bot/connection',{headers:{'X-OpenBot-Session':session}});assert.equal((await connection.json() as any).configured,false);

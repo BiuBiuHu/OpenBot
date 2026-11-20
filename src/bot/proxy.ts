@@ -44,13 +44,14 @@ export function createBotProxy(config: () => OpenBotConfig) {
   return {
     async handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
       const url = new URL(req.url || '/', 'http://localhost');
-      if (url.pathname !== '/bot' && !url.pathname.startsWith('/api/bot/')) return false;
+      const home = url.pathname === '/' || url.pathname === '/index.html';
+      if (!home && url.pathname !== '/bot' && !url.pathname.startsWith('/api/bot/')) return false;
       try {
         const host = String(req.headers.host || '');
         if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host)) throw new BotError('Invalid host', 403);
-        if (url.pathname === '/bot' && req.method === 'GET') {
+        if ((home || url.pathname === '/bot') && req.method === 'GET') {
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY' });
-          res.end(fs.readFileSync(path.join(repoRoot(), 'src/ui/bot.html'), 'utf8').replace('__SESSION__', session)); return true;
+          res.end(fs.readFileSync(path.join(repoRoot(), home ? 'src/ui/index.html' : 'src/ui/bot.html'), 'utf8').replace('__SESSION__', session).replace('__BOT_SESSION__', session)); return true;
         }
         if (req.headers['x-openbot-session'] !== session) throw new BotError('Reload the Bot page to connect', 403);
         if (req.headers.origin && req.headers.origin !== `http://${host}`) throw new BotError('Invalid origin', 403);

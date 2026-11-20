@@ -128,6 +128,11 @@ export async function startControlPlane(
         res.end(fs.readFileSync(uiFile));
         return;
       }
+      if (req.method === "GET" && url.pathname === "/home-bot.js") {
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store" });
+        res.end(fs.readFileSync(path.join(repoRoot(), "src/ui/home-bot.js")));
+        return;
+      }
       if (req.method === "GET" && url.pathname === "/chat-ui.js") {
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
         res.end(fs.readFileSync(path.join(repoRoot(), "src/ui/chat-ui.js")));
