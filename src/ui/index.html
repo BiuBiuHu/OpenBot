@@ -801,7 +801,7 @@
       async function engineSetupRequest(method = 'GET') {
         const response = await fetch('/api/bot/engine-setup', { method, headers: { 'x-openbot-session': document.querySelector('meta[name="bot-session"]').content } });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || '无法连接安装服务');
+        if (!response.ok) { const error = new Error(data.error || '无法连接安装服务'); error.confirmed = true; throw error; }
         engineSetupStatus.textContent = data.message;
         installEngineButton.disabled = data.status === 'installing';
         installEngineButton.textContent = data.status === 'installing' ? '正在准备执行引擎…' : data.status === 'failed' ? '重试安装' : '安装 / 检查执行引擎';
@@ -809,7 +809,7 @@
         if (data.status === 'installing') enginePoll = setTimeout(() => engineSetupRequest().catch(engineSetupFailed), 2000);
       }
       function engineSetupFailed(error) {
-        engineSetupStatus.textContent = `连接中断，安装结果尚未确认。恢复连接后可重新检查。${error.message}`;
+        engineSetupStatus.textContent = error.confirmed ? error.message : `连接中断，安装结果尚未确认。恢复连接后可重新检查。${error.message}`;
         installEngineButton.disabled = false;
         installEngineButton.textContent = '重新检查 / 重试';
       }

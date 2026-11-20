@@ -1,3 +1,4 @@
+import { BotError } from './bot/contracts.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { repoRoot } from './paths.js';
@@ -53,7 +54,7 @@ export function createEngineSetup(config: () => OpenBotConfig, applied: (next: O
     start() {
       if (running) return { ...state };
       const snapshot = structuredClone(config());
-      if (!snapshot.host.hostname) throw new Error('请先保存 ECS 连接信息。');
+      if (!snapshot.host.hostname) throw new BotError('请先保存 ECS 连接信息。', 400);
       state = { status: 'installing', version: OPENHANDS_VERSION, message: '正在检查 ECS、安装锁定依赖并启动服务，首次安装可能需要数分钟。' };
       running = installer(snapshot).then(result => {
         if (JSON.stringify(config().host) !== JSON.stringify(snapshot.host)) throw new Error('安装期间连接目标发生变化。远端已安装，但未切换当前连接；请重新检查目标后重试。');

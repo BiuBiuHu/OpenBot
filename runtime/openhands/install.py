@@ -94,7 +94,7 @@ def install_locked(lock):
             shutil.rmtree(release)
         run('/usr/bin/python3.12', '-m', 'venv', str(release))
         (release / 'requirements.lock').write_text(lock)
-        run(str(release / 'bin/pip'), 'install', '--require-hashes', '-r', str(release / 'requirements.lock'))
+        run(str(release / 'bin/pip'), '--isolated', 'install', '--index-url', 'https://pypi.org/simple', '--retries', '2', '--timeout', '30', '--require-hashes', '-r', str(release / 'requirements.lock'))
         run(str(release / 'bin/pip'), 'check')
         run(str(release / 'bin/python'), '-c', "from importlib.metadata import version; assert all(version(p)=='1.49.2' for p in ['openhands-agent-server','openhands-sdk','openhands-tools','openhands-workspace']); import openhands.agent_server")
         (release / 'ready').write_text(digest)
