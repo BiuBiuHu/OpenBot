@@ -565,6 +565,15 @@
           <button id="close-settings" type="button">Close</button>
         </div>
         <div class="next" id="settings-next"></div>
+        <section style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)" aria-label="执行引擎安装">
+          <strong>初始化远端电脑</strong>
+          <p class="help">自动安装 OpenHands、Chromium、可视桌面和任务服务。适用于 Ubuntu 24.04 x86_64，需要 root 或免密 sudo。请先保存上方连接信息。</p>
+          <label for="engine-model">远端模型</label><input id="engine-model" name="engineModel" placeholder="例如 deepseek/deepseek-chat">
+          <label for="engine-base-url">模型服务地址（可选）</label><input id="engine-base-url" name="engineBaseUrl" placeholder="模型提供商的 API 地址">
+          <label for="engine-api-key">模型 API Key</label><input id="engine-api-key" name="engineApiKey" type="password" autocomplete="off" placeholder="只交给远端执行服务，不写入聊天">
+          <button id="install-engine" type="button">初始化 / 检查远端电脑</button>
+          <p id="engine-setup-status" class="help" role="status" aria-live="polite">已有服务会保留，内部凭据自动配置。有未结束任务时不会重启电脑。</p>
+        </section>
       </form>
     </div>
     <script type="module">
@@ -741,6 +750,10 @@
         settingsForm.user.value = host.user || "";
         settingsForm.port.value = host.port || 22;
         settingsForm.identityFile.value = host.identityFile || "";
+        settingsForm.engineModel.value = s.openhands?.llmModel || '';
+        settingsForm.engineBaseUrl.value = s.openhands?.llmBaseUrl || '';
+        settingsForm.engineApiKey.value = '';
+        settingsForm.engineApiKey.placeholder = s.openhands?.hasModelKey ? '已保存，留空保持' : '填写模型 API Key';
         settingsForm.sessionApiKey.value = "";
         settingsForm.sessionApiKey.placeholder = s.openhands && s.openhands.hasSessionKey ? "set — leave blank to keep" : "leave blank to keep";
         settingsForm.language.value = s.language || "zh-CN";
@@ -788,6 +801,32 @@
           saveBtn.disabled = false;
         }
       });
+
+      const installEngineButton = document.getElementById('install-engine');
+      const engineSetupStatus = document.getElementById('engine-setup-status');
+      let enginePoll;
+      async function engineSetupRequest(method = 'GET') {
+        const response = await fetch('/api/bot/engine-setup', { method, headers: { 'x-openbot-session': document.querySelector('meta[name="bot-session"]').content, 'Content-Type': 'application/json' }, ...(method === 'POST' ? { body: JSON.stringify({ model: { name: settingsForm.engineModel.value.trim(), apiKey: settingsForm.engineApiKey.value.trim(), baseUrl: settingsForm.engineBaseUrl.value.trim() } }) } : {}) });
+        const data = await response.json();
+        if (!response.ok) { const error = new Error(data.error || '无法连接安装服务'); error.confirmed = true; throw error; }
+        if (method === 'POST') settingsForm.engineApiKey.value = '';
+        engineSetupStatus.textContent = data.message;
+        if (data.status === 'succeeded') { await homeBot.reconnect(); desk.removeAttribute('src'); await refreshDesktop(); }
+        installEngineButton.disabled = data.status === 'installing';
+        installEngineButton.textContent = data.status === 'installing' ? '正在初始化电脑…' : data.status === 'failed' ? '重试安装' : '初始化 / 检查远端电脑';
+        clearTimeout(enginePoll);
+        if (data.status === 'installing') enginePoll = setTimeout(() => engineSetupRequest().catch(engineSetupFailed), 2000);
+      }
+      function engineSetupFailed(error) {
+        engineSetupStatus.textContent = error.confirmed ? error.message : `连接中断，安装结果尚未确认。恢复连接后可重新检查。${error.message}`;
+        installEngineButton.disabled = false;
+        installEngineButton.textContent = '重新检查 / 重试';
+      }
+      installEngineButton.onclick = async () => {
+        installEngineButton.disabled = true;
+        try { await engineSetupRequest('POST'); } catch (error) { engineSetupFailed(error); }
+      };
+      engineSetupRequest().catch(() => {});
 
       deskMaxBtn.onclick = (e) => {
         e.stopPropagation();

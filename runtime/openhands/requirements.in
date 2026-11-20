@@ -1,0 +1,5 @@
+# Upgrade all four together, after adapter and ECS validation.
+openhands-agent-server==1.49.2
+openhands-sdk==1.49.2
+openhands-tools==1.49.2
+openhands-workspace==1.49.2

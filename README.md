@@ -7,7 +7,7 @@ OpenBot 是一个独立、自托管的个人 Agent 执行组件。你在聊天�
 保留独立 Web 测试入口，通过 API 为日历等应用提供执行能力。未来计划接入安派（Anpai）；代码和运行时始终独立，不需要把整个项目放进日历仓库。
 
 > **Alpha · MIT · 自带 Linux ECS 和模型服务**
-> 当前完整功能位于 `codex/byo-ecs-control` 分支。面向单用户、可信环境；尚未提供一键安装、多租户隔离或正式 npm 发布。
+> 面向单用户、可信环境。提供锁定版本的完整 ECS 初始化；多租户隔离与正式 npm 发布尚未提供。
 
 ## 看看它如何工作
 
@@ -51,68 +51,114 @@ OpenBot 是一个独立、自托管的个人 Agent 执行组件。你在聊天�
 
 网页操作主要使用页面元素与 CDP，并非覆盖所有 Linux 桌面应用的像素级 computer-use。私密网页任务使用受限工具和独立临时浏览器上下文，不提供终端、任意 JavaScript 或原始 CDP 给模型。
 
-## 快速开始
+## 安装与初始化
 
-### 1. 准备环境
+> 完整初始化功能当前在 [PR #14](https://github.com/BiuBiuHu/OpenBot/pull/14) 的 `codex/managed-openhands` 分支。下面的命令使用该分支。
 
-- 本机：Node.js **22.19.0 或更高版本**、npm、Git、SSH。
-- ECS：可通过 SSH 连接的 Linux、Node.js，以及可用的 OpenHands Agent Server。现有联调使用 Ubuntu 24.04 / OpenHands Agent Server 1.49.2。
-- 模型：供远端 OpenHands 使用的模型配置与 API Key。
-- 网页任务：ECS 上的 Chromium 与仅监听回环地址的 CDP；查看和手动操作桌面另需 Xvnc / noVNC。
+### 1. 准备一台 ECS
 
-本地启动不会自动安装远端 OpenHands、浏览器或桌面。当前需要手动部署这些依赖。
+| 项目 | 要求 |
+| --- | --- |
+| 本机 | Node.js ≥ 22.19.0、npm、Git、SSH；本地入口已在 macOS 验证 |
+| ECS | Ubuntu 24.04、x86_64、systemd；其他系统暂不支持自动初始化 |
+| 权限 | 能用 SSH 私钥登录；连接账户为 root 或具有免密 sudo 权限 |
+| 资源 | 建议至少 2 核 / 4 GiB 内存，预留 4 GiB 以上磁盘供依赖和下载缓存使用；用户文件另计 |
+| 网络 | 本机能 SSH 到 ECS；ECS 能访问系统软件源、安装包下载源与模型 API |
+| 模型 | 模型名称、API Key，以及需要时填写的服务地址；可以复用已保存的本机 OpenAI-compatible 配置 |
 
-### 2. 启动本地入口
+**无需预先手动安装 OpenHands、Chromium、桌面或 Bot Runtime。** 初始化器会准备 Python、Node、原生运行库、字体、终端工具与这些服务。SSH 和系统包管理器是远端启动安装所需的基础条件。
+
+### 2. 在本机启动 OpenBot
 
 ```bash
-git clone --branch codex/byo-ecs-control https://github.com/BiuBiuHu/OpenBot.git
+git clone --branch codex/managed-openhands https://github.com/BiuBiuHu/OpenBot.git
 cd OpenBot
 npm ci
 npm run build
-
-# 替换为自己的主机、用户和私钥路径
-npm run openbot -- init --host YOUR_ECS_HOST --user ubuntu --port 22 --identity ~/.ssh/id_ed25519
 npm run dev -- --port 3857
 ```
 
-打开 [http://127.0.0.1:3857](http://127.0.0.1:3857)。主页面是任务入口，`/bot` 是诊断入口。SSH 配置保存在本机 `~/.openbot/`，不要提交到仓库。
+打开 [http://127.0.0.1:3857](http://127.0.0.1:3857)，进入 **Settings**：
 
-### 3. 部署远端执行服务
+1. 填写 Host、User、SSH Port 和本机私钥文件路径，点击 **Save and connect**。私钥留在本机，不要粘贴私钥内容。
+2. 在“初始化远端电脑”中填写模型名称、模型服务地址和 API Key。已保存 Key 时留空可继续使用；初次保存 SSH 后提示远端服务不可达是正常的，继续初始化即可。
+3. 点击 **初始化 / 检查远端电脑**。首次下载可能需要数分钟，页面会显示进行状态，避免重复点击。
+4. 等待“电脑环境已就绪”。内部凭据会自动保存，页面自动连接任务服务和可视桌面，无需复制 OpenHands 或 Bot 的令牌。
 
-在本机从已提交代码打包最小运行时：
+模型名称采用 OpenHands / LiteLLM 格式，例如 `deepseek/deepseek-chat`。复用本机 OpenAI-compatible 服务时，安装器会添加 `openai/` 路由前缀并沿用原服务地址。API Key 不进入聊天或安装命令参数，经 SSH 传到 ECS 的受限配置文件。
 
-```bash
-node scripts/build-bot.mjs HEAD
-```
-
-产物是 `dist/openbot-runtime-<commit>.tar.gz`。将它上传到 ECS，解压到独立目录；该产物不包含本地 UI、Pi 或安派代码，也不需要在 ECS 安装本仓库的 npm 依赖。
-
-在 ECS 上配置环境，再启动解压后的入口：
+**命令行方式**与页面使用同一安装器：
 
 ```bash
-export BOT_DATA_DIR="$HOME/.openbot-runtime"
-export BOT_WORKSPACE="$HOME/openbot-workspace"
-export BOT_PORT=3850
-export OH_BASE_URL=http://127.0.0.1:8000
-# 通过权限为 600 的环境文件设置以下值，不要写入仓库：
-# OH_SESSION_API_KEY、OH_LLM_MODEL、OH_LLM_API_KEY
-# 按模型服务需要设置 OH_LLM_BASE_URL
-# 私密网页任务另需 BOT_BROWSER_CDP_URL，例如 http://127.0.0.1:9322
+# 替换为自己的主机、用户和私钥路径
+npm run openbot -- init --host YOUR_ECS_HOST --user ubuntu --port 22 --identity ~/.ssh/id_ed25519
 
-node /path/to/unpacked-runtime/bot/main.js
+# 先在本机 ~/.openbot/.env 中配置 OH_LLM_MODEL、OH_LLM_API_KEY，
+# 按需配置 OH_LLM_BASE_URL；也可复用已保存的本机模型配置。
+# 不要将真实 Key 放进命令参数、聊天或仓库。
+npm run openbot -- setup
+npm run dev -- --port 3857
 ```
 
-长期使用时，以 systemd 等服务管理器托管 OpenBot、OpenHands 和浏览器；前台启动仅用于调试，不能保证退出 SSH 后仍运行。首次启动会在 `BOT_DATA_DIR/service-token` 生成连接凭证。在本地页面的“执行服务连接设置”中配置远端端口和凭证，通过 SSH 隧道连接。
+### 3. 初始化会安装什么
 
-OpenHands 安装细节可参考[试装记录](docs/openbot-mvp/06-ops/openhands-agent-server-trial.md)。这份历史记录包含早期产品决策；当前任务入口与执行方式以本 README 和[当前架构](docs/byo-ecs-control/03-architecture/architecture.md)为准。
+| 组件 | 管理方式 | 用途 |
+| --- | --- | --- |
+| OpenHands Agent Server / SDK / Tools / Workspace | 固定 1.49.2，传递依赖版本与 SHA-256 锁定 | 模型循环、终端、文件与浏览器工具 |
+| Node.js | 固定 22.23.5，校验下载哈希 | 运行独立 Bot Runtime |
+| Chromium（Chrome for Testing） | 固定 158.0.8127.36，校验下载哈希 | 同时供 Agent 和用户操作的可视浏览器 |
+| TigerVNC、Openbox、noVNC、websockify、字体及原生库 | Ubuntu 软件仓库管理 | 远端桌面、窗口管理与网页查看 |
+| Bot Runtime | 从当前已提交的 Git 版本自动打包并校验 | 持久化任务、事件、文件接口、私密填写与恢复 |
 
-### 4. 交给它第一个任务
+OpenHands 1.49.2 包含一处受版本检查约束的兼容补丁：模型服务未返回可选的缓存用量字段时按 0 处理，避免任务报错；补丁校验与来源见[验证记录](docs/managed-openhands/04-engineering/evidence-manifest.md)。
 
-先用普通任务验证：“在工作区创建 hello.txt，写入 Hello OpenBot，然后读回来。”
+OpenHands 优先使用公开 PyPI 镜像，失败后回退官方源；二进制下载也执行固定哈希校验，不会因更换下载源而放宽版本。应用版本由项目明确更新，不随安装自动追踪最新版；系统依赖继续采用发行版维护的软件包。
 
-再选择“私密网页任务”，尝试：“登录我的邮箱，总结最近 24 小时的邮件。需要账号和密码时，向我展示填写表单。”也可以使用“测试邮箱摘要”入口。不要把密码发送到聊天中；遇到验证码或扫码登录时，按接管提示完成操作。
+服务以专用非 root 账户 `openbot-engine` 运行，由 systemd 管理并开机自启。安装内容位于 `/opt/openbot-engine`，持久数据位于 `/var/lib/openbot-engine`。既有其他 OpenHands / 桌面 / Bot 服务不会被覆盖。
 
-邮箱摘要是一个应用场景。私密输入与接管协议面向通用网页表单，并不依赖 163 专用登录规则。网站风控、登录方式和模型能力可能影响执行结果。
+内部端口只监听 ECS 回环地址，通过 SSH 隧道访问，**无需开放这些公网端口**：
+
+| 服务 | 远端端口 |
+| --- | --- |
+| OpenHands | 18000 |
+| Bot Runtime | 13850 |
+| Chromium CDP | 19322 |
+| VNC / 网页桌面 | 15901 / 16080 |
+
+安装完成前会验证：非 root 文件写入、读取与清理；同一可视浏览器中的输入和点击；任务服务身份接口；网页桌面入口。重复初始化保留凭据、任务数据和浏览器资料；配置与版本未变时不重启正常服务。检测到未结束任务会拒绝重启，请先完成或取消任务。
+
+### 4. 验证第一个任务
+
+在主页提交：“在工作区创建 hello.txt，写入 Hello OpenBot，然后读回来。”应看到任务完成结果，也能在“工作区文件”中找到文件。
+
+再提交一个简单网页任务，观察右侧桌面的浏览器是否执行操作。刷新本地页面后，应恢复同一任务及其结果，不应重复执行。
+
+邮箱场景可选择“私密网页任务”，输入：“登录我的邮箱，总结最近 24 小时的邮件。需要账号和密码时，向我展示填写表单。”不要把密码发到聊天里；验证码或扫码等步骤由用户接管，完成后继续原任务。网站风控和模型能力仍可能影响执行结果。
+
+### 5. 安装失败怎么处理
+
+| 提示或现象 | 处理方式 |
+| --- | --- |
+| SSH 不通 / 私钥找不到 | 检查主机、用户名、端口与本机私钥路径；先确认本机可以正常 SSH 登录 |
+| sudo 权限不足 | 为安装账户配置所需权限，或使用有权限的连接账户，再重试 |
+| 系统不支持 | 使用 Ubuntu 24.04 x86_64；安装器不会将其他发行版当成兼容环境继续安装 |
+| 下载失败 / 空间不足 | 检查 ECS 出站网络、软件源和磁盘空间，修复后重新点击初始化 |
+| 端口被占用 | 检查冲突服务；安装器不会擅自关闭已有服务 |
+| 有未结束任务 | 完成或取消任务后再初始化，避免丢失临时浏览器会话 |
+| 页面断线 | 恢复本地服务后重新检查；安装结果不明确时不要删除数据目录或重置凭据 |
+| 服务已启动但任务报模型错误 | 检查模型名称、API 地址、Key 和额度；初始化自测不消耗模型调用，实际任务才验证模型服务 |
+
+在 ECS 上查看运行情况：
+
+```bash
+sudo systemctl status openbot-engine openbot-desktop openbot-browser openbot-viewer openbot-runtime --no-pager
+sudo journalctl -u openbot-runtime -u openbot-browser -n 80 --no-pager
+sudo tail -n 80 /opt/openbot-engine/install.log
+```
+
+日志与环境文件可能包含运行信息，请脱敏后再提交 Issue。安装失败保留原连接配置；新服务切换失败会尝试恢复旧单元和配置。不要通过删除 `/var/lib/openbot-engine` 解决连接问题，该目录包含任务和浏览器资料。
+
+开发者手动部署、独立 Runtime 打包及接口说明见[当前架构](docs/byo-ecs-control/03-architecture/architecture.md)和[安装验证记录](docs/managed-openhands/04-engineering/evidence-manifest.md)。
 
 ## 运行与隐私边界
 
@@ -147,7 +193,8 @@ OpenHands 安装细节可参考[试装记录](docs/openbot-mvp/06-ops/openhands-
 ```bash
 npm ci
 npm run build
-npx tsx --test tests/private*.test.ts tests/bot*.test.ts tests/a2a-adapter*.test.ts tests/pi-kernel.test.ts
+npx tsx --test tests/private*.test.ts tests/bot*.test.ts tests/a2a-adapter*.test.ts tests/pi-kernel.test.ts tests/managed-openhands.test.ts
+python3 tests/managed_installer_test.py
 ```
 
 上述测试覆盖任务运行时、私密交互与相关适配层。真实 ECS、网站登录和远端桌面仍需要单独联调，单元测试不能替代。`npm test` 可运行仓库完整测试集，部分环境相关测试需具备相应依赖。

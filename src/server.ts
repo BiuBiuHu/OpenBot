@@ -1,3 +1,4 @@
+import { createEngineSetup } from './managed-openhands.js';
 import { createBotProxy } from "./bot/proxy.js";
 import http from "node:http";
 import fs from "node:fs";
@@ -118,7 +119,15 @@ export async function startControlPlane(
   const trialFile = path.join(repoRoot(), "src/ui/oh-test.html");
   const deskViewFile = path.join(repoRoot(), "src/ui/desktop-view.html");
 
-  const bot = createBotProxy(() => liveConfig);
+  const engineSetup = createEngineSetup(() => liveConfig, async next => {
+    await ohTunnel?.stop(); ohTunnel = undefined;
+    await desktopTunnel?.stop(); desktopTunnel = undefined;
+    liveConfig = next; oh = OpenHandsClient.fromConfig(next);
+    await bot.reloadConnection();
+    lastConnect = await connectConfiguredHost(liveConfig, { timeoutMs: 8000 });
+    ohTunnel = lastConnect.tunnel; desktopTunnel = lastConnect.desktopTunnel; lastDesktop = lastConnect.desktop;
+  });
+  const bot = createBotProxy(() => liveConfig, engineSetup);
   const server = http.createServer(async (req, res) => {
     if (await bot.handle(req, res)) return;
     const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
