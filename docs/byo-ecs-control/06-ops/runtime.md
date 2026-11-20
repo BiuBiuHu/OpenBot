@@ -34,3 +34,13 @@ v0.1 / 2026-11-20：新增独立运行时。保留安派仓库独立，单用户
 ## 4. 回滚
 
 停止本次独立 runtime 服务，恢复上一构建版本；保留 BOT_DATA_DIR 和 workspace。不修改、重启、卸载既有 OpenHands，不改安全组。任务产生的文件需要单独处理，切换版本不撤销 shell 副作用。
+
+## 可见浏览器（computer-use 试验）
+
+执行主机需要已安装 `browser_tool_set` 的 OpenHands Agent Server、Chromium 和可见桌面。为 Bot 单独创建持久 browser profile，启动 Chromium 时仅在 `127.0.0.1` 监听 CDP；不要把调试端口暴露到公网。运行独立 Bot runtime 时设置 `BOT_BROWSER_CDP_URL=http://127.0.0.1:9322`，会把 `browser_tool_set` 与其连接参数传给远端 Agent。页面可通过现有桌面查看和手动接管同一个浏览器。
+
+此功能默认关闭，不会复用本机浏览器登录状态。当前动作仍使用 AlwaysConfirm，真实邮件发送、购物下单和付款需要用户对应授权。浏览器依赖留在 ECS，不进入安派仓库。
+
+当前测试部署：runtime release-1297cf0；独立临时服务 openbot-browser-test（DISPLAY :1，CDP 9322）、openbot-browser-fixture（模拟站点 3861）。二者均仅本机监听。fixture 无真实发送和支付，仅用于复现浏览器闭环。原 OpenHands 与 A2A 服务未重启。
+
+回滚：停止上述两个新增服务，把 openbot-byo-ecs-test 恢复至 release-6dd6f28 的启动方式并去掉 BOT_BROWSER_CDP_URL；保留 state、workspace 和 browser-profile 以免丢失任务/浏览器数据。当前临时服务没有配置整机重启自启。

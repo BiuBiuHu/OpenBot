@@ -70,7 +70,8 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
     }
     if (card.revision === task.revision) return;
     card.revision = task.revision;
-    card.state.textContent = `${labels[task.status] || task.status} · ${task.id.slice(0,8)}`;
+    const approvalSent = task.status === 'waiting_approval' && task.pendingActions?.length && task.pendingActions.every(a => task.decidedActionIds?.includes(a.id));
+    card.state.textContent = `${approvalSent ? '确认已提交 · 等待远端响应' : labels[task.status] || task.status} · ${task.id.slice(0,8)}`;
     card.body.innerHTML = renderMarkdown(task.result || task.error || (task.status === 'running' ? '远端正在执行，完成后结果会保留在这里。' : ''));
     card.actions.replaceChildren();
     const button = (label, action, accept) => {
@@ -95,13 +96,13 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
       const details = document.createElement('details'); details.open = task.status === 'waiting_approval';
       const summary = document.createElement('summary'); summary.textContent = '待执行动作';
       const pre = document.createElement('pre'); pre.style.whiteSpace = 'pre-wrap'; pre.style.maxHeight = '230px'; pre.style.overflow = 'auto';
-      pre.textContent = task.pendingActions.map(a => JSON.stringify({ tool: a.tool, action: a.action }, null, 2)).join('\n');
+      pre.textContent = task.pendingActions.map(a => JSON.stringify({ summary: a.summary, tool: a.tool, action: a.action }, null, 2)).join('\n');
       details.append(summary, pre); card.actions.append(details);
     }
-    if (task.status === 'waiting_approval') { button('允许本次动作', 'approval', true); button('拒绝本次动作', 'approval', false); }
+    if (task.status === 'waiting_approval' && !approvalSent) { button('允许本次动作', 'approval', true); button('拒绝本次动作', 'approval', false); }
     if (task.status === 'running') button('暂停任务', 'pause');
     if (task.status === 'paused' && !task.error) button('继续任务', 'resume');
-    if (task.error || task.status === 'paused') button('核对远端状态', 'refresh');
+    if (task.error || task.status === 'paused' || approvalSent) button('核对远端状态', 'refresh');
     if (task.status === 'succeeded') refreshDesktop();
   }
   async function refresh() {
@@ -134,7 +135,7 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
     try {
       const { task } = await api('tasks', 'POST', pending);
       pending = null; localStorage.removeItem('openbot-home-pending');
-      $('box').value = ''; render(task); notice('已接收，任务与结果保存在远端。', true);
+      $('box').value = ''; render(task); notice('已连接 · 任务已接收，结果保存在远端。', true);
       $('log').scrollTop = $('log').scrollHeight;
     } catch (error) { disconnected(error); } finally { sending = false; $('send').disabled = false; }
   }
