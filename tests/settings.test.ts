@@ -90,8 +90,8 @@ describe("host settings (no live SSH)", () => {
       hasSessionKey: false,
     });
     assert.equal(missing.ready, false);
-    assert.match(missing.nextStep, /openhands-agent-server-trial/);
-    assert.match(missing.nextStep, /systemctl enable --now openhands-agent-server/);
+    assert.match(missing.nextStep, /openbot -- setup/);
+    assert.match(missing.nextStep, /credentials automatically/);
     assert.match(missing.nextStep, /optional for chat/);
     const ready = nextStepForConnect({
       hasHost: true,

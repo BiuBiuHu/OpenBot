@@ -565,6 +565,12 @@
           <button id="close-settings" type="button">Close</button>
         </div>
         <div class="next" id="settings-next"></div>
+        <section style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)" aria-label="执行引擎安装">
+          <strong>远端执行引擎</strong>
+          <p class="help">自动安装已验证的 OpenHands 1.49.2，依赖版本固定。适用于 Ubuntu 24.04 x86_64，需要 root 或免密 sudo。请先保存上方连接信息。</p>
+          <button id="install-engine" type="button">安装 / 检查执行引擎</button>
+          <p id="engine-setup-status" class="help" role="status" aria-live="polite">已有 OpenHands 服务会保留；安装不会重启现有任务。</p>
+        </section>
       </form>
     </div>
     <script type="module">
@@ -788,6 +794,30 @@
           saveBtn.disabled = false;
         }
       });
+
+      const installEngineButton = document.getElementById('install-engine');
+      const engineSetupStatus = document.getElementById('engine-setup-status');
+      let enginePoll;
+      async function engineSetupRequest(method = 'GET') {
+        const response = await fetch('/api/bot/engine-setup', { method, headers: { 'x-openbot-session': document.querySelector('meta[name="bot-session"]').content } });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || '无法连接安装服务');
+        engineSetupStatus.textContent = data.message;
+        installEngineButton.disabled = data.status === 'installing';
+        installEngineButton.textContent = data.status === 'installing' ? '正在准备执行引擎…' : data.status === 'failed' ? '重试安装' : '安装 / 检查执行引擎';
+        clearTimeout(enginePoll);
+        if (data.status === 'installing') enginePoll = setTimeout(() => engineSetupRequest().catch(engineSetupFailed), 2000);
+      }
+      function engineSetupFailed(error) {
+        engineSetupStatus.textContent = `连接中断，安装结果尚未确认。恢复连接后可重新检查。${error.message}`;
+        installEngineButton.disabled = false;
+        installEngineButton.textContent = '重新检查 / 重试';
+      }
+      installEngineButton.onclick = async () => {
+        installEngineButton.disabled = true;
+        try { await engineSetupRequest('POST'); } catch (error) { engineSetupFailed(error); }
+      };
+      engineSetupRequest().catch(() => {});
 
       deskMaxBtn.onclick = (e) => {
         e.stopPropagation();

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { installManagedEngine, useManagedEngine } from './managed-openhands.js';
 import fs from "node:fs";
 import { randomBytes } from "node:crypto";
 import { startBotRuntime } from "./bot/runtime.js";
@@ -24,6 +25,7 @@ function usage(): string {
 Usage:
   npx openbot init [--host HOST] [--user USER] [--port N] [--identity FILE]
                    [--name NAME] [--model MODEL] [--base-url URL]
+  npx openbot setup             Automatically install the pinned OpenHands engine
   npx openbot bind              Install/start the worker on the remote host
   npx openbot status            SSH + worker + OpenHands tunnel health
   npx openbot serve [--port N]  Local client UI (one thread → OpenHands)
@@ -96,7 +98,7 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
     console.log("Still missing --host. Example:");
     console.log("  npx openbot init --host 203.0.113.10 --user ubuntu --identity ~/.ssh/id_ed25519");
   } else {
-    console.log(`Host ${sshTarget(next)} — next: open Settings in the UI or start OpenHands on that machine`);
+    console.log(`Host ${sshTarget(next)} — next: run npm run openbot -- setup to install the pinned execution engine`);
   }
 }
 
@@ -325,6 +327,14 @@ async function main(): Promise<void> {
     case "init":
       await cmdInit(flags);
       break;
+    case "setup": {
+      const config = loadConfig();
+      console.log('正在准备 ECS 执行引擎，首次安装可能需要数分钟…');
+      const result = await installManagedEngine(config);
+      useManagedEngine(config, result);
+      console.log(`执行引擎 ${result.version} 已就绪，凭据已安全保存。请配置模型与 Bot Runtime；已有任务服务未被重启。`);
+      break;
+    }
     case "bind":
       await cmdBind();
       break;

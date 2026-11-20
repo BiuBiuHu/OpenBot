@@ -343,6 +343,6 @@ export function nextStepForConnect(state: {
   return {
     ready: false,
     nextStep:
-      "SSH works, but OpenHands Agent Server is not answering on the host (127.0.0.1:8000). Chat cannot work yet. This repo does not install OpenHands — on that machine follow docs/openbot-mvp/06-ops/openhands-agent-server-trial.md, then `systemctl enable --now openhands-agent-server`. Put the host session key in ~/.openbot/.env as OH_SESSION_API_KEY. `npx openbot bind` is only the old worker and is optional for chat.",
+      "SSH works, but OpenHands Agent Server is not answering on the host (127.0.0.1:8000). Chat cannot work yet. Use Settings → 安装 / 检查执行引擎, or `npm run openbot -- setup`, to install the pinned engine and save its credentials automatically. `npx openbot bind` is only the old worker and is optional for chat.",
   };
 }
