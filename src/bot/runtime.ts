@@ -19,7 +19,7 @@ export async function startBotRuntime(opts: { dataDir: string; token: string; po
       if (got.length !== expected.length || !timingSafeEqual(got, expected)) throw new BotError('Unauthorized', 401);
       const url = new URL(req.url || '/', 'http://localhost');
       if (req.method === 'GET' && url.pathname === '/v1/identity') {
-        json(res, 200, { apiVersion: 1, instanceId: store.instanceId, capabilities: ['tasks', 'files.read', 'files.list', 'approvals'], execution: await engine.client.health() }); return;
+        json(res, 200, { apiVersion: 1, instanceId: store.instanceId, capabilities: ['tasks', 'files.read', 'files.list', 'approvals', ...(opts.oh.browser ? ['browser'] : [])], execution: await engine.client.health() }); return;
       }
       if (url.pathname === '/v1/tasks' && req.method === 'POST') {
         json(res, 202, { task: store.create(await body(req)) }); return;

@@ -65,7 +65,7 @@ export interface CreateConversationInput {
   run?: boolean;
   threadId?: string;
   /** Override the default tool list (lookup browser fallback). */
-  tools?: Array<{ name: string }>;
+  tools?: Array<{ name: string; params?: Record<string, unknown> }>;
 }
 
 export interface PollOptions {

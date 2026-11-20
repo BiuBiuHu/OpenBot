@@ -78,3 +78,11 @@ it('approval transition race: observer keeps following waiting state until remot
   const engine=new TaskEngine(store,client,defaultConfig().openhands);
   try{let t=store.create({requestId:'race',threadId:'t',goal:'write'});t=store.save({...t,status:'running'});await engine.tick();assert.equal(store.get(t.id).status,'waiting_approval');assert.doesNotMatch(JSON.stringify(store.get(t.id).pendingActions),/reasoning/);await engine.tick();assert.equal(store.get(t.id).status,'succeeded')}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
 });
+
+it('configured browser is passed to remote tool initialization with visible CDP session',async()=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot-browser-'));const store=new TaskStore(root);let input:any;
+  const client:any={createConversation:async(value:any)=>{input=value;return{id:value.conversationId}}};
+  const config:any={workspaceDir:root,browser:{cdpUrl:'http://127.0.0.1:9322'}};
+  const engine=new TaskEngine(store,client,config);
+  try{store.create({requestId:'browser',threadId:'t',goal:'Use the remote browser'});await engine.tick();assert.deepEqual(input.tools.find((t:any)=>t.name==='browser_tool_set'),{name:'browser_tool_set',params:{cdp_url:'http://127.0.0.1:9322',headless:false}});assert.equal(input.confirmationPolicy,'AlwaysConfirm')}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
+});

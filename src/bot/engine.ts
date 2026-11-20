@@ -26,7 +26,7 @@ export class TaskEngine {
     if (task.status === 'queued') {
       const pending = this.store.save({ ...task, status: 'starting', error: undefined });
       try {
-        const conv = await this.client.createConversation({ goal: task.goal, conversationId: task.id, workspaceDir: this.config.workspaceDir, confirmationPolicy: 'AlwaysConfirm' }, this.config);
+        const conv = await this.client.createConversation({ goal: task.goal, conversationId: task.id, workspaceDir: this.config.workspaceDir, confirmationPolicy: 'AlwaysConfirm', ...(this.config.browser ? { tools: [{ name: 'terminal' }, { name: 'file_editor' }, { name: 'task_tracker' }, { name: 'browser_tool_set', params: { cdp_url: this.config.browser.cdpUrl, headless: false } }] } : {}) }, this.config);
         this.store.save({ ...pending, conversationId: conv.id, status: 'running' });
       } catch {
         // Creation may have succeeded despite a lost response. Never POST again.

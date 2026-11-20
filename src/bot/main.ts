@@ -9,6 +9,7 @@ fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 const tokenFile = path.join(dataDir, 'service-token');
 if (!fs.existsSync(tokenFile)) fs.writeFileSync(tokenFile, randomBytes(32).toString('hex'), { mode: 0o600 });
 const runtime = await startBotRuntime({ dataDir, token: fs.readFileSync(tokenFile, 'utf8').trim(), port: Number(process.env.BOT_PORT || 3850), oh: {
+  ...(process.env.BOT_BROWSER_CDP_URL ? { browser: { cdpUrl: process.env.BOT_BROWSER_CDP_URL } } : {}),
   baseUrl: process.env.OH_BASE_URL || 'http://127.0.0.1:8000',
   sessionApiKey: process.env.OH_SESSION_API_KEY || process.env.OH_SESSION_API_KEYS_0 || '',
   workspaceDir: path.resolve(process.env.BOT_WORKSPACE || path.join(os.homedir(), 'openbot-workspace')),
