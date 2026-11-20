@@ -1,0 +1,5 @@
+{
+  "manualAccountCapture": true,
+  "passwordRedacted": true,
+  "modelCanaryLeak": false
+}
