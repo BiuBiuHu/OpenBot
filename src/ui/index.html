@@ -811,7 +811,7 @@
         if (!response.ok) { const error = new Error(data.error || '无法连接安装服务'); error.confirmed = true; throw error; }
         if (method === 'POST') settingsForm.engineApiKey.value = '';
         engineSetupStatus.textContent = data.message;
-        if (data.status === 'succeeded') { await homeBot.reconnect(); await refreshDesktop(); }
+        if (data.status === 'succeeded') { await homeBot.reconnect(); desk.removeAttribute('src'); await refreshDesktop(); }
         installEngineButton.disabled = data.status === 'installing';
         installEngineButton.textContent = data.status === 'installing' ? '正在初始化电脑…' : data.status === 'failed' ? '重试安装' : '初始化 / 检查远端电脑';
         clearTimeout(enginePoll);
