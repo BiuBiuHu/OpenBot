@@ -1,0 +1,134 @@
+[
+  {
+    "id": "API-001",
+    "requirementId": "REQ-ECS-001",
+    "title": "runtime 鉴权与 UI 同源边界",
+    "system": "runtime/UI/ECS",
+    "priority": "P0",
+    "scopeType": "changed-feature",
+    "preconditions": "临时本地测试数据；E2E 使用专用 ECS 测试工作区",
+    "steps": [
+      "运行 tests/bot-proxy.test.ts"
+    ],
+    "expectedResults": [
+      "状态与真实文件一致；同一 requestId 仅一次创建"
+    ],
+    "sideEffects": [
+      "不得写安派仓库、工作区外文件或重复执行已决定动作"
+    ],
+    "evidence": [
+      "测试输出或 test-report.md 中的 taskId、文件摘要与截图"
+    ],
+    "automation": "tests/bot-proxy.test.ts"
+  },
+  {
+    "id": "API-002",
+    "requirementId": "REQ-ECS-004",
+    "title": "同一任务跨运行时重启恢复",
+    "system": "runtime/UI/ECS",
+    "priority": "P0",
+    "scopeType": "changed-feature",
+    "preconditions": "临时本地测试数据；E2E 使用专用 ECS 测试工作区",
+    "steps": [
+      "运行 tests/bot-runtime.test.ts"
+    ],
+    "expectedResults": [
+      "状态与真实文件一致；同一 requestId 仅一次创建"
+    ],
+    "sideEffects": [
+      "不得写安派仓库、工作区外文件或重复执行已决定动作"
+    ],
+    "evidence": [
+      "测试输出或 test-report.md 中的 taskId、文件摘要与截图"
+    ],
+    "automation": "tests/bot-runtime.test.ts"
+  },
+  {
+    "id": "API-003",
+    "requirementId": "REQ-ECS-006",
+    "title": "重复提交和不确定提交不重做",
+    "system": "runtime/UI/ECS",
+    "priority": "P0",
+    "scopeType": "changed-feature",
+    "preconditions": "临时本地测试数据；E2E 使用专用 ECS 测试工作区",
+    "steps": [
+      "运行 tests/bot-runtime.test.ts"
+    ],
+    "expectedResults": [
+      "状态与真实文件一致；同一 requestId 仅一次创建"
+    ],
+    "sideEffects": [
+      "不得写安派仓库、工作区外文件或重复执行已决定动作"
+    ],
+    "evidence": [
+      "测试输出或 test-report.md 中的 taskId、文件摘要与截图"
+    ],
+    "automation": "tests/bot-runtime.test.ts"
+  },
+  {
+    "id": "API-004",
+    "requirementId": "REQ-ECS-005",
+    "title": "审批版本和动作决定防重复",
+    "system": "runtime/UI/ECS",
+    "priority": "P0",
+    "scopeType": "changed-feature",
+    "preconditions": "临时本地测试数据；E2E 使用专用 ECS 测试工作区",
+    "steps": [
+      "运行 tests/bot-runtime.test.ts"
+    ],
+    "expectedResults": [
+      "状态与真实文件一致；同一 requestId 仅一次创建"
+    ],
+    "sideEffects": [
+      "不得写安派仓库、工作区外文件或重复执行已决定动作"
+    ],
+    "evidence": [
+      "测试输出或 test-report.md 中的 taskId、文件摘要与截图"
+    ],
+    "automation": "tests/bot-runtime.test.ts"
+  },
+  {
+    "id": "FILE-001",
+    "requirementId": "REQ-ECS-003",
+    "title": "文件预览与路径边界",
+    "system": "runtime/UI/ECS",
+    "priority": "P0",
+    "scopeType": "changed-feature",
+    "preconditions": "临时本地测试数据；E2E 使用专用 ECS 测试工作区",
+    "steps": [
+      "运行 tests/bot-runtime.test.ts"
+    ],
+    "expectedResults": [
+      "状态与真实文件一致；同一 requestId 仅一次创建"
+    ],
+    "sideEffects": [
+      "不得写安派仓库、工作区外文件或重复执行已决定动作"
+    ],
+    "evidence": [
+      "测试输出或 test-report.md 中的 taskId、文件摘要与截图"
+    ],
+    "automation": "tests/bot-runtime.test.ts"
+  },
+  {
+    "id": "E2E-001",
+    "requirementId": "REQ-ECS-004",
+    "title": "真实 ECS 写文件并退出客户端恢复",
+    "system": "runtime/UI/ECS",
+    "priority": "P0",
+    "scopeType": "changed-feature",
+    "preconditions": "临时本地测试数据；E2E 使用专用 ECS 测试工作区",
+    "steps": [
+      "提交等待20秒并写 notes.md 的任务，核对批准命令，退出主服务，重开并读取同任务及文件"
+    ],
+    "expectedResults": [
+      "状态与真实文件一致；同一 requestId 仅一次创建"
+    ],
+    "sideEffects": [
+      "不得写安派仓库、工作区外文件或重复执行已决定动作"
+    ],
+    "evidence": [
+      "测试输出或 test-report.md 中的 taskId、文件摘要与截图"
+    ],
+    "automation": "manual browser + SSH"
+  }
+]
