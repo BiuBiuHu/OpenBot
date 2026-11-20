@@ -1,4 +1,17 @@
-# Architecture (index)
+# Architecture
+
+当前首页使用 ECS 上的独立 OpenBot Runtime 管理持久化任务，由 OpenHands 执行终端、文件和浏览器工具。默认自主执行；私密输入和人工接管通过独立交互协议完成。
+
+- [当前运行时架构](docs/byo-ecs-control/03-architecture/architecture.md)
+- [API 契约](docs/byo-ecs-control/03-architecture/api.md)
+- [Personal Agent 执行设计](docs/byo-ecs-control/03-architecture/personal-agent-execution.md)
+- [安派集成边界](docs/byo-ecs-control/03-architecture/anpai-integration.md)
+
+下面保留早期本地 Agent / 远端交接设计作为历史背景，不代表当前首页流程。当前使用说明见 [README](README.md)。
+
+---
+
+# Historical architecture
 
 OpenBot is a **local Agent** (think / orchestration companion) plus a **remote runtime that has the computer**. v0 remote runtime is **OpenHands Agent Server** (dependency / plugin, not a fork). A self-built `openbot-agent` is deferred. See [docs/openbot-mvp/03-architecture/runtime-decision-v0.md](docs/openbot-mvp/03-architecture/runtime-decision-v0.md).
 
