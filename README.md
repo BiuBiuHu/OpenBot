@@ -2,39 +2,45 @@
 
 **让你自己的 ECS，成为 Personal Agent 的手和脚。**
 
-OpenBot 是一个独立、自托管的个人 Agent 执行组件。你在聊天中交代任务，Agent 在你的 Linux 服务器上操作文件、执行命令和使用浏览器，异步完成工作，再把结果带回来。遇到登录、验证码或无法继续的步骤，它会邀请你协助，然后接着执行。
+用一句话交代任务，让 Agent 在你自己的 Linux ECS 上操作浏览器、读写文件并带回结果。你可以看到远端电脑，也可以随时接管。
 
-保留独立 Web 测试入口，通过 API 为日历等应用提供执行能力。未来计划接入安派（Anpai）；代码和运行时始终独立，不需要把整个项目放进日历仓库。
+![OpenBot 实际界面：左侧聊天返回执行结果，右侧远端浏览器显示已完成的测试订单](docs/byo-ecs-control/05-testing/evidence/computer-use-completed.png)
 
-> **Alpha · MIT · 自带 Linux ECS 和模型服务**
-> 面向单用户、可信环境。提供锁定版本的完整 ECS 初始化；多租户隔离与正式 npm 发布尚未提供。
+**上图是实际联调画面：** Agent 读取模拟邮件 → 打开模拟商店 → 选择两本笔记本 → 提交测试订单 → 返回订单结果。全程使用演示数据，没有真实购买或扣费。
 
-## 看看它如何工作
+[开始安装](#安装与初始化) · [了解能力](#当前能做什么) · [接入自己的应用](#作为独立组件接入)
 
-### 从任务到结果
+> **Alpha · MIT · 自托管**
+>
+> 自带 Linux ECS 和模型服务；一键准备执行引擎、浏览器和可视桌面。当前面向单用户、可信环境。
 
-下面是实际浏览器联调截图：Agent 读取模拟邮件中的需求，进入模拟商店，选择商品与数量，提交测试订单，并返回页面中的结果。使用演示数据，实际扣费为 0；截图为该次验收时的界面。
+## 需要你时，再请你帮忙
 
-![Agent 在远端浏览器完成模拟邮件到测试订单的任务](docs/byo-ecs-control/05-testing/evidence/computer-use-completed.png)
+任务在远端异步执行。遇到登录、验证码或无法继续的步骤，Agent 会请求协助；你可以填写信息或接管电脑，然后继续任务。
 
-### 密码交给执行端，不交给模型
+| 私密填写：密码直达执行端 | 手机端：也能协助任务 |
+| --- | --- |
+| ![桌面端私密填写卡片：账号、密码显示隐藏、加密提交和手动接管](docs/private-interaction/05-testing/evidence/input-polish-desktop.png) | ![手机端私密填写界面](docs/private-interaction/05-testing/evidence/input-polish-mobile.png) |
+| 账号正常传递；密码先加密，再由远端解密填入网页，不进入聊天或模型工具参数。 | 无需回到电脑前，在手机上填写信息或进入接管流程。 |
 
-账号正常填写，密码支持显示 / 隐藏。浏览器先加密密码，远端服务解密后直接填入目标页面；密码不经过聊天消息或模型工具参数。下图使用空白演示表单，不含真实账号。
-
-<img src="docs/private-interaction/05-testing/evidence/input-polish-desktop.png" alt="桌面端私密填写卡片，支持查看密码与手动接管" width="484">
-
-### 手机上也能协助
-
-自主执行、任务方式选择和私密填写均适配窄屏。需要人工处理时，可从同一任务进入接管流程。
-
-<img src="docs/private-interaction/05-testing/evidence/composer-toolbar-mobile.png" alt="移动端自主执行状态和任务方式选择" width="390">
+*以上为空白演示表单，不含真实账号或密码。*
 
 <details>
-<summary>查看移动端私密填写界面</summary>
+<summary>查看更多：手机端任务入口与完整环境实测</summary>
 
-<img src="docs/private-interaction/05-testing/evidence/input-polish-mobile.png" alt="移动端密码填写与手动接管入口" width="374">
+**手机端任务入口**
+
+![手机端自主执行状态、任务方式选择与邮箱摘要入口](docs/private-interaction/05-testing/evidence/composer-toolbar-mobile.png)
+
+**新初始化的 ECS：文件读写与网页任务**
+
+下面是独立测试环境的真实记录，包含文件写入读回、网页读取和可视桌面。画面上方保留了首次失败任务的历史提示；修复后下方任务已完成。
+
+![完整 ECS 环境实测：文件任务完成，远端浏览器打开 Example Domain](docs/managed-openhands/05-testing/evidence/full-stack-completed.png)
 
 </details>
+
+OpenBot 保留独立 Web 入口，也通过 API 为其他应用提供执行能力。未来计划接入安派（Anpai）；代码与运行时始终独立，不需要放进日历仓库。
 
 ## 当前能做什么
 
@@ -53,7 +59,7 @@ OpenBot 是一个独立、自托管的个人 Agent 执行组件。你在聊天�
 
 ## 安装与初始化
 
-> 完整初始化功能当前在 [PR #14](https://github.com/BiuBiuHu/OpenBot/pull/14) 的 `codex/managed-openhands` 分支。下面的命令使用该分支。
+完整 ECS 初始化已合并到 `main`，按下面的步骤即可开始。
 
 ### 1. 准备一台 ECS
 
@@ -71,7 +77,7 @@ OpenBot 是一个独立、自托管的个人 Agent 执行组件。你在聊天�
 ### 2. 在本机启动 OpenBot
 
 ```bash
-git clone --branch codex/managed-openhands https://github.com/BiuBiuHu/OpenBot.git
+git clone https://github.com/BiuBiuHu/OpenBot.git
 cd OpenBot
 npm ci
 npm run build
