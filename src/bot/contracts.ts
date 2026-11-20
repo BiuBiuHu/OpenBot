@@ -4,7 +4,7 @@ export interface BotTask {
   id: string; requestId: string; threadId: string; goal: string;
   source?: { kind: string; referenceId?: string };
   status: TaskStatus; conversationId: string; createdAt: string; updatedAt: string;
-  revision: number; result?: string; error?: string; pendingActions?: unknown[];
+  revision: number; result?: string; error?: string; pendingActions?: unknown[]; decidedActionIds?: string[];
 }
 export interface SubmitTask { requestId: string; threadId: string; goal: string; source?: BotTask['source'] }
 export const TERMINAL = new Set<TaskStatus>(['succeeded', 'failed', 'interrupted']);

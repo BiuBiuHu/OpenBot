@@ -47,10 +47,18 @@ export class TaskEngine {
       else if (['failed', 'cancelled', 'timeout'].includes(conv.status)) status = 'failed';
       let result = task.result, pendingActions = task.pendingActions;
       if (status === 'succeeded' || status === 'failed' || status === 'waiting_approval') {
-        const events = (await this.client.searchEvents(task.conversationId, { limit: 100 })).items;
+        const events: Record<string, unknown>[] = [];
+        let pageId: string | undefined;
+        for (let page = 0; page < 50; page++) {
+          const next = await this.client.searchEvents(task.conversationId, { limit: 100, pageId });
+          events.push(...next.items); pageId = next.nextPageId;
+          if (!pageId) break;
+        }
+        if (pageId) throw new Error('Event history exceeds observation limit');
+        const observed = new Set(events.filter(e => e.kind === 'ObservationEvent').map(e => e.action_id));
         result = agentReplyText(events).slice(0, 100000);
         // Only show actual action records, never fabricate a command from the goal.
-        pendingActions = status === 'waiting_approval' ? events.filter(e => e.kind === 'ActionEvent').slice(-10).map(e => ({ id: e.id, toolCallId: e.tool_call_id, tool: e.tool_name, action: e.action, summary: e.summary })) : undefined;
+        pendingActions = status === 'waiting_approval' ? events.filter(e => e.kind === 'ActionEvent' && !observed.has(e.id)).slice(-10).map(e => ({ id: e.id, toolCallId: e.tool_call_id, tool: e.tool_name, action: e.action, summary: e.summary })) : undefined;
       }
       if (status !== task.status || result !== task.result || task.error || JSON.stringify(pendingActions) !== JSON.stringify(task.pendingActions)) this.store.save({ ...task, status, result, pendingActions, error: undefined });
     } catch (e) {
@@ -67,8 +75,10 @@ export class TaskEngine {
       if (task.revision !== revision) throw new BotError('Task changed; refresh before acting', 409);
       if (action === 'approval') {
         if (task.status !== 'waiting_approval' || !task.pendingActions?.length || typeof accept !== 'boolean') throw new BotError('No matching approval', 409);
+        const actionIds = task.pendingActions.map(a => String((a as { id?: string }).id || ''));
+        if (actionIds.some(id => !id || task.decidedActionIds?.includes(id))) throw new BotError('This action already has a recorded decision; reconcile remote state', 409);
         // Persist before sending: a lost response must never regrant this approval.
-        const next = this.store.save({ ...task, status: 'paused', error: 'Approval delivery pending; refresh to reconcile before retrying.' });
+        const next = this.store.save({ ...task, status: 'paused', decidedActionIds: [...(task.decidedActionIds || []), ...actionIds], error: 'Approval delivery pending; refresh to reconcile before retrying.' });
         await this.client.respondToConfirmation(task.conversationId, accept);
         return this.store.save({ ...next, status: accept ? 'running' : 'paused', pendingActions: undefined, error: undefined });
       }

@@ -10,7 +10,7 @@ v0.1 / 2026-11-20：新增独立运行时。保留安派仓库独立，单用户
 
 ## 2. 安装
 
-在本仓库构建 `npm ci && npm run build`。将可追溯 commit 的构建产物 `dist/bot/`、`dist/oh-client.js`、`dist/oh-events.js` 和含 `{"type":"module"}` 的 package.json 置于 ECS 独立版本目录。配置：
+在本仓库安装构建依赖后运行 `node scripts/build-bot.mjs <commit>`，产出 `dist/openbot-runtime-<commit>.tar.gz`；脚本只打包指定提交的最小运行时。将可追溯 commit 的构建产物 `dist/bot/`、`dist/oh-client.js`、`dist/oh-events.js` 和含 `{"type":"module"}` 的 package.json 置于 ECS 独立版本目录。配置：
 
 - `BOT_PORT` 默认 3850。
 - `BOT_DATA_DIR` 独立持久目录，禁止放进 Agent 工作区。

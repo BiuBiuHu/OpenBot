@@ -342,11 +342,12 @@ export class OpenHandsClient {
 
   async searchEvents(
     id: string,
-    opts: { limit?: number; kind?: string } = {},
+    opts: { limit?: number; kind?: string; pageId?: string } = {},
   ): Promise<OhEventPage> {
     const qs = new URLSearchParams();
     if (opts.limit) qs.set("limit", String(opts.limit));
     if (opts.kind) qs.set("kind", opts.kind);
+    if (opts.pageId) qs.set("page_id", opts.pageId);
     const query = qs.toString() ? `?${qs}` : "";
     let raw: unknown;
     try {
