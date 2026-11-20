@@ -103,7 +103,7 @@ describe("A2A adapter", () => {
     const mock = await startMockOhServer({
       sessionKey: "card-key",
       finishAfterPolls: 1,
-      replyFor: (goal) => `${DUMP}\n${goal}`,
+      replyFor: (goal) => `${DUMP}\n${goal.includes("uname") ? "Linux" : "FILE_WRITE_OK"}`,
     });
     const adapter = await startOpenHandsAdapter({
       client: new OpenHandsClient(mock.baseUrl, "card-key"),
@@ -144,6 +144,7 @@ describe("A2A adapter", () => {
           if (step === 1) {
             step += 1;
             assert.ok(adapter.tasks.length >= 1);
+            assert.match(blob, /FILE_WRITE_OK/, "Pi must receive the real file result");
             const stream = createAssistantMessageEventStream();
             emitAssistantMessage(stream, assistantTextMessage("改好了。写进那个文件了。"));
             return stream;
@@ -152,6 +153,7 @@ describe("A2A adapter", () => {
             step += 1;
             return toolCallStream("run_command", { goal: "跑一下 uname" });
           }
+          assert.match(blob, /Linux/, "Pi must receive actual command output");
           const stream = createAssistantMessageEventStream();
           emitAssistantMessage(stream, assistantTextMessage("跑完了。"));
           return stream;

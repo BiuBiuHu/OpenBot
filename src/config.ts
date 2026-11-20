@@ -109,6 +109,7 @@ export function defaultConfig(partial: Partial<OpenBotConfig> = {}): OpenBotConf
     },
     language: normalizeChatLanguage(partial.language ?? pick(env, "OPENBOT_LANGUAGE", DEFAULT_CHAT_LANGUAGE)),
     openhands: {
+      remotePort: partial.openhands?.remotePort || Number(pick(env, "OH_REMOTE_PORT", "8000")),
       baseUrl: (
         partial.openhands?.baseUrl ||
         pick(env, "OH_BASE_URL") ||
@@ -252,6 +253,7 @@ export function publicSettings(config: OpenBotConfig) {
       identityFile: config.host.identityFile || "",
     },
     openhands: {
+      remotePort: config.openhands.remotePort ?? 8000,
       baseUrl: config.openhands.baseUrl,
       hasSessionKey: Boolean(config.openhands.sessionApiKey),
     },

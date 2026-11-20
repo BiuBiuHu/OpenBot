@@ -256,6 +256,16 @@ export class OpenHandsClient {
       const ok = rec.status === "ok" || rec.ok === true || rec.status === "healthy";
       return { ok, raw };
     } catch (err) {
+      // A2A gateways expose a card, not the underlying OpenHands /health route.
+      // This verifies gateway availability; task execution still validates downstream.
+      if (err instanceof OpenHandsError && err.status === 404) {
+        try {
+          const card = await this.request<Record<string, unknown>>("GET", "/.well-known/agent-card.json");
+          if (typeof card.name === "string" && Array.isArray(card.supportedInterfaces) && card.supportedInterfaces.length && Array.isArray(card.skills) && card.skills.length) {
+            return { ok: true, raw: { status: "ok", transport: "a2a", downstreamVerified: false } };
+          }
+        } catch { /* preserve the original health failure */ }
+      }
       if (err instanceof OpenHandsError && err.status && err.status < 500) {
         return { ok: false, raw: { error: err.message, status: err.status } };
       }

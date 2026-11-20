@@ -68,6 +68,7 @@ ${listed}
 哪一项对得上，就调用同名工具，把用户原话放进 goal。这些工具只把任务发给远端，不在本进程里做。
 工具如果回「连不上这台电脑。」，你就只回这一句。
 远端做完后用一两句说出带回的内容。长过程不要原样贴出。不要只说做完了。
+用户要求实际输出或核验结果，而工具只返回完成状态时，继续调用远端工具做只读核验并带回结果；不要重复写入，不要再问用户是否需要核验。
 不要说「这台电脑这轮没在时限里跑完。你再说一次就行。」`;
 }
 
@@ -196,7 +197,7 @@ function skillToolText(skillId: string, result: RemoteTaskResult): string {
   }
   const delivered = result.transport === "a2a" && result.dispatched && !result.failed;
   if (delivered && CONTENT_SKILL.has(skillId)) return substantiveRemoteText(text);
-  if (delivered) return "做完了。";
+  if (delivered) return substantiveRemoteText(text);
   if (result.failed) {
     const alreadyBrief = text === remoteFailedText() || text === "The computer did not finish that.";
     if (alreadyBrief) return text;
