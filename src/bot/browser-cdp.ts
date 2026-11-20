@@ -1,3 +1,5 @@
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { BotError } from './contracts.js';
 
 /** Narrow browser driver. Its private evaluate primitive is never exposed as an Agent tool. */
@@ -13,7 +15,16 @@ export class BrowserCDP {
   private captureManual = false;
   beginManualCapture() { this.captureManual = true; }
   async endManualCapture() { if (this.session) await this.evaluate('void 0'); this.captureManual = false; }
-  constructor(private endpoint: string) {}
+  constructor(private endpoint: string, private allowedLocalOrigins = (process.env.BOT_PRIVATE_BROWSER_ALLOWED_ORIGINS || '').split(',').filter(Boolean)) {}
+  private async validateURL(raw: string) {
+    if (raw === 'about:blank') return;
+    const url = new URL(raw);
+    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new BotError('Expected a web URL');
+    if (this.allowedLocalOrigins.includes(url.origin)) return;
+    const hostname = url.hostname.replace(/^\[|\]$/g, '');
+    const addresses = isIP(hostname) ? [{ address: hostname }] : await lookup(hostname, { all: true });
+    if (!addresses.length || addresses.some(a => !isPublicBrowserAddress(a.address))) throw new BotError('Private network pages are unavailable in protected browsing');
+  }
   private async connect() {
     if (this.socket?.readyState === WebSocket.OPEN) return;
     const endpoint = new URL(this.endpoint);
@@ -67,6 +78,7 @@ export class BrowserCDP {
     return result.result?.value;
   }
   async navigate(url: string) {
+    await this.validateURL(url);
     const target = new URL(url); if (!['https:', 'http:'].includes(target.protocol) || target.username || target.password) throw new BotError('Expected a web URL');
     await this.open(); this.elements.clear();
     const result = await this.call('Page.navigate', { url: target.href }, this.session);
@@ -77,6 +89,7 @@ export class BrowserCDP {
     await this.open(); const tree = await this.call('Page.getFrameTree', {}, this.session);
     const out: Array<{ session: string; context: number }> = [];
     const visit = async (node: any) => {
+      await this.validateURL(node.frame.url || 'about:blank');
       let session = this.session!;
       try { const world = await this.call('Page.createIsolatedWorld', { frameId: node.frame.id, worldName: 'openbot-private' }, session); out.push({ session, context: world.executionContextId }); }
       catch {
@@ -128,4 +141,11 @@ export class BrowserCDP {
   async close() {
     try { if (this.context) await this.call('Target.disposeBrowserContext', { browserContextId: this.context }); } finally { this.socket?.close(); this.secrets.clear(); this.elements.clear(); }
   }
+}
+
+export function isPublicBrowserAddress(address: string): boolean {
+  if (isIP(address) === 6) return /^[23][0-9a-f]{3}:/i.test(address);
+  if (isIP(address) !== 4) return false;
+  const [a,b] = address.split('.').map(Number);
+  return !(a===0 || a===10 || a===127 || a>=224 || (a===169&&b===254) || (a===172&&b>=16&&b<=31) || (a===192&&b===168) || (a===100&&b>=64&&b<=127) || (a===198&&(b===18||b===19)));
 }

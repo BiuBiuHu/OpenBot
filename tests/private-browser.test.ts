@@ -17,3 +17,6 @@ it('ordinary computer tasks can request takeover but cannot use the private brow
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'human-capability-'));const store=new TaskStore(root);const broker=new PrivateBrowsers(store,'',()=> 'http://127.0.0.1:3850');
  try{const t=store.create({requestId:'r',threadId:'t',goal:'operate'});store.save({...t,status:'running'});broker.prepare(t);assert.deepEqual(broker.toolsFor(t.id).map(t=>t.name),['request_user_takeover']);await assert.rejects(()=>broker.call(t.id,'page_observe',{}),/unavailable/);await broker.call(t.id,'request_user_takeover',{reason:'需要协助'});assert.equal(store.get(t.id).status,'waiting_user');}finally{await broker.close();store.close();fs.rmSync(root,{recursive:true,force:true})}
 });
+it('protected browsing does not expose loopback CDP or private network pages by default',async()=>{
+ const {isPublicBrowserAddress}=await import('../src/bot/browser-cdp.js');for(const host of ['127.0.0.1','10.0.0.1','172.16.0.1','192.168.1.1','169.254.169.254','::1','::ffff:127.0.0.1','fc00::1'])assert.equal(isPublicBrowserAddress(host),false,host);assert.equal(isPublicBrowserAddress('8.8.8.8'),true);const browser=new BrowserCDP('http://127.0.0.1:1',[]);await assert.rejects(()=>browser.navigate('http://127.0.0.1:9322/json'),/Private network/);
+});
