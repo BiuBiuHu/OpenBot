@@ -44,6 +44,16 @@ def wait_health(token):
         time.sleep(1)
     raise RuntimeError('服务未能在 60 秒内就绪；请检查 journalctl -u openbot-engine，修复后重试。')
 
+def verify_execution(token):
+    command = 'test "$(id -un)" = openbot-engine && sample=$(mktemp ./openbot-install-smoke.XXXXXX) && printf "OPENBOT_ENGINE_FILE_OK" > "$sample" && cat "$sample" && rm "$sample"'
+    req = urllib.request.Request(f'http://127.0.0.1:{PORT}/api/bash/execute_bash_command',
+        data=json.dumps({'command': command, 'cwd': '/var/lib/openbot-engine/workspace', 'timeout': 20}).encode(),
+        headers={'X-Session-API-Key': token, 'Content-Type': 'application/json'}, method='POST')
+    with urllib.request.urlopen(req, timeout=30) as response:
+        result = json.load(response)
+    if result.get('exit_code') != 0 or result.get('stdout') != 'OPENBOT_ENGINE_FILE_OK':
+        raise RuntimeError('执行引擎文件读写自测未通过，请检查工作区权限和服务日志。')
+
 def install(lock):
     if os.geteuid() != 0:
         raise RuntimeError('安装需要 root 或免密 sudo。请为连接账户配置权限后重试。')
@@ -144,6 +154,7 @@ WantedBy=multi-user.target
         elif not active:
             run('systemctl', 'start', 'openbot-engine')
         wait_health(token)
+        verify_execution(token)
     except Exception:
         if changed:
             run('systemctl', 'stop', 'openbot-engine')

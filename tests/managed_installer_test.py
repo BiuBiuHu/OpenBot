@@ -18,7 +18,7 @@ class InstallerTests(unittest.TestCase):
         self.patchers = [patch.object(i, 'ROOT', self.root), patch.object(i, 'UNIT', self.root / 'service'),
             patch.object(i.subprocess, 'run', return_value=SimpleNamespace(returncode=0)),
             patch.object(i.shutil, 'disk_usage', return_value=SimpleNamespace(free=4*1024**3)),
-            patch.object(i, 'wait_health'), patch.object(i, 'run', side_effect=self.fake_run)]
+            patch.object(i, 'wait_health'), patch.object(i, 'verify_execution'), patch.object(i, 'run', side_effect=self.fake_run)]
         for p in self.patchers: p.start()
     def tearDown(self):
         for p in reversed(self.patchers): p.stop()
