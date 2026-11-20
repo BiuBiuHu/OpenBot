@@ -69,7 +69,7 @@ export function createBotProxy(config: () => OpenBotConfig) {
         }
         if (!baseUrl || connection?.host !== hostKey()) throw new BotError('Connection interrupted. Reconnect to recover tasks.', 503);
         const route = url.pathname.slice('/api/bot'.length);
-        if (!/^\/(tasks(?:\/[a-f0-9-]+(?:\/(approval|pause|resume|refresh))?)?|files|file)$/.test(route)) throw new BotError('Not found', 404);
+        if (!/^\/(tasks(?:\/[a-f0-9-]+(?:\/(approval|pause|resume|refresh|cancel|autonomy))?)?|files|file)$/.test(route)) throw new BotError('Not found', 404);
         const data = await request('/v1' + route + url.search, req.method, req.method === 'POST' ? await body(req) : undefined);
         json(res, req.method === 'POST' && route === '/tasks' ? 202 : 200, data);
       } catch (e) { failure(res, e); }

@@ -32,3 +32,9 @@ source 可用 {kind:"openbot"} 或未来 {kind:"anpai",referenceId:"日程 ID"}�
 `POST /tasks` accepts `observationPolicy: "confirm_all" | "auto_browser_reads"` (default `confirm_all`). The homepage exposes an unchecked per-task opt-in. Only exact `browser_get_state`, `browser_get_content`, and `browser_list_tabs` action schemas qualify; mixed batches and unknown parameters require confirmation. Navigation, clicks, typing, scripts, storage and terminal commands remain manual. This is permission to observe the connected browser, not unrestricted task authorization.
 
 The policy is immutable under an existing `requestId`. Returned tasks retain `observationPolicy` and `autoApprovedActionIds` across restarts. Decisions are persisted before delivery; an uncertain delivery pauses and cannot be automatically replayed. The homepage displays the count of automatically authorized observations.
+
+### Autonomous execution (supersedes the initial UI policy above)
+
+Following the user's explicit product decision, new submissions default to `observationPolicy: "autonomous"`. The homepage sends this policy and removes per-action approval controls for autonomous tasks. The ECS observer durably authorizes all proposed tools, including navigation, terminal and file edits; the model still chooses the actions. Existing explicit policies remain supported for API consumers. `POST /tasks/:id/autonomy` with the current revision changes an existing unfinished task to autonomous mode without recreating the conversation. It does not clear uncertain-delivery errors or resume a deliberately paused task.
+
+`POST /tasks/:id/cancel` is allowed only while queued, before any conversation creation. Running tasks use pause/resume. Cancellation retains an interrupted record. Automatic decisions retain the same persist-before-delivery/no-replay behavior, including after disconnect/restart. Login challenges and requests for human input remain task results; no bypass is implemented.

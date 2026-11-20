@@ -32,3 +32,7 @@
 - https://github.com/browser-use/browser-use
 - https://github.com/browserbase/stagehand
 - https://github.com/trycua/cua
+
+## 用户后续决策：默认自主执行
+
+用户明确要求取消逐动作审批，因此以上「仅自动观察」交互方案已被替代。沿用现有开源执行栈，默认让 Agent 自主决定浏览器、文件和命令操作，保留暂停、恢复及持久化防重放。无需更换 Linux computer-use 框架。

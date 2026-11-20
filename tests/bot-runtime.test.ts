@@ -76,7 +76,7 @@ it('approval transition race: observer keeps following waiting state until remot
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot-race-'));const store=new TaskStore(root);let polls=0;
   const client:any={getConversation:async()=>++polls===1?{executionStatus:'waiting_for_confirmation',status:'awaiting_approval'}:{executionStatus:'finished',status:'succeeded'},searchEvents:async()=>({items:[{kind:'ActionEvent',id:'a',tool_name:'terminal',action:{command:'echo done'},reasoning_content:'private reasoning'}]})};
   const engine=new TaskEngine(store,client,defaultConfig().openhands);
-  try{let t=store.create({requestId:'race',threadId:'t',goal:'write'});t=store.save({...t,status:'running'});await engine.tick();assert.equal(store.get(t.id).status,'waiting_approval');assert.doesNotMatch(JSON.stringify(store.get(t.id).pendingActions),/reasoning/);await engine.tick();assert.equal(store.get(t.id).status,'succeeded')}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
+  try{let t=store.create({requestId:'race',threadId:'t',goal:'write',observationPolicy:'confirm_all'});t=store.save({...t,status:'running'});await engine.tick();assert.equal(store.get(t.id).status,'waiting_approval');assert.doesNotMatch(JSON.stringify(store.get(t.id).pendingActions),/reasoning/);await engine.tick();assert.equal(store.get(t.id).status,'succeeded')}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
 });
 
 it('configured browser is passed to remote tool initialization with visible CDP session',async()=>{

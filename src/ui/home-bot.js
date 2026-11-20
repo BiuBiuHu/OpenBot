@@ -9,7 +9,7 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
   if (!threadId) { threadId = crypto.randomUUID(); localStorage.setItem('openbot-home-thread', threadId); }
   let pending;
   try { pending = JSON.parse(localStorage.getItem('openbot-home-pending') || 'null'); } catch { pending = null; }
-  if (pending) { $('box').value = pending.goal; $('auto-observe').checked = pending.observationPolicy === 'auto_browser_reads'; }
+  if (pending) { $('box').value = pending.goal; }
   const cards = new Map();
   const deciding = new Set();
   function notice(text, ok = false) {
@@ -71,7 +71,7 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
     if (card.revision === task.revision) return;
     card.revision = task.revision;
     const approvalSent = task.status === 'waiting_approval' && task.pendingActions?.length && task.pendingActions.every(a => task.decidedActionIds?.includes(a.id));
-    card.state.textContent = `${approvalSent ? '确认已提交 · 等待远端响应' : labels[task.status] || task.status} · ${task.id.slice(0,8)}${task.observationPolicy === 'auto_browser_reads' ? ' · 自动观察 ' + (task.autoApprovedActionIds?.length || 0) + ' 次' : ''}`;
+    card.state.textContent = `${task.observationPolicy === 'autonomous' && task.status === 'waiting_approval' ? '执行中' : approvalSent ? '确认已提交 · 等待远端响应' : labels[task.status] || task.status} · ${task.id.slice(0,8)}${task.observationPolicy === 'autonomous' ? ' · 自主执行' : task.observationPolicy === 'auto_browser_reads' ? ' · 自动观察 ' + (task.autoApprovedActionIds?.length || 0) + ' 次' : ''}`;
     card.body.innerHTML = renderMarkdown(task.result || task.error || (task.status === 'running' ? '远端正在执行，完成后结果会保留在这里。' : ''));
     card.actions.replaceChildren();
     const button = (label, action, accept) => {
@@ -92,15 +92,17 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
       };
       card.actions.append(btn);
     };
-    if (task.pendingActions?.length) {
+    if (task.pendingActions?.length && task.observationPolicy !== 'autonomous') {
       const details = document.createElement('details'); details.open = task.status === 'waiting_approval';
       const summary = document.createElement('summary'); summary.textContent = '待执行动作';
       const pre = document.createElement('pre'); pre.style.whiteSpace = 'pre-wrap'; pre.style.maxHeight = '230px'; pre.style.overflow = 'auto';
       pre.textContent = task.pendingActions.map(a => JSON.stringify({ summary: a.summary, tool: a.tool, action: a.action }, null, 2)).join('\n');
       details.append(summary, pre); card.actions.append(details);
     }
-    if (task.status === 'waiting_approval' && !approvalSent) { button('允许本次动作', 'approval', true); button('拒绝本次动作', 'approval', false); }
-    if (task.status === 'running') button('暂停任务', 'pause');
+    if (task.observationPolicy !== 'autonomous' && task.status === 'waiting_approval' && !approvalSent) { button('允许本次动作', 'approval', true); button('拒绝本次动作', 'approval', false); }
+    if (task.observationPolicy !== 'autonomous' && ['running', 'waiting_approval', 'paused'].includes(task.status)) button('切换为自主执行', 'autonomy');
+    if (task.status === 'queued') button('取消排队', 'cancel');
+    if (task.status === 'running' || (task.status === 'waiting_approval' && task.observationPolicy === 'autonomous')) button('暂停任务', 'pause');
     if (task.status === 'paused' && !task.error) button('继续任务', 'resume');
     if (task.error || task.status === 'paused' || approvalSent) button('核对远端状态', 'refresh');
     if (task.status === 'succeeded') refreshDesktop();
@@ -125,9 +127,9 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
     if (sending) return;
     const goal = $('box').value.trim(); if (!goal) return;
     if (!connected) { await reconnect(); if (!connected) return; }
-    const observationPolicy = $('auto-observe').checked ? 'auto_browser_reads' : 'confirm_all';
-    if (pending && (pending.goal !== goal || (pending.observationPolicy || 'confirm_all') !== observationPolicy)) {
-      $('box').value = pending.goal; $('auto-observe').checked = pending.observationPolicy === 'auto_browser_reads';
+    const observationPolicy = 'autonomous';
+    if (pending && (pending.goal !== goal)) {
+      $('box').value = pending.goal;
       notice('上一条请求尚未确认，保留原请求重试可避免重复执行。'); return;
     }
     pending ||= { requestId: crypto.randomUUID(), threadId, goal, observationPolicy, source: { kind: 'openbot-home' } };

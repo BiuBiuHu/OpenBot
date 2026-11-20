@@ -1,6 +1,6 @@
 /** Versioned, UI-independent contract. Anpai is a future API consumer. */
 export type TaskStatus = 'queued' | 'starting' | 'running' | 'waiting_approval' | 'paused' | 'succeeded' | 'failed' | 'interrupted';
-export type ObservationPolicy = 'confirm_all' | 'auto_browser_reads';
+export type ObservationPolicy = 'confirm_all' | 'auto_browser_reads' | 'autonomous';
 export interface BotTask {
   observationPolicy?: ObservationPolicy; autoApprovedActionIds?: string[];
   id: string; requestId: string; threadId: string; goal: string;

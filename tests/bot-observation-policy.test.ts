@@ -28,5 +28,13 @@ it('selected read decision is durable and not replayed after restart or repeated
 });
 it('request id cannot silently widen a prior approval policy',()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot-policy-id-'));const store=new TaskStore(root);
- try{const input={requestId:'r',threadId:'t',goal:'read'};const t=store.create(input);assert.equal(t.observationPolicy,'confirm_all');assert.equal(store.create({...input,observationPolicy:'confirm_all'}).id,t.id);assert.throws(()=>store.create({...input,observationPolicy:'auto_browser_reads'}),/different task/);assert.throws(()=>store.create({...input,requestId:'bad',observationPolicy:'everything' as any}),/Invalid/)}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
+ try{const input={requestId:'r',threadId:'t',goal:'read',observationPolicy:'confirm_all' as const};const t=store.create(input);assert.equal(t.observationPolicy,'confirm_all');assert.equal(store.create({...input,observationPolicy:'confirm_all'}).id,t.id);assert.throws(()=>store.create({...input,observationPolicy:'auto_browser_reads'}),/different task/);assert.throws(()=>store.create({...input,requestId:'bad',observationPolicy:'everything' as any}),/Invalid/)}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
+});
+it('only a queued task can be cancelled, without calling the execution service',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot-cancel-'));const store=new TaskStore(root);
+ try{const t=store.create({requestId:'cancel',threadId:'t',goal:'read'});const engine=new TaskEngine(store,{} as any,defaultConfig().openhands);assert.equal((await engine.action(t.id,'cancel',t.revision)).status,'interrupted');const running=store.save({...t,status:'running'});await assert.rejects(()=>engine.action(t.id,'cancel',running.revision));}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
+});
+it('autonomous tasks default to automatic tool decisions; old policies stay explicit',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot-auto-default-'));const store=new TaskStore(root);
+ try{assert.equal(store.create({requestId:'r',threadId:'t',goal:'act'}).observationPolicy,'autonomous');const t={...task([{id:'write',tool:'terminal',action:{command:'echo example',kind:'TerminalAction'}}]),observationPolicy:'autonomous' as const};assert.equal(canAutoObserve(t),true);assert.equal(canAutoObserve({...t,error:'delivery unknown'}),false);assert.equal(canAutoObserve({...t,decidedActionIds:['write']}),false);}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
 });

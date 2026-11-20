@@ -30,7 +30,7 @@ export async function startBotRuntime(opts: { dataDir: string; token: string; po
         if (!Number.isSafeInteger(offset) || offset < 0) throw new BotError('Invalid offset');
         json(res, 200, { tasks: items.slice(offset, offset + 100), nextOffset: offset + 100 < items.length ? offset + 100 : null }); return;
       }
-      const match = url.pathname.match(/^\/v1\/tasks\/([a-f0-9-]+)(?:\/(approval|pause|resume|refresh))?$/);
+      const match = url.pathname.match(/^\/v1\/tasks\/([a-f0-9-]+)(?:\/(approval|pause|resume|refresh|cancel|autonomy))?$/);
       if (match && req.method === 'GET' && !match[2]) { json(res, 200, { task: store.get(match[1]) }); return; }
       if (match && req.method === 'POST' && match[2]) { const b = await body(req); json(res, 200, { task: await engine.action(match[1], match[2], b.revision, b.accept) }); return; }
       if (req.method === 'GET' && url.pathname === '/v1/files') { json(res, 200, { entries: files.list(url.searchParams.get('path') || '') }); return; }

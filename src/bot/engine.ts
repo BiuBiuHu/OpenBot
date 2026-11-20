@@ -91,12 +91,14 @@ export class TaskEngine {
       await this.ticking;
       const task = this.store.get(id);
       if (task.revision !== revision) throw new BotError('Task changed; refresh before acting', 409);
+      if (action === 'autonomy' && !TERMINAL.has(task.status)) return this.store.save({ ...task, observationPolicy: 'autonomous' });
+      if (action === 'cancel' && task.status === 'queued') return this.store.save({ ...task, status: 'interrupted', error: 'Queued task cancelled before execution.' });
       if (action === 'approval') {
         if (task.status !== 'waiting_approval' || !task.pendingActions?.length || typeof accept !== 'boolean') throw new BotError('No matching approval', 409);
         return await this.approve(task, accept);
       }
       if (action === 'refresh') { await this.observe(task); return this.store.get(id); }
-      if (action === 'pause' && task.status === 'running') {
+      if (action === 'pause' && ['running', 'waiting_approval'].includes(task.status)) {
         await this.client.pauseConversation(task.conversationId);
         await this.observe(task); return this.store.get(id);
       }
@@ -111,7 +113,8 @@ export class TaskEngine {
 
 /** Narrow capability allowlist, not a model-provided risk label. Mixed batches fail closed. */
 export function canAutoObserve(task: BotTask): boolean {
-  if (task.observationPolicy !== 'auto_browser_reads' || task.status !== 'waiting_approval' || task.error || !task.pendingActions?.length) return false;
+  if (!['auto_browser_reads', 'autonomous'].includes(task.observationPolicy || '') || task.status !== 'waiting_approval' || task.error || !task.pendingActions?.length) return false;
+  if (task.observationPolicy === 'autonomous') return task.pendingActions.every(raw => { const id = (raw as { id?: string }).id; return typeof id === 'string' && !!id && !task.decidedActionIds?.includes(id); });
   const schemas: Record<string, { kind: string; fields: string[] }> = {
     browser_get_state: { kind: 'BrowserGetStateAction', fields: ['include_screenshot'] },
     browser_get_content: { kind: 'BrowserGetContentAction', fields: ['extract_links', 'start_from_char'] },
