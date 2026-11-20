@@ -25,7 +25,7 @@ function usage(): string {
 Usage:
   npx openbot init [--host HOST] [--user USER] [--port N] [--identity FILE]
                    [--name NAME] [--model MODEL] [--base-url URL]
-  npx openbot setup             Automatically install the pinned OpenHands engine
+  npx openbot setup             Initialize the complete remote computer
   npx openbot bind              Install/start the worker on the remote host
   npx openbot status            SSH + worker + OpenHands tunnel health
   npx openbot serve [--port N]  Local client UI (one thread → OpenHands)
@@ -329,10 +329,10 @@ async function main(): Promise<void> {
       break;
     case "setup": {
       const config = loadConfig();
-      console.log('正在准备 ECS 执行引擎，首次安装可能需要数分钟…');
+      console.log('正在初始化远端电脑，首次安装可能需要数分钟…');
       const result = await installManagedEngine(config);
       useManagedEngine(config, result);
-      console.log(`执行引擎 ${result.version} 已就绪，凭据已安全保存。请配置模型与 Bot Runtime；已有任务服务未被重启。`);
+      console.log(`远端电脑已就绪（OpenHands ${result.version}），内部连接已配置。运行 npm run dev -- --port 3857 开始任务。`);
       break;
     }
     case "bind":

@@ -257,6 +257,7 @@ export function publicSettings(config: OpenBotConfig) {
       remotePort: config.openhands.remotePort ?? 8000,
       baseUrl: config.openhands.baseUrl,
       hasSessionKey: Boolean(config.openhands.sessionApiKey),
+      llmModel: config.openhands.llmModel || (config.llm.apiKey ? "openai/" + config.llm.model : ""), llmBaseUrl: config.openhands.llmApiKey ? config.openhands.llmBaseUrl || "" : config.llm.baseUrl, hasModelKey: Boolean(config.openhands.llmApiKey || config.llm.apiKey),
     },
     desktop: {
       localPort: config.desktop.localPort,

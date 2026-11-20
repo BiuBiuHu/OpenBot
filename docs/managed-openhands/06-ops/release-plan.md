@@ -11,3 +11,10 @@
 
 ## 验证核销
 最终安装器 6a7cd4d 已在隔离测试服务执行；客户端以当前锁摘要验收。首次安装、重复安装、非 root 文件操作、鉴权、回环监听、凭据权限和原服务健康均通过，详见 `../04-engineering/evidence-manifest.md`。只完成测试环境安装器验证，未部署或迁移生产任务服务。
+
+## 完整初始化验证范围（用户补充授权，2026-11-20）
+用户明确要求加入 Chromium、可视桌面、Bot Runtime 和全部初始化依赖，允许沿用原测试 ECS 自测。新增专属服务：openbot-desktop/window-manager/browser/viewer/runtime；端口 15901/19322/16080/13850，DISPLAY :41。保留旧 3850/6080/9322 任务与桌面服务。
+
+应用二进制固定 Node 22.23.5、Chrome for Testing 158.0.8127.36，下载 SHA-256 存于 runtime/desktop/assets.json；Node 校验上游 SHASUMS256.txt，Chrome ZIP 完整性已验证。系统库由 Ubuntu 安全仓库管理。模型优先使用显式远端配置，否则复用已保存的本机 OpenAI-compatible 配置；不输出真实 Key。
+
+验收：专属服务启动、自启、鉴权、固定端口回环监听；同一可视浏览器中执行输入/点击自测；Runtime 完成真实任务；本地 UI 连接桌面；断线恢复同一任务；重复初始化保持任务和凭据。升级遇到未结束任务先拒绝重启。失败恢复先前专属单元/配置；原服务不切流。

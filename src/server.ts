@@ -119,7 +119,14 @@ export async function startControlPlane(
   const trialFile = path.join(repoRoot(), "src/ui/oh-test.html");
   const deskViewFile = path.join(repoRoot(), "src/ui/desktop-view.html");
 
-  const engineSetup = createEngineSetup(() => liveConfig, next => { liveConfig = next; oh = OpenHandsClient.fromConfig(next); });
+  const engineSetup = createEngineSetup(() => liveConfig, async next => {
+    await ohTunnel?.stop(); ohTunnel = undefined;
+    await desktopTunnel?.stop(); desktopTunnel = undefined;
+    liveConfig = next; oh = OpenHandsClient.fromConfig(next);
+    await bot.reloadConnection();
+    lastConnect = await connectConfiguredHost(liveConfig, { timeoutMs: 8000 });
+    ohTunnel = lastConnect.tunnel; desktopTunnel = lastConnect.desktopTunnel; lastDesktop = lastConnect.desktop;
+  });
   const bot = createBotProxy(() => liveConfig, engineSetup);
   const server = http.createServer(async (req, res) => {
     if (await bot.handle(req, res)) return;

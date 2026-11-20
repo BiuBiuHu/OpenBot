@@ -10,7 +10,7 @@ import { BotError } from './contracts.js';
 import { body, json, failure } from './http.js';
 
 interface Connection { host: string; token: string; remotePort: number; instanceId?: string }
-export function createBotProxy(config: () => OpenBotConfig, setup?: { state(): unknown; start(): unknown }) {
+export function createBotProxy(config: () => OpenBotConfig, setup?: { state(): unknown; start(model?: any): unknown }) {
   const session = randomBytes(32).toString('hex');
   const connectionFile = path.join(openbotHome(), 'bot-connection.json');
   let connection: Connection | undefined = fs.existsSync(connectionFile) ? JSON.parse(fs.readFileSync(connectionFile, 'utf8')) : undefined;
@@ -55,7 +55,7 @@ export function createBotProxy(config: () => OpenBotConfig, setup?: { state(): u
         }
         if (req.headers['x-openbot-session'] !== session) throw new BotError('Reload the Bot page to connect', 403);
         if (req.headers.origin && req.headers.origin !== `http://${host}`) throw new BotError('Invalid origin', 403);
-        if (url.pathname === '/api/bot/engine-setup' && setup && ['GET', 'POST'].includes(req.method || '')) { json(res, req.method === 'POST' ? 202 : 200, req.method === 'POST' ? setup.start() : setup.state()); return true; }
+        if (url.pathname === '/api/bot/engine-setup' && setup && ['GET', 'POST'].includes(req.method || '')) { json(res, req.method === 'POST' ? 202 : 200, req.method === 'POST' ? setup.start((await body(req)).model) : setup.state()); return true; }
         if (url.pathname === '/api/bot/connection' && req.method === 'GET') { json(res, 200, { configured: !!connection && connection.host === hostKey(), connected: !!baseUrl, hostName: config().host.name }); return true; }
         if (url.pathname === '/api/bot/connect' && req.method === 'POST') {
           const b = await body(req);
@@ -76,6 +76,7 @@ export function createBotProxy(config: () => OpenBotConfig, setup?: { state(): u
       } catch (e) { failure(res, e); }
       return true;
     },
+    reloadConnection: async () => { await connecting?.catch(() => {}); await tunnel?.stop(); tunnel = undefined; baseUrl = ''; connection = fs.existsSync(connectionFile) ? JSON.parse(fs.readFileSync(connectionFile, 'utf8')) : undefined; },
     close: async () => { await connecting?.catch(() => {}); await tunnel?.stop(); },
   };
 }
