@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import net from "node:net";
 import type { OpenBotConfig } from "./types.js";
 import { identityPath } from "./config.js";
 import { sshTarget } from "./ssh.js";
@@ -97,20 +98,41 @@ export async function openLocalForward(
     stderr += chunk.toString("utf8");
   });
 
+  // A live SSH process may still be authenticating. Wait for the local listener,
+  // then let callers verify the actual remote service and its identity.
   await new Promise<void>((resolve, reject) => {
-    const fail = (err: Error) => {
-      clearTimeout(timer);
-      reject(err);
+    let settled = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let socket: net.Socket | undefined;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      clearTimeout(retry);
+      socket?.destroy();
+      child.removeListener("error", onError);
+      child.removeListener("exit", onExit);
+      if (error) { child.kill("SIGKILL"); reject(error); }
+      else resolve();
     };
-    const timer = setTimeout(() => {
-      // -N has no "ready" line; if it is still alive after a beat, the forward is up.
-      if (child.exitCode === null) resolve();
-      else fail(new Error(`SSH tunnel exited: ${stderr || child.exitCode}`));
-    }, 600);
-    child.once("error", (err) => fail(err));
-    child.once("exit", (code) => {
-      fail(new Error(`SSH tunnel exited (${code}): ${stderr.trim() || "no stderr"}`));
-    });
+    const onError = (error: Error) => finish(error);
+    const onExit = (code: number | null) => finish(new Error(`SSH tunnel exited (${code}): ${stderr.trim() || "no stderr"}`));
+    const deadline = setTimeout(() => finish(new Error("SSH tunnel did not become ready before timeout")), ((spec.connectTimeoutSec ?? 20) + 5) * 1000);
+    child.once("error", onError);
+    child.once("exit", onExit);
+    const probe = () => {
+      if (settled) return;
+      socket = net.connect({ host: "127.0.0.1", port: localPort });
+      socket.setTimeout(250);
+      socket.once("connect", () => finish());
+      const again = () => {
+        socket?.destroy();
+        if (!settled) retry = setTimeout(probe, 100);
+      };
+      socket.once("error", again);
+      socket.once("timeout", again);
+    };
+    probe();
   });
 
   return {
