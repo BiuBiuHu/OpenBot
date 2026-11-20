@@ -21,7 +21,7 @@ export class TaskEngine {
   async stop() { this.stopped = true; clearTimeout(this.timer); await this.ticking; }
   async tick() {
     // Serialize writes to the shared workspace. Waiting/paused tasks hold the queue.
-    const task = [...this.store.tasks.values()].find(t => !TERMINAL.has(t.status));
+    const task = [...this.store.tasks.values()].filter(t => !TERMINAL.has(t.status)).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0];
     if (!task || this.actions.has(task.id)) return;
     if (task.status === 'queued') {
       const pending = this.store.save({ ...task, status: 'starting', error: undefined });
@@ -92,6 +92,7 @@ export class TaskEngine {
       const task = this.store.get(id);
       if (task.revision !== revision) throw new BotError('Task changed; refresh before acting', 409);
       if (action === 'autonomy' && !TERMINAL.has(task.status)) return this.store.save({ ...task, observationPolicy: 'autonomous' });
+      if (action === 'cancel' && task.status === 'waiting_approval') { await this.client.pauseConversation(task.conversationId); return this.store.save({ ...task, status: 'interrupted', pendingActions: undefined, error: 'Task cancelled while waiting; remote conversation paused.' }); }
       if (action === 'cancel' && task.status === 'queued') return this.store.save({ ...task, status: 'interrupted', error: 'Queued task cancelled before execution.' });
       if (action === 'approval') {
         if (task.status !== 'waiting_approval' || !task.pendingActions?.length || typeof accept !== 'boolean') throw new BotError('No matching approval', 409);

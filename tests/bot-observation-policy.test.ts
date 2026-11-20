@@ -38,3 +38,7 @@ it('autonomous tasks default to automatic tool decisions; old policies stay expl
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot-auto-default-'));const store=new TaskStore(root);
  try{assert.equal(store.create({requestId:'r',threadId:'t',goal:'act'}).observationPolicy,'autonomous');const t={...task([{id:'write',tool:'terminal',action:{command:'echo example',kind:'TerminalAction'}}]),observationPolicy:'autonomous' as const};assert.equal(canAutoObserve(t),true);assert.equal(canAutoObserve({...t,error:'delivery unknown'}),false);assert.equal(canAutoObserve({...t,decidedActionIds:['write']}),false);}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
 });
+it('queue order survives filesystem reload even when UUID order differs',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot-order-'));let store=new TaskStore(root);let creates=0;
+ try{const base=task();store.save({...base,id:'ffffffff-ffff',requestId:'old',status:'paused',createdAt:'2026-01-01'});store.save({...base,id:'aaaaaaaa-aaaa',requestId:'new',status:'queued',createdAt:'2026-01-02'});store.close();store=new TaskStore(root);const engine=new TaskEngine(store,{createConversation:async()=>{creates++;return{id:'new'}}} as any,defaultConfig().openhands);await engine.tick();assert.equal(creates,0);}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
+});
