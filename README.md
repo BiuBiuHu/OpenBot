@@ -8,7 +8,7 @@ Describe a task. Your agent uses a browser, works with files, and brings back re
 
 ![OpenBot in action: task results in chat alongside the remote browser showing a completed test order](docs/byo-ecs-control/05-testing/evidence/computer-use-completed.png)
 
-**A real integration test:** the agent read a simulated email, opened a demo store, selected two notebooks, submitted a test order, and reported the result. All data was synthetic; no real purchase or payment occurred. Screenshots show the current Chinese-language interface; English documentation does not imply a fully localized UI.
+**A real integration test:** the agent read a simulated email, opened a demo store, selected two notebooks, submitted a test order, and reported the result. All data was synthetic; no real purchase or payment occurred. These earlier integration screenshots use Chinese. The interface now supports both English and Simplified Chinese.
 
 [Get started](#installation-and-setup) · [Features](#what-works-today) · [Integrate OpenBot](#integrating-openbot)
 
@@ -43,6 +43,15 @@ This actual test run shows a file write/read task, a browser task, and the visib
 </details>
 
 OpenBot has its own Web interface and exposes APIs for other applications. Integration with Anpai, a calendar application, is planned. The code and runtime remain independent of the calendar repository.
+
+<details>
+<summary>English interface preview</summary>
+
+![English interface with a synthetic private-input form](docs/ui-i18n/05-testing/evidence/english-desktop.png)
+
+This UI test uses an empty demonstration form and no live server connection. It illustrates language support, not a completed remote task.
+
+</details>
 
 ## What works today
 
@@ -86,7 +95,7 @@ npm run build
 npm run dev -- --port 3857
 ```
 
-Open [http://127.0.0.1:3857](http://127.0.0.1:3857) and go to **Settings**. Some controls currently have Chinese labels; the exact labels are included below to help you find them.
+Open [http://127.0.0.1:3857](http://127.0.0.1:3857) and go to **Settings**. The interface follows your browser language on first visit: Chinese variants use Simplified Chinese; other languages use English. Use **Interface language** in the header to choose English, 简体中文, or Browser default. Your choice is remembered in this browser and synchronized across local tabs without reloading or clearing inputs. This is separate from the local chat reply language; task results and remote websites remain in their original language.
 
 1. Enter **Host**, **User**, **SSH Port**, and your local private-key file path, then click **Save and connect**. The private key stays on your machine; do not paste its contents.
 2. Under **Initialize remote computer** (`初始化远端电脑`), enter the model name, API base URL, and API key. Leave the key blank to reuse a saved key. An unreachable-service notice after first saving SSH settings is expected before initialization.

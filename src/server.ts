@@ -137,7 +137,7 @@ export async function startControlPlane(
         res.end(fs.readFileSync(uiFile));
         return;
       }
-      if (req.method === "GET" && ["/home-bot.js", "/private-input.js"].includes(url.pathname)) {
+      if (req.method === "GET" && ["/home-bot.js", "/private-input.js", "/i18n.js", "/locales.js"].includes(url.pathname)) {
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store" });
         res.end(fs.readFileSync(path.join(repoRoot(), "src/ui", url.pathname.slice(1))));
         return;

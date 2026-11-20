@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>电脑</title>
+    <title data-i18n="电脑">电脑</title>
     <style>
       html, body, #screen {
         margin: 0;
@@ -40,6 +40,9 @@
     <div id="screen"></div>
     <div id="err"></div>
     <script type="module">
+import { t, uiText, initI18n } from '/i18n.js';
+initI18n();
+
       const params = new URLSearchParams(location.search);
       let port = Number(params.get("port") || 0) || 0;
 
@@ -95,12 +98,12 @@
 
       function fail(msg) {
         err.style.display = "block";
-        err.textContent = msg;
+        uiText(err, msg);
       }
 
       const RFB = await loadRFB();
       if (!RFB) {
-        fail("桌面模块没读到。隧道通了再试。");
+        fail(t("桌面模块没读到。隧道通了再试。"));
       } else {
         const p = await resolvePort();
         const urls = wsUrls(p);

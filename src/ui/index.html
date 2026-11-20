@@ -4,7 +4,7 @@
     <meta name="bot-session" content="__BOT_SESSION__">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OpenBot — your machine</title>
+    <title data-i18n="OpenBot — your machine">OpenBot — your machine</title>
     <style>
       :root {
         --bg: #10140f;
@@ -394,6 +394,7 @@
         justify-content: center;
         padding: 2.5rem 1rem 1rem;
       }
+      .sheet { overflow-y: auto; overscroll-behavior: contain; }
       .sheet.open { display: flex; }
       .sheet form {
         width: min(32rem, 100%);
@@ -493,90 +494,95 @@
       [data-task-id] [role="status"] { color: var(--phosphor); font-size: 13px; }
       [data-task-id] button:disabled { opacity: .5; cursor: wait; }
       @media (max-width: 840px) { header { display: block; padding: 12px; } header .actions { display: flex; justify-content: space-between; margin-top: 8px; } header .meta { max-width: none; text-align: right; } main { grid-template-rows: auto minmax(180px, 1fr) auto; } aside { display: block; grid-column: 1; grid-row: 3; max-height: 32vh; overflow: auto; border-top: 1px solid var(--line); } }
-    </style>
+
+.ui-language{display:inline-flex;gap:6px;align-items:center;font:12px system-ui;white-space:nowrap}.ui-language select{max-width:160px;padding:7px;background:var(--panel);color:var(--ink);border:1px solid var(--line)}header .actions{flex-wrap:wrap;gap:8px}@media(max-width:480px){header .meta{flex-basis:100%;text-align:left!important}.composer-autonomy-note{display:none}.composer-tools{flex-wrap:wrap}}
+</style>
   </head>
   <body>
-    <a href="/bot" style="position:fixed;right:20px;bottom:12px;z-index:50;font-size:13px">Bot 独立测试入口 ↗</a>
+    <a href="/bot" style="position:fixed;right:20px;bottom:12px;z-index:50;font-size:13px" data-i18n="Bot 独立测试入口 ↗">Bot 独立测试入口 ↗</a>
     <header>
       <div class="brand">
         <h1><span id="lamp" class="lamp"></span><span id="face" class="avatar" title="OpenBot"><span class="eyes"></span></span>OpenBot</h1>
-        <p>SSH your own machine. The agent gets a computer — you keep the keys. <a href="/oh-test" style="color:var(--phosphor)">本机试连</a></p>
+        <p><span data-i18n="SSH your own machine. The agent gets a computer — you keep the keys.">SSH your own machine. The agent gets a computer — you keep the keys.</span> <a href="/oh-test" style="color:var(--phosphor)" data-i18n="本机试连">本机试连</a></p>
       </div>
-      <div class="actions">
-        <button id="open-settings" type="button">Settings</button>
-        <div class="meta" id="meta">connecting…</div>
+      <div class="actions"><label class="ui-language"><span data-i18n="界面语言">Language</span> <select data-language-picker aria-label="Interface language" data-i18n-aria-label="界面语言"><option value="auto" data-i18n="跟随浏览器">Browser default</option><option value="en">English</option><option value="zh-CN">简体中文</option></select></label>
+        <button id="open-settings" type="button" data-i18n="Settings">Settings</button>
+        <div class="meta" id="meta" data-i18n="connecting…">connecting…</div>
       </div>
     </header>
     <main>
       <div id="banner"></div>
       <section class="chat-col">
         <section id="log"></section>
-        <div class="composer-tools" role="group" aria-label="任务选项">
-          <div class="composer-autonomy"><span class="composer-autonomy-dot" aria-hidden="true"></span><strong>Agent 自主执行</strong><span class="composer-autonomy-note">可随时暂停</span></div>
+        <div class="composer-tools" role="group" aria-label="任务选项" data-i18n-aria-label="任务选项">
+          <div class="composer-autonomy"><span class="composer-autonomy-dot" aria-hidden="true"></span><strong data-i18n="Agent 自主执行">Agent 自主执行</strong><span class="composer-autonomy-note" data-i18n="可随时暂停">可随时暂停</span></div>
           <div class="composer-options">
-            <label class="composer-mode" for="execution-profile"><span class="composer-mode-label">任务方式</span><span class="composer-select"><select id="execution-profile"><option value="computer">电脑任务</option><option value="private_browser">私密网页任务</option></select></span></label>
-            <button id="mail-test" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg><span>测试邮箱摘要</span></button>
+            <label class="composer-mode" for="execution-profile"><span class="composer-mode-label" data-i18n="任务方式">任务方式</span><span class="composer-select"><select id="execution-profile"><option value="computer" data-i18n="电脑任务">电脑任务</option><option value="private_browser" data-i18n="私密网页任务">私密网页任务</option></select></span></label>
+            <button id="mail-test" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg><span data-i18n="测试邮箱摘要">测试邮箱摘要</span></button>
           </div>
         </div>
         <footer>
-          <textarea id="box" rows="2" placeholder="直接开始对话。"></textarea>
-          <button id="send" type="button">发送</button>
+          <textarea id="box" rows="2" placeholder="直接开始对话。" data-i18n-placeholder="直接开始对话。"></textarea>
+          <button id="send" type="button" data-i18n="发送">发送</button>
         </footer>
       </section>
       <aside>
         <div id="bot-connect" style="margin-bottom:12px">
-          <button id="bot-reconnect" type="button">恢复连接</button>
-          <span id="bot-status" role="status">正在连接远端电脑…</span>
-          <details><summary>执行服务连接设置</summary><label>服务令牌<input id="home-token" type="password" autocomplete="off" placeholder="已保存可留空"></label><label>远端端口<input id="home-port" type="number" value="3850" min="1" max="65535"></label><button id="home-connect-save" type="button">保存并连接</button></details>
+          <button id="bot-reconnect" type="button" data-i18n="恢复连接">恢复连接</button>
+          <span id="bot-status" role="status" data-i18n="正在连接远端电脑…">正在连接远端电脑…</span>
+          <details><summary data-i18n="执行服务连接设置">执行服务连接设置</summary><label><span data-i18n="服务令牌">服务令牌</span><input id="home-token" type="password" autocomplete="off" placeholder="已保存可留空" data-i18n-placeholder="已保存可留空"></label><label><span data-i18n="远端端口">远端端口</span><input id="home-port" type="number" value="3850" min="1" max="65535"></label><button id="home-connect-save" type="button" data-i18n="保存并连接">保存并连接</button></details>
         </div>
-        <h2>电脑 <button type="button" id="desk-max-btn" aria-pressed="false">放大</button></h2>
+        <h2><span data-i18n="电脑">电脑</span> <button type="button" id="desk-max-btn" aria-pressed="false" data-i18n="放大">放大</button></h2>
         <div class="desk-wrap" id="desk-wrap">
-          <button type="button" id="desk-close" class="desk-close" hidden>收起</button>
-          <div id="desk-missing" class="desk-missing">Desktop not reachable yet.</div>
+          <button type="button" id="desk-close" class="desk-close" hidden data-i18n="收起">收起</button>
+          <div id="desk-missing" class="desk-missing" data-i18n="Desktop not reachable yet.">Desktop not reachable yet.</div>
           <iframe id="desk" class="desk" hidden title="Remote desktop" tabindex="0" allow="pointer-lock; fullscreen; clipboard-read; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups"></iframe>
         </div>
-        <details id="home-files"><summary>工作区文件</summary><form id="home-browse"><input id="home-directory" placeholder="相对目录，留空查看工作区"><button>查看文件</button></form><div id="home-file-list"></div><pre id="home-file-preview" style="white-space:pre-wrap;overflow:auto;max-height:260px"></pre></details>
+        <details id="home-files"><summary data-i18n="工作区文件">工作区文件</summary><form id="home-browse"><input id="home-directory" placeholder="相对目录，留空查看工作区" data-i18n-placeholder="相对目录，留空查看工作区"><button data-i18n="查看文件">查看文件</button></form><div id="home-file-list"></div><pre id="home-file-preview" style="white-space:pre-wrap;overflow:auto;max-height:260px"></pre></details>
       </aside>
     </main>
     <div id="settings" class="sheet">
       <form id="settings-form">
-        <h2>Connect your machine</h2>
-        <p class="help">Saved under ~/.openbot on this laptop (mode 0600). Point at a private key file — do not paste the key, and do not put it in git. Saving opens an SSH tunnel to OpenHands on that host.</p>
-        <label for="set-language">语言</label>
+        <h2 data-i18n="Connect your machine">Connect your machine</h2>
+        <p class="help" data-i18n="Saved under ~/.openbot on this laptop (mode 0600). Point at a private key file — do not paste the key, and do not put it in git. Saving opens an SSH tunnel to OpenHands on that host.">Saved under ~/.openbot on this laptop (mode 0600). Point at a private key file — do not paste the key, and do not put it in git. Saving opens an SSH tunnel to OpenHands on that host.</p>
+        <label for="set-language" data-i18n="本机回复语言">本机回复语言</label>
         <select id="set-language" name="language">
           <option value="zh-CN">简体中文</option>
           <option value="zh-TW">繁體中文</option>
           <option value="en">English</option>
         </select>
-        <p class="help">聊天回复用这个语言。网上查到的繁体或英文也会转成这个。</p>
-        <label for="set-host">Host</label>
-        <input id="set-host" name="hostname" autocomplete="off" placeholder="hostname or IP" />
-        <label for="set-user">User</label>
+        <p class="help" data-i18n="本机聊天回复语言，与界面语言独立；远端任务回复由任务要求和模型决定。">本机聊天回复语言，与界面语言独立；远端任务回复由任务要求和模型决定。</p>
+        <label for="set-host" data-i18n="Host">Host</label>
+        <input id="set-host" name="hostname" autocomplete="off" placeholder="hostname or IP" data-i18n-placeholder="hostname or IP" />
+        <label for="set-user" data-i18n="User">User</label>
         <input id="set-user" name="user" autocomplete="off" placeholder="ubuntu" />
-        <label for="set-port">Port</label>
+        <label for="set-port" data-i18n="Port">Port</label>
         <input id="set-port" name="port" type="number" min="1" max="65535" value="22" />
-        <label for="set-identity">Identity file path</label>
+        <label for="set-identity" data-i18n="Identity file path">Identity file path</label>
         <input id="set-identity" name="identityFile" autocomplete="off" placeholder="~/.ssh/id_ed25519" />
-        <label for="set-session">OpenHands session key (optional)</label>
-        <input id="set-session" name="sessionApiKey" type="password" autocomplete="off" placeholder="leave blank to keep" />
-        <p class="help">Writes OH_SESSION_API_KEY to ~/.openbot/.env only. Never committed.</p>
+        <label for="set-session" data-i18n="OpenHands session key (optional)">OpenHands session key (optional)</label>
+        <input id="set-session" name="sessionApiKey" type="password" autocomplete="off" placeholder="leave blank to keep" data-i18n-placeholder="leave blank to keep" />
+        <p class="help" data-i18n="Writes OH_SESSION_API_KEY to ~/.openbot/.env only. Never committed.">Writes OH_SESSION_API_KEY to ~/.openbot/.env only. Never committed.</p>
         <div class="row">
-          <button id="save-settings" type="submit">Save and connect</button>
-          <button id="close-settings" type="button">Close</button>
+          <button id="save-settings" type="submit" data-i18n="Save and connect">Save and connect</button>
+          <button id="close-settings" type="button" data-i18n="Close">Close</button>
         </div>
         <div class="next" id="settings-next"></div>
-        <section style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)" aria-label="执行引擎安装">
-          <strong>初始化远端电脑</strong>
-          <p class="help">自动安装 OpenHands、Chromium、可视桌面和任务服务。适用于 Ubuntu 24.04 x86_64，需要 root 或免密 sudo。请先保存上方连接信息。</p>
-          <label for="engine-model">远端模型</label><input id="engine-model" name="engineModel" placeholder="例如 deepseek/deepseek-chat">
-          <label for="engine-base-url">模型服务地址（可选）</label><input id="engine-base-url" name="engineBaseUrl" placeholder="模型提供商的 API 地址">
-          <label for="engine-api-key">模型 API Key</label><input id="engine-api-key" name="engineApiKey" type="password" autocomplete="off" placeholder="只交给远端执行服务，不写入聊天">
-          <button id="install-engine" type="button">初始化 / 检查远端电脑</button>
-          <p id="engine-setup-status" class="help" role="status" aria-live="polite">已有服务会保留，内部凭据自动配置。有未结束任务时不会重启电脑。</p>
+        <section style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)" aria-label="执行引擎安装" data-i18n-aria-label="执行引擎安装">
+          <strong data-i18n="初始化远端电脑">初始化远端电脑</strong>
+          <p class="help" data-i18n="自动安装 OpenHands、Chromium、可视桌面和任务服务。适用于 Ubuntu 24.04 x86_64，需要 root 或免密 sudo。请先保存上方连接信息。">自动安装 OpenHands、Chromium、可视桌面和任务服务。适用于 Ubuntu 24.04 x86_64，需要 root 或免密 sudo。请先保存上方连接信息。</p>
+          <label for="engine-model" data-i18n="远端模型">远端模型</label><input id="engine-model" name="engineModel" placeholder="例如 deepseek/deepseek-chat" data-i18n-placeholder="例如 deepseek/deepseek-chat">
+          <label for="engine-base-url" data-i18n="模型服务地址（可选）">模型服务地址（可选）</label><input id="engine-base-url" name="engineBaseUrl" placeholder="模型提供商的 API 地址" data-i18n-placeholder="模型提供商的 API 地址">
+          <label for="engine-api-key" data-i18n="模型 API Key">模型 API Key</label><input id="engine-api-key" name="engineApiKey" type="password" autocomplete="off" placeholder="只交给远端执行服务，不写入聊天" data-i18n-placeholder="只交给远端执行服务，不写入聊天">
+          <button id="install-engine" type="button" data-i18n="初始化 / 检查远端电脑">初始化 / 检查远端电脑</button>
+          <p id="engine-setup-status" class="help" role="status" aria-live="polite" data-i18n="已有服务会保留，内部凭据自动配置。有未结束任务时不会重启电脑。">已有服务会保留，内部凭据自动配置。有未结束任务时不会重启电脑。</p>
         </section>
       </form>
     </div>
     <script type="module">
+import { t, setText, uiText, setAttr, initI18n } from '/i18n.js';
+initI18n();
+
       import { createHomeBot } from "/home-bot.js";
       import { createComposeGuard, renderMarkdown, shouldSendOnEnter } from "/chat-ui.js";
 
@@ -609,8 +615,8 @@
         el.className = "msg " + kind;
         const wrap = document.createElement("div");
         wrap.className = "bubble";
-        if (kind === "user") el.setAttribute("aria-label", "your message");
-        if (kind === "bot") el.setAttribute("aria-label", "assistant message");
+        if (kind === "user") setAttr(el, "aria-label", () => t("your message"));
+        if (kind === "bot") setAttr(el, "aria-label", () => t("assistant message"));
         if (title && kind !== "user" && kind !== "bot") {
           const h = document.createElement("h3");
           h.textContent = title;
@@ -658,7 +664,7 @@
         document.body.classList.toggle("desk-max", on);
         deskClose.hidden = !on;
         deskMaxBtn.setAttribute("aria-pressed", on ? "true" : "false");
-        deskMaxBtn.textContent = on ? "收起" : "放大";
+        setText(deskMaxBtn, () => on ? t("收起") : t("放大"));
       }
 
       async function refreshDesktop() {
@@ -673,14 +679,13 @@
             desk.hidden = true;
             desk.removeAttribute("src");
             deskMissing.hidden = false;
-            deskMissing.textContent =
-              d.missing ||
-              "The desktop tunnel is not open yet. Save and connect; the client forwards 127.0.0.1:6080.";
+            setText(deskMissing, () => t(d.missing) ||
+              t("The desktop tunnel is not open yet. Save and connect; the client forwards 127.0.0.1:6080."));
           }
         } catch {
           desk.hidden = true;
           deskMissing.hidden = false;
-          deskMissing.textContent = "Desktop not reachable yet.";
+          setText(deskMissing, () => t("Desktop not reachable yet."));
         }
       }
 
@@ -722,12 +727,12 @@
         const actions = document.createElement("div");
         const yes = document.createElement("button");
         yes.className = "yes";
-        yes.textContent = "Approve";
+        setText(yes, () => t("Approve"));
         const no = document.createElement("button");
         no.className = "no";
-        no.textContent = "Deny";
+        setText(no, () => t("Deny"));
         actions.append(yes, no);
-        const card = add("approval", "approval gate", extraLines, actions);
+        const card = add("approval", t("approval gate"), extraLines, actions);
         const decide = async (allow) => {
           yes.disabled = no.disabled = true;
           await fetch("/api/approve", {
@@ -735,7 +740,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: ev.id, allow }),
           });
-          card.querySelector("h3").textContent = allow ? "approved" : "denied";
+          setText(card.querySelector("h3"), () => allow ? t("approved") : t("denied"));
         };
         yes.onclick = () => decide(true);
         no.onclick = () => decide(false);
@@ -753,11 +758,11 @@
         settingsForm.engineModel.value = s.openhands?.llmModel || '';
         settingsForm.engineBaseUrl.value = s.openhands?.llmBaseUrl || '';
         settingsForm.engineApiKey.value = '';
-        settingsForm.engineApiKey.placeholder = s.openhands?.hasModelKey ? '已保存，留空保持' : '填写模型 API Key';
+        setAttr(settingsForm.engineApiKey, 'placeholder', () => s.openhands?.hasModelKey ? t('已保存，留空保持') : t('填写模型 API Key'));
         settingsForm.sessionApiKey.value = "";
-        settingsForm.sessionApiKey.placeholder = s.openhands && s.openhands.hasSessionKey ? "set — leave blank to keep" : "leave blank to keep";
+        setAttr(settingsForm.sessionApiKey, "placeholder", () => s.openhands && s.openhands.hasSessionKey ? t("set — leave blank to keep") : t("leave blank to keep"));
         settingsForm.language.value = s.language || "zh-CN";
-        settingsNext.textContent = (s.connect && s.connect.nextStep) || "";
+        uiText(settingsNext, (s.connect && s.connect.nextStep) || '');
       }
 
       document.getElementById("open-settings").onclick = async () => {
@@ -773,7 +778,7 @@
         e.preventDefault();
         const saveBtn = document.getElementById("save-settings");
         saveBtn.disabled = true;
-        settingsNext.textContent = "Saving…";
+        setText(settingsNext, () => t("Saving…"));
         try {
           const payload = {
             hostname: settingsForm.hostname.value.trim(),
@@ -792,11 +797,11 @@
           const data = await res.json();
           if (!data.ok) throw new Error(data.error || res.status);
           settingsForm.sessionApiKey.value = "";
-          settingsNext.textContent = (data.connect && data.connect.nextStep) || "Saved to ~/.openbot.";
+          setText(settingsNext, () => t(data.connect && data.connect.nextStep) || t("Saved to ~/.openbot."));
           await refreshStatus();
           await refreshDesktop();
         } catch (err) {
-          settingsNext.textContent = String(err);
+          uiText(settingsNext, err.message || String(err));
         } finally {
           saveBtn.disabled = false;
         }
@@ -808,19 +813,19 @@
       async function engineSetupRequest(method = 'GET') {
         const response = await fetch('/api/bot/engine-setup', { method, headers: { 'x-openbot-session': document.querySelector('meta[name="bot-session"]').content, 'Content-Type': 'application/json' }, ...(method === 'POST' ? { body: JSON.stringify({ model: { name: settingsForm.engineModel.value.trim(), apiKey: settingsForm.engineApiKey.value.trim(), baseUrl: settingsForm.engineBaseUrl.value.trim() } }) } : {}) });
         const data = await response.json();
-        if (!response.ok) { const error = new Error(data.error || '无法连接安装服务'); error.confirmed = true; throw error; }
+        if (!response.ok) { const error = new Error(data.error || t('无法连接安装服务')); error.confirmed = true; throw error; }
         if (method === 'POST') settingsForm.engineApiKey.value = '';
-        engineSetupStatus.textContent = data.message;
+        uiText(engineSetupStatus, data.message);
         if (data.status === 'succeeded') { await homeBot.reconnect(); desk.removeAttribute('src'); await refreshDesktop(); }
         installEngineButton.disabled = data.status === 'installing';
-        installEngineButton.textContent = data.status === 'installing' ? '正在初始化电脑…' : data.status === 'failed' ? '重试安装' : '初始化 / 检查远端电脑';
+        setText(installEngineButton, () => data.status === 'installing' ? t('正在初始化电脑…') : data.status === 'failed' ? t('重试安装') : t('初始化 / 检查远端电脑'));
         clearTimeout(enginePoll);
         if (data.status === 'installing') enginePoll = setTimeout(() => engineSetupRequest().catch(engineSetupFailed), 2000);
       }
       function engineSetupFailed(error) {
-        engineSetupStatus.textContent = error.confirmed ? error.message : `连接中断，安装结果尚未确认。恢复连接后可重新检查。${error.message}`;
+        setText(engineSetupStatus, () => error.confirmed ? t(error.message) : t('连接中断，安装结果尚未确认。恢复连接后可重新检查。') + error.message);
         installEngineButton.disabled = false;
-        installEngineButton.textContent = '重新检查 / 重试';
+        setText(installEngineButton, () => t('重新检查 / 重试'));
       }
       installEngineButton.onclick = async () => {
         installEngineButton.disabled = true;
@@ -861,11 +866,12 @@
       homeBot.start();
       refreshDesktop();
       setInterval(refreshDesktop, 5000);
-      add(
+      const welcome = add(
         "sys",
         "",
-        "直接告诉我想在远端电脑上做什么。任务保存在 ECS，刷新或断线后可以恢复；Agent 自主执行，需要你参与时会在这里说明。",
+        t("直接告诉我想在远端电脑上做什么。任务保存在 ECS，刷新或断线后可以恢复；Agent 自主执行，需要你参与时会在这里说明。"),
       );
+      uiText(welcome.querySelector(".bubble > div"), "直接告诉我想在远端电脑上做什么。任务保存在 ECS，刷新或断线后可以恢复；Agent 自主执行，需要你参与时会在这里说明。");
     </script>
   </body>
 </html>
