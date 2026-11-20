@@ -34,7 +34,7 @@ export class TaskEngine {
       }
       return;
     }
-    if (task.status === 'paused' || task.status === 'waiting_approval') return;
+    if (task.status === 'paused') return;
     await this.observe(task);
   }
   private async observe(task: BotTask) {
@@ -50,7 +50,7 @@ export class TaskEngine {
         const events = (await this.client.searchEvents(task.conversationId, { limit: 100 })).items;
         result = agentReplyText(events).slice(0, 100000);
         // Only show actual action records, never fabricate a command from the goal.
-        pendingActions = status === 'waiting_approval' ? events.filter(e => /ActionEvent/.test(String(e.kind))).slice(-10) : undefined;
+        pendingActions = status === 'waiting_approval' ? events.filter(e => e.kind === 'ActionEvent').slice(-10).map(e => ({ id: e.id, toolCallId: e.tool_call_id, tool: e.tool_name, action: e.action, summary: e.summary })) : undefined;
       }
       if (status !== task.status || result !== task.result || task.error || JSON.stringify(pendingActions) !== JSON.stringify(task.pendingActions)) this.store.save({ ...task, status, result, pendingActions, error: undefined });
     } catch (e) {
