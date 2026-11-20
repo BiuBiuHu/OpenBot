@@ -63,7 +63,7 @@ export async function connectConfiguredHost(
       if (tunnel) await tunnel.stop();
       tunnel = await openLocalForward(config, {
         localPort: openHandsLocalPort(config.openhands.baseUrl),
-        remotePort: 8000,
+        remotePort: config.openhands.remotePort ?? 8000,
         connectTimeoutSec,
       });
       ohProbe = await client.health();

@@ -1,8 +1,6 @@
-import { outcomeFromRemote, voiceChatReply } from "./chat-voice.js";
-import { agentReplyText } from "./oh-events.js";
+import { runRemoteTask } from "./remote-agent.js";
 import {
   OpenHandsClient,
-  isTerminalStatus,
   type CreateConversationInput,
   type OhConversation,
 } from "./oh-client.js";
@@ -90,70 +88,17 @@ export interface HandoffTurnDeps {
 }
 
 /**
- * This computer → OpenHands immediately. No confirm card.
- * Creates a conversation, or continues one already on this thread.
+ * Remote agent turn. No confirm card. Does not give up at 60 seconds:
+ * a task that is still running is waited out until a terminal status.
+ * Connection failure is one short sentence.
  */
 export async function runHandoffTurn(goal: string, deps: HandoffTurnDeps): Promise<OhConversation | undefined> {
   const proposal = deps.store.propose({ goal, threadId: deps.threadId });
   deps.store.take(proposal.id);
   deps.emit({ type: "status", text: "thinking" });
-
-  let last: OhConversation | undefined;
-  let id = (deps.conversationId || "").trim();
-  if (id) {
-    try {
-      last = await deps.client.getConversation(id);
-      await deps.client.sendMessage(id, goal);
-    } catch {
-      id = "";
-      last = undefined;
-    }
-  }
-  if (!id) {
-    const delivery = await deliverConfirmedHandoff(deps.client, proposal, deps.oh);
-    last = delivery.conversation;
-    id = last.id;
-  }
-  if (!id || !last) {
-    deps.emit({ type: "error", message: "OpenHands created a conversation without an id" });
-    deps.emit({ type: "done" });
-    return last;
-  }
-
-  const timeoutMs = deps.timeoutMs ?? 60_000;
-  const pollMs = deps.pollMs ?? 250;
-  const deadline = Date.now() + timeoutMs;
-  let timedOut = false;
-  let lastItems: unknown[] = [];
-  while (Date.now() < deadline) {
-    last = await deps.client.getConversation(id);
-    try {
-      const page = await deps.client.searchEvents(id, { limit: 80 });
-      lastItems = page.items;
-    } catch {
-      /* events search is optional across OH versions */
-    }
-    if (isTerminalStatus(last.executionStatus)) break;
-    if (Date.now() >= deadline) {
-      timedOut = true;
-      break;
-    }
-    await sleep(pollMs);
-  }
-  if (!isTerminalStatus(last.executionStatus)) {
-    timedOut = true;
-  }
-  const raw = agentReplyText(lastItems);
-  const outcome = outcomeFromRemote(last.status, timedOut);
-  const voiced = voiceChatReply({ userMessage: goal, remoteText: raw, outcome, language: deps.language });
-  deps.emit({ type: "token", text: voiced.text });
-  if (voiced.kind === "fail") {
-    deps.emit({ type: "error", message: voiced.text });
-  }
+  const result = await runRemoteTask(goal, deps);
+  deps.emit({ type: "token", text: result.text });
+  if (result.failed) deps.emit({ type: "error", message: result.text });
   deps.emit({ type: "done" });
-  return last;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return result.conversation;
 }

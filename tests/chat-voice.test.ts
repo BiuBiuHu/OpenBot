@@ -146,39 +146,54 @@ describe("chat voice", () => {
     const follow = voiceCodingReady({ language: "zh-CN" });
     assert.match(follow.text, /可以/);
     assert.doesNotMatch(follow.text, /先不背说明书/);
+    const seen: string[] = [];
     const events: AgentEvent[] = [];
     const result = await runThreadTurn("改代码", {
       client: new OpenHandsClient("http://127.0.0.1:9", "x"),
       store: new HandoffStore(),
       emit: (e) => events.push(e),
-      forceHandoff: true,
       language: "zh-CN",
+      pi: {
+        async prompt(text) {
+          seen.push(text);
+          return { text: "Pi 先看见了。" };
+        },
+        dispose() {},
+      },
       searchWeb: async () => {
-        throw new Error("clock/coding must not search");
+        throw new Error("router must not search before Pi");
       },
     });
-    assert.equal(result.path, "coding");
+    assert.deepEqual(seen, ["改代码"]);
+    assert.equal(result.path, "pi");
     const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
-    assert.match(tokens, /可以/);
+    assert.match(tokens, /Pi 先看见了/);
     assert.doesNotMatch(tokens, /先不背说明书/);
   });
 
   it("TC-VOICE-013: 今天的时间 does not call search", async () => {
+    const seen: string[] = [];
     const events: AgentEvent[] = [];
     const result = await runThreadTurn("今天的时间是什么时候", {
       client: new OpenHandsClient("http://127.0.0.1:9", "x"),
       store: new HandoffStore(),
       emit: (e) => events.push(e),
-      forceHandoff: true,
       language: "zh-CN",
+      pi: {
+        async prompt(text) {
+          seen.push(text);
+          return { text: "Pi 先看见了。" };
+        },
+        dispose() {},
+      },
       searchWeb: async () => {
-        throw new Error("clock must not search");
+        throw new Error("router must not search before Pi");
       },
     });
-    assert.equal(result.path, "clock");
+    assert.deepEqual(seen, ["今天的时间是什么时候"]);
+    assert.equal(result.path, "pi");
     const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
-    assert.match(tokens, /现在是/);
-    assert.match(tokens, /上海/);
+    assert.match(tokens, /Pi 先看见了/);
     assert.doesNotMatch(tokens, /网上查过了|CST|今天開始/);
   });
 
@@ -309,32 +324,34 @@ describe("chat voice", () => {
       replyFor: () => INTRO,
     });
     try {
+      const seen: string[] = [];
+      let searched = 0;
       const events: AgentEvent[] = [];
       const result = await runThreadTurn("Grok Bot 是什么", {
         client: new OpenHandsClient(mock.baseUrl, "voice-key"),
         store: new HandoffStore(),
         emit: (e) => events.push(e),
-        forceHandoff: true,
         timeoutMs: 2000,
         pollMs: 20,
-        searchWeb: async () => [
-          {
-            title: "Grok (chatbot)",
-            snippet: "Grok is a generative AI chatbot developed by xAI.",
-            url: "https://en.wikipedia.org/wiki/Grok_(chatbot)",
-            source: "wikipedia",
+        pi: {
+          async prompt(text) {
+            seen.push(text);
+            return { text: "Pi 先看见了。" };
           },
-        ],
+          dispose() {},
+        },
+        searchWeb: async () => {
+          searched += 1;
+          return [];
+        },
       });
-      assert.equal(result.path, "lookup");
+      assert.deepEqual(seen, ["Grok Bot 是什么"]);
+      assert.equal(searched, 0);
+      assert.equal(result.path, "pi");
       assert.equal(mock.creates.length, 0);
       const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
-      assert.match(tokens, /网上查过了/);
-      assert.match(tokens, /对话|聊天|机器人/);
-      assert.match(tokens, /xAI/);
-      assert.doesNotMatch(tokens, /Grok is a generative/i);
+      assert.match(tokens, /Pi 先看见了/);
       assert.doesNotMatch(tokens, /我是 OpenHands/);
-      assert.doesNotMatch(tokens, /不知道/);
       assert.ok(!events.some((e) => e.type === "tool_start"));
     } finally {
       await mock.stop();
@@ -347,32 +364,34 @@ describe("chat voice", () => {
       replyFor: () => INTRO,
     });
     try {
+      const seen: string[] = [];
+      let browsed = 0;
       const events: AgentEvent[] = [];
       const result = await runThreadTurn("Grok Bot 是什么", {
         client: new OpenHandsClient(mock.baseUrl, "voice-key"),
         store: new HandoffStore(),
         emit: (e) => events.push(e),
-        forceHandoff: true,
         timeoutMs: 2000,
         pollMs: 20,
-        searchWeb: async () => [],
-        browsePublicPage: async () => [
-          {
-            title: "Grok Bot",
-            snippet: "Grok is a generative AI chatbot developed by xAI.",
-            url: "https://www.bing.com/search?q=Grok+Bot",
-            source: "browser",
+        pi: {
+          async prompt(text) {
+            seen.push(text);
+            return { text: "Pi 先看见了。" };
           },
-        ],
+          dispose() {},
+        },
+        searchWeb: async () => [],
+        browsePublicPage: async () => {
+          browsed += 1;
+          return [];
+        },
       });
-      assert.equal(result.path, "lookup");
+      assert.deepEqual(seen, ["Grok Bot 是什么"]);
+      assert.equal(browsed, 0);
+      assert.equal(result.path, "pi");
       assert.equal(mock.creates.length, 0);
       const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
-      assert.match(tokens, /网上查过了/);
-      assert.match(tokens, /对话|聊天|机器人/);
-      assert.match(tokens, /xAI/);
-      assert.doesNotMatch(tokens, /Grok is a generative/i);
-      assert.doesNotMatch(tokens, /还没找到/);
+      assert.match(tokens, /Pi 先看见了/);
       assert.doesNotMatch(tokens, /我是 OpenHands/);
       assert.ok(!events.some((e) => e.type === "tool_start"));
     } finally {
@@ -410,29 +429,41 @@ describe("chat voice", () => {
       replyFor: () => INTRO,
     });
     try {
+      const seen: string[] = [];
+      let reads = 0;
       const events: AgentEvent[] = [];
       const result = await runThreadTurn(DOC_ASK, {
         client: new OpenHandsClient(mock.baseUrl, "voice-key"),
         store: new HandoffStore(),
         emit: (e) => events.push(e),
-        forceHandoff: true,
         timeoutMs: 2000,
         pollMs: 20,
         language: "zh-CN",
+        pi: {
+          async prompt(text) {
+            seen.push(text);
+            return { text: "Pi 先看见了。" };
+          },
+          dispose() {},
+        },
         searchWeb: async () => {
           throw new Error("document ask must not search");
         },
-        readPublicDocument: async () => ({
-          title: "用户记忆和知识库",
-          text: DOC_TEXT,
-          url: "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md",
-        }),
+        readPublicDocument: async () => {
+          reads += 1;
+          return {
+            title: "用户记忆和知识库",
+            text: DOC_TEXT,
+            url: "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md",
+          };
+        },
       });
-      assert.equal(result.path, "document");
+      assert.equal(seen[0], DOC_ASK);
+      assert.equal(reads, 0);
+      assert.equal(result.path, "pi");
       assert.equal(mock.creates.length, 0);
       const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
-      assert.match(tokens, /我看过了/);
-      assert.match(tokens, /用户记忆/);
+      assert.match(tokens, /Pi 先看见了/);
       assert.doesNotMatch(tokens, /没在时限|再说一次|我是 OpenHands|网上查过了/);
       assert.ok(!events.some((e) => e.type === "tool_start"));
     } finally {
@@ -446,29 +477,34 @@ describe("chat voice", () => {
       replyFor: () => INTRO,
     });
     try {
+      const seen: string[] = [];
       const events: AgentEvent[] = [];
       const result = await runThreadTurn(DOC_ASK_EXACT, {
         client: new OpenHandsClient(mock.baseUrl, "voice-key"),
         store: new HandoffStore(),
         emit: (e) => events.push(e),
-        forceHandoff: true,
         timeoutMs: 2000,
         pollMs: 20,
         language: "zh-CN",
+        pi: {
+          async prompt(text) {
+            seen.push(text);
+            return { text: "Pi 先看见了。" };
+          },
+          dispose() {},
+        },
         searchWeb: async (query) => {
           throw new Error(`document ask must not search: ${query}`);
         },
-        readPublicDocument: async () => ({
-          title: "用户记忆和知识库",
-          text: DOC_TEXT,
-          url: "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter3.md",
-        }),
+        readPublicDocument: async () => {
+          throw new Error("router must not read before Pi");
+        },
       });
-      assert.equal(result.path, "document");
+      assert.deepEqual(seen, [DOC_ASK_EXACT]);
+      assert.equal(result.path, "pi");
       assert.equal(mock.creates.length, 0);
       const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
-      assert.match(tokens, /我看过了/);
-      assert.match(tokens, /用户记忆/);
+      assert.match(tokens, /Pi 先看见了/);
       assert.doesNotMatch(tokens, /HTTPS|网上查过了|没在时限/);
     } finally {
       await mock.stop();
@@ -476,18 +512,28 @@ describe("chat voice", () => {
   });
 
   it("TC-DOC-005: a failed document fetch is one fail line, not the computer timeout", async () => {
+    const seen: string[] = [];
     const events: AgentEvent[] = [];
     const result = await runThreadTurn(DOC_ASK, {
       client: new OpenHandsClient("http://127.0.0.1:9", "x"),
       store: new HandoffStore(),
       emit: (e) => events.push(e),
-      forceHandoff: true,
       language: "zh-CN",
-      readPublicDocument: async () => undefined,
+      pi: {
+        async prompt(text) {
+          seen.push(text);
+          return { text: "Pi 先看见了。" };
+        },
+        dispose() {},
+      },
+      readPublicDocument: async () => {
+        throw new Error("router must not read before Pi");
+      },
     });
-    assert.equal(result.path, "document");
+    assert.deepEqual(seen, [DOC_ASK]);
+    assert.equal(result.path, "pi");
     const tokens = events.filter((e) => e.type === "token").map((e) => String(e.text || "")).join("");
-    assert.match(tokens, /没读成/);
+    assert.match(tokens, /Pi 先看见了/);
     assert.doesNotMatch(tokens, /没在时限|再说一次/);
   });
 });

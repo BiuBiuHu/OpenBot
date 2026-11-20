@@ -33,6 +33,10 @@ export interface DesktopConfig {
 
 /** Local tunnel client for v0 remote runtime = OpenHands Agent Server. */
 export interface OpenHandsConfig {
+  /** Opt-in remote browser attached to the user-visible desktop over loopback CDP. */
+  browser?: { cdpUrl: string };
+  /** SSH target port; may be an A2A gateway in front of OpenHands. */
+  remotePort?: number;
   /** Default http://127.0.0.1:8000 — reach via `ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host`. */
   baseUrl: string;
   /** Sent as X-Session-API-Key. From OH_SESSION_API_KEY (or OPENHANDS_API_KEY). */

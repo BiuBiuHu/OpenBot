@@ -1,0 +1,10 @@
+{
+  "id": "8637fe18-83e9-4e0d-b1bd-a54ca86c117c",
+  "status": "succeeded",
+  "policy": "autonomous",
+  "automatedActions": 1,
+  "uniqueDecisions": 1,
+  "result": "",
+  "error": null,
+  "file": "AUTO_AGENT_OK\n"
+}

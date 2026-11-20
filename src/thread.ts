@@ -1,137 +1,133 @@
-import { runAgentTurn, runLocalChatTurn } from "./agent.js";
-import {
-  isClockAsk,
-  isVagueCodingAsk,
-  lookupQuery,
-  needsLookup,
-  voiceCodingReady,
-  voiceFromDocument,
-  voiceFromSearch,
-  voiceNow,
-} from "./chat-voice.js";
-import { DEFAULT_CHAT_LANGUAGE, normalizeChatLanguage, prefersChineseSearch } from "./language.js";
-import { hasLocalModelKey } from "./config.js";
-import { runHandoffTurn, type HandoffTurnDeps } from "./handoff.js";
+import { briefChatText, linkifyReply, looksLikeOpenHandsIntro, voiceChatReply } from "./chat-voice.js";
+import { applyChatLanguage, DEFAULT_CHAT_LANGUAGE, normalizeChatLanguage } from "./language.js";
+import { type HandoffTurnDeps } from "./handoff.js";
+import { createOpenBotPiSession, type OpenBotPiOptions, type PiSession } from "./pi-kernel.js";
+import { connectionFailureText, isConnectError, loadRemoteSkills } from "./remote-agent.js";
+import { createSessionTools, type SessionToolBag } from "./session-tools.js";
 import type { AgentEvent, ApprovalRequest, ChatMessage, LlmConfig } from "./types.js";
 import type { WorkerClient } from "./worker-client.js";
 import type { OhConversation } from "./oh-client.js";
-import { browsePublicPage } from "./page-browse.js";
-import { isDocumentReadAsk, readPublicDocument, type PublicDocument } from "./page-read.js";
-import { searchWeb, type SearchHit } from "./web-search.js";
+import type { PublicDocument } from "./page-read.js";
+import type { SearchHit } from "./web-search.js";
 
 export interface ThreadTurnDeps extends HandoffTurnDeps {
   llm?: LlmConfig;
   worker?: WorkerClient;
   history?: ChatMessage[];
   waitForApproval?: (req: ApprovalRequest) => Promise<boolean>;
-  /** Force the remote OpenHands path (This computer). */
+  /**
+   * Ignored as a router. Every sentence goes to the Pi session that owns this thread.
+   * Kept so older callers still type-check.
+   */
   forceHandoff?: boolean;
-  /** Real HTTP search. Tests inject a stub; production fetches APIs then public result pages. */
+  /** Injected Pi session. Production creates one with createAgentSession. */
+  pi?: PiSession;
+  modelStream?: OpenBotPiOptions["modelStream"];
+  /**
+   * Ignored. Web search is not a local Pi tool. Older tests inject this to
+   * fail if a router calls it before Pi.
+   */
   searchWeb?: (query: string) => Promise<SearchHit[]>;
-  /** Last resort after HTTP pages are empty: OpenHands browser / page read. */
+  /** Ignored. Public pages are not read in this process. */
   browsePublicPage?: (query: string) => Promise<SearchHit[]>;
-  /** Public document URL the person asked to read. Tests inject a stub. */
+  /** Ignored. Public documents are not read in this process. */
   readPublicDocument?: (url: string) => Promise<PublicDocument | undefined>;
   /** Saved chat language. Default zh-CN. */
   language?: string;
 }
 
 export interface ThreadTurnResult {
-  path: "handoff" | "local" | "worker" | "lookup" | "clock" | "coding" | "document";
+  path: "pi" | "handoff" | "local" | "worker" | "lookup" | "clock" | "coding" | "document";
   conversation?: OhConversation;
   history: ChatMessage[];
+  /** Long remote body kept off the transcript. */
+  kept?: string;
 }
 
 /**
- * One local chat thread.
- * - Remote OpenHands is the important path (no local key, or forceHandoff).
- * - Local BYOK chat is optional and never requires a worker.
- * - The PR#1 worker tool loop stays available when both a key and worker exist.
+ * One local chat thread, owned by the Pi session.
+ * The user's sentence is prompted as-is. Clock is the local tool. Public
+ * documents and web search are remote card skills when the agent card lists
+ * them. The remote computer is a separate agent.
  */
 export async function runThreadTurn(message: string, deps: ThreadTurnDeps): Promise<ThreadTurnResult> {
   const goal = message.trim();
   if (!goal) throw new Error("message required");
-
   const language = normalizeChatLanguage(deps.language ?? DEFAULT_CHAT_LANGUAGE);
+  deps.emit({ type: "status", text: "thinking" });
 
-  if (isClockAsk(goal)) {
-    deps.emit({ type: "status", text: "thinking" });
-    deps.emit({ type: "token", text: voiceNow({ language }).text });
-    deps.emit({ type: "done" });
-    return { path: "clock", history: deps.history ?? [] };
-  }
-
-  if (isVagueCodingAsk(goal)) {
-    deps.emit({ type: "status", text: "thinking" });
-    deps.emit({ type: "token", text: voiceCodingReady({ language }).text });
-    deps.emit({ type: "done" });
-    return { path: "coding", history: deps.history ?? [] };
-  }
-
-  if (isDocumentReadAsk(goal)) {
-    deps.emit({ type: "status", text: "thinking" });
-    const href = goal;
-    const doc = await (deps.readPublicDocument
-      ? deps.readPublicDocument(href)
-      : readPublicDocument(href));
-    const voiced = voiceFromDocument({ userMessage: goal, document: doc, language });
-    deps.emit({ type: "token", text: voiced.text });
-    deps.emit({ type: "done" });
-    return { path: "document", history: deps.history ?? [] };
-  }
-
-  if (needsLookup(goal)) {
-    deps.emit({ type: "status", text: "thinking" });
-    const query = lookupQuery(goal);
-    let hits = await (deps.searchWeb
-      ? deps.searchWeb(query)
-      : searchWeb(query, { preferChinese: prefersChineseSearch(language) }));
-    if (!hits.length) {
-      hits = await (deps.browsePublicPage
-        ? deps.browsePublicPage(query)
-        : browsePublicPage(query, {
-            client: deps.client,
-            oh: deps.oh,
-            timeoutMs: Math.min(deps.timeoutMs ?? 25_000, 25_000),
-            pollMs: deps.pollMs,
-          }).catch(() => [] as SearchHit[]));
-    }
-    const voiced = voiceFromSearch({ userMessage: goal, hits, language });
-    deps.emit({ type: "token", text: voiced.text });
-    deps.emit({ type: "done" });
-    return { path: "lookup", history: deps.history ?? [] };
-  }
-
-  const hasLocalKey = hasLocalModelKey(deps.llm?.apiKey);
-  const useHandoff = deps.forceHandoff || !hasLocalKey;
-
-  if (useHandoff) {
-    const conversation = await runHandoffTurn(goal, deps);
-    return { path: "handoff", conversation, history: deps.history ?? [] };
-  }
-
-  if (deps.worker && deps.llm && deps.waitForApproval) {
-    const history = await runAgentTurn(goal, {
-      worker: deps.worker,
+  const owned = !deps.pi;
+  const bag: SessionToolBag = {};
+  const session =
+    deps.pi ??
+    (await createOpenBotPiSession({
       llm: deps.llm,
-      history: deps.history,
-      emit: deps.emit,
-      waitForApproval: deps.waitForApproval,
-    });
-    return { path: "worker", history };
-  }
+      language,
+        remoteSkills: await loadRemoteSkills(deps.client.baseUrl),
+      tools: createSessionTools({
+        client: () => deps.client,
+        oh: () => deps.oh,
+        language: () => language,
+        pollMs: deps.pollMs,
+        threadId: deps.threadId,
+        conversationId: () => deps.conversationId,
+        bag,
+      }),
+      modelStream: deps.modelStream,
+      conversation: () => bag.conversation,
+      kept: () => bag.remote?.fullText,
+    }));
 
-  if (!deps.llm) {
-    deps.emit({ type: "error", message: "local chat needs an LLM config" });
+  try {
+    const turn = await session.prompt(goal);
+    const text = presentPiText(goal, turn.text, language, turn.kept ?? bag.remote?.fullText);
+    deps.emit({ type: "token", text });
+    if (bag.remote?.failed) deps.emit({ type: "error", message: text });
     deps.emit({ type: "done" });
-    return { path: "local", history: deps.history ?? [] };
+    return {
+      path: "pi",
+      conversation: turn.conversation ?? bag.conversation,
+      history: appendHistory(deps.history, goal, text),
+      kept: turn.kept ?? bag.remote?.fullText,
+    };
+  } catch (err) {
+    const text = isConnectError(err) ? connectionFailureText(language) : localFailureText(language);
+    deps.emit({ type: "token", text });
+    deps.emit({ type: "error", message: text });
+    deps.emit({ type: "done" });
+    return { path: "pi", history: deps.history ?? [] };
+  } finally {
+    if (owned) session.dispose();
   }
-  const history = await runLocalChatTurn(goal, {
-    llm: deps.llm,
-    history: deps.history,
-    emit: deps.emit,
-  });
-  return { path: "local", history };
+}
+
+function presentPiText(userMessage: string, text: string, language: string, kept?: string): string {
+  const raw = String(text || "").trim();
+  const lang = normalizeChatLanguage(language);
+  if (!raw) return lang === "en" ? "No reply." : "这轮没有答上来。";
+  if (raw === connectionFailureText(lang)) return raw;
+  const voiced = looksLikeOpenHandsIntro(raw)
+    ? voiceChatReply({
+        userMessage,
+        remoteText: raw,
+        outcome: "succeeded",
+        language: lang,
+      }).text
+    : applyChatLanguage(linkifyReply(raw), lang);
+  return briefChatText(voiced, kept);
+}
+
+function localFailureText(language: string): string {
+  return normalizeChatLanguage(language) === "en" ? "The local agent did not answer." : "本地代理这轮没答上来。";
+}
+
+function appendHistory(history: ChatMessage[] | undefined, user: string, assistant: string): ChatMessage[] {
+  const next: ChatMessage[] = [
+    ...(history ?? []),
+    { role: "user", content: user },
+    { role: "assistant", content: assistant },
+  ];
+  return next.slice(-40);
 }
 
 export function printThreadEvent(event: AgentEvent, io = { out: process.stdout, err: process.stderr }): void {

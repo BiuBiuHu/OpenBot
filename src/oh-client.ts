@@ -55,6 +55,8 @@ export interface OhEventPage {
 
 export interface CreateConversationInput {
   goal: string;
+  mcpConfig?: Record<string, unknown>;
+  confirmationPolicy?: "AlwaysConfirm" | "NeverConfirm";
   conversationId?: string;
   workspaceDir?: string;
   model?: string;
@@ -64,7 +66,7 @@ export interface CreateConversationInput {
   run?: boolean;
   threadId?: string;
   /** Override the default tool list (lookup browser fallback). */
-  tools?: Array<{ name: string }>;
+  tools?: Array<{ name: string; params?: Record<string, unknown> }>;
 }
 
 export interface PollOptions {
@@ -211,6 +213,7 @@ export class OpenHandsClient {
     try {
       res = await fetch(url, {
         method,
+        signal: AbortSignal.timeout(30_000),
         headers: this.headers(body !== undefined),
         body: body === undefined ? undefined : JSON.stringify(body),
       });
@@ -254,6 +257,16 @@ export class OpenHandsClient {
       const ok = rec.status === "ok" || rec.ok === true || rec.status === "healthy";
       return { ok, raw };
     } catch (err) {
+      // A2A gateways expose a card, not the underlying OpenHands /health route.
+      // This verifies gateway availability; task execution still validates downstream.
+      if (err instanceof OpenHandsError && err.status === 404) {
+        try {
+          const card = await this.request<Record<string, unknown>>("GET", "/.well-known/agent-card.json");
+          if (typeof card.name === "string" && Array.isArray(card.supportedInterfaces) && card.supportedInterfaces.length && Array.isArray(card.skills) && card.skills.length) {
+            return { ok: true, raw: { status: "ok", transport: "a2a", downstreamVerified: false } };
+          }
+        } catch { /* preserve the original health failure */ }
+      }
       if (err instanceof OpenHandsError && err.status && err.status < 500) {
         return { ok: false, raw: { error: err.message, status: err.status } };
       }
@@ -269,6 +282,7 @@ export class OpenHandsClient {
         kind: "Agent",
         llm: buildAgentLlm(input, cfg),
         tools: input.tools || DEFAULT_TOOLS,
+        ...(input.mcpConfig ? { mcp_config: input.mcpConfig } : {}),
       },
       workspace: {
         kind: "LocalWorkspace",
@@ -280,7 +294,7 @@ export class OpenHandsClient {
         run,
       },
       max_iterations: input.maxIterations ?? 20,
-      confirmation_policy: { kind: "NeverConfirm" },
+      confirmation_policy: { kind: input.confirmationPolicy ?? "NeverConfirm" },
     };
     if (input.conversationId) payload.conversation_id = input.conversationId;
     const raw = await this.request<unknown>("POST", "/api/conversations", payload);
@@ -330,13 +344,22 @@ export class OpenHandsClient {
     return { success: rec.success !== false, raw };
   }
 
+  async respondToConfirmation(id: string, accept: boolean): Promise<void> {
+    await this.request("POST", `/api/conversations/${encodeURIComponent(id)}/events/respond_to_confirmation`, { accept, reason: accept ? "User approved in OpenBot" : "User rejected in OpenBot" });
+  }
+
+  async pauseConversation(id: string): Promise<void> {
+    await this.request("POST", `/api/conversations/${encodeURIComponent(id)}/pause`);
+  }
+
   async searchEvents(
     id: string,
-    opts: { limit?: number; kind?: string } = {},
+    opts: { limit?: number; kind?: string; pageId?: string } = {},
   ): Promise<OhEventPage> {
     const qs = new URLSearchParams();
     if (opts.limit) qs.set("limit", String(opts.limit));
     if (opts.kind) qs.set("kind", opts.kind);
+    if (opts.pageId) qs.set("page_id", opts.pageId);
     const query = qs.toString() ? `?${qs}` : "";
     let raw: unknown;
     try {
@@ -358,13 +381,12 @@ export class OpenHandsClient {
   }
 
   async pollConversation(id: string, opts: PollOptions = {}): Promise<OhConversation> {
-    const timeoutMs = opts.timeoutMs ?? 60_000;
     const pollMs = opts.pollMs ?? 400;
     const stopOnApproval = opts.stopOnApproval !== false;
-    const deadline = Date.now() + timeoutMs;
+    const deadline = typeof opts.timeoutMs === "number" ? Date.now() + opts.timeoutMs : undefined;
     let last = await this.getConversation(id);
     while (!isTerminalStatus(last.executionStatus, stopOnApproval)) {
-      if (Date.now() >= deadline) return last;
+      if (deadline !== undefined && Date.now() >= deadline) return last;
       await sleep(pollMs);
       last = await this.getConversation(id);
     }

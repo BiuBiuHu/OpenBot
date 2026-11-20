@@ -1,9 +1,12 @@
 #!/usr/bin/env node
+import fs from "node:fs";
+import { randomBytes } from "node:crypto";
+import { startBotRuntime } from "./bot/runtime.js";
 import path from "node:path";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { classifyCommand } from "./approval.js";
-import { applyHostSettings, defaultConfig, hasLocalModelKey, loadConfig, saveConfig, writeEnvExampleToHome } from "./config.js";
+import { applyHostSettings, defaultConfig, loadConfig, saveConfig, writeEnvExampleToHome } from "./config.js";
 import { loadEvalCases, runEvalSuite, writeEvalSuiteRun } from "./eval-set.js";
 import { openbotHome } from "./paths.js";
 import { startControlPlane } from "./server.js";
@@ -31,6 +34,7 @@ Usage:
   npx openbot oh conversations  List OH conversations
   npx openbot oh run <goal>     Confirmed handoff: create OH conversation + poll
   npx openbot eval              Replay the chat-layer eval set (writes ~/.openbot/evals)
+  npx openbot bot-runtime [--port 3850] [--data DIR] [--workspace DIR]  Run on ECS
   npx openbot help
 
 OpenHands is reached at OH_BASE_URL (default http://127.0.0.1:8000).
@@ -250,7 +254,7 @@ async function cmdOh(rest: string[], flags: Record<string, string>): Promise<voi
   if (sub === "run") {
     const goal = rest.slice(1).join(" ").trim();
     if (!goal) throw new Error("Usage: npx openbot oh run 'uname -a and summarize'");
-    const timeoutMs = flags.timeout ? Number(flags.timeout) * 1000 : 60_000;
+    const timeoutMs = flags.timeout ? Number(flags.timeout) * 1000 : undefined;
     const pollMs = flags["poll-ms"] ? Number(flags["poll-ms"]) : 250;
     const wait = flags.wait !== "false" && flags["no-wait"] !== "true";
     process.stderr.write(`handoff → ${client.baseUrl}\n`);
@@ -281,69 +285,43 @@ async function cmdOh(rest: string[], flags: Record<string, string>): Promise<voi
   throw new Error(`Unknown oh subcommand: ${sub}\nTry: openbot oh health | conversations | run '<goal>'`);
 }
 
-async function confirmHandoff(goal: string): Promise<boolean> {
-  if (!process.stdin.isTTY) return true;
-  const rl = readline.createInterface({ input, output });
-  const answer = await rl.question(`Hand this to the computer?\n  ${goal}\nConfirm? [y/N] `);
-  rl.close();
-  return /^y(es)?$/i.test(answer.trim());
-}
-
 async function cmdChat(rest: string[], flags: Record<string, string>): Promise<void> {
   const message = rest.join(" ").trim();
   if (!message) throw new Error("Usage: npx openbot chat 'what kernel is on my machine?'");
   const config = loadConfig();
-  const forceHandoff =
-    flags.handoff === "true" || flags.computer === "true" || !hasLocalModelKey(config.llm.apiKey);
-  const hasWorker = Boolean(config.host.hostname && config.worker.token);
-
-  if (forceHandoff || !hasWorker) {
-    const client = ohClient(config);
-    const store = new HandoffStore();
-    const timeoutMs = flags.timeout ? Number(flags.timeout) * 1000 : 60_000;
-    const pollMs = flags["poll-ms"] ? Number(flags["poll-ms"]) : 250;
-    const result = await runThreadTurn(message, {
-      client,
-      oh: config.openhands,
-      llm: config.llm,
-      store,
-      emit: printThreadEvent,
-      forceHandoff,
-      timeoutMs,
-      pollMs,
-      threadId: flags.thread || "chat_default",
-      language: config.language,
-    });
-    process.stdout.write("\n");
-    if (result.path === "handoff" && remoteConversationFailed(result.conversation)) {
-      process.exitCode = 1;
-    }
-    return;
-  }
-
-  await withWorker(config, async (worker) => {
-    const result = await runThreadTurn(message, {
-      client: ohClient(config),
-      oh: config.openhands,
-      llm: config.llm,
-      worker,
-      store: new HandoffStore(),
-      emit: printThreadEvent,
-      forceHandoff: false,
-      language: config.language,
-      waitForConfirm: async (proposal) => confirmHandoff(proposal.goal),
-      waitForApproval: async (req) => confirmDangerous(req.command),
-    });
-    process.stdout.write("\n");
-    if (result.path === "handoff" && remoteConversationFailed(result.conversation)) {
-      process.exitCode = 1;
-    }
+  const client = ohClient(config);
+  const store = new HandoffStore();
+  const pollMs = flags["poll-ms"] ? Number(flags["poll-ms"]) : 250;
+  const result = await runThreadTurn(message, {
+    client,
+    oh: config.openhands,
+    llm: config.llm,
+    store,
+    emit: printThreadEvent,
+    pollMs,
+    threadId: flags.thread || "chat_default",
+    language: config.language,
   });
+  process.stdout.write("\n");
+  if (result.conversation && remoteConversationFailed(result.conversation)) process.exitCode = 1;
 }
 
 async function main(): Promise<void> {
   const { cmd, flags, rest } = parseArgs(process.argv.slice(2));
   switch (cmd) {
+    case "bot-runtime": {
+      const config = loadConfig();
+      const dataDir = flags.data || path.join(openbotHome(), "bot-runtime");
+      fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+      const tokenFile = path.join(dataDir, "service-token");
+      if (!fs.existsSync(tokenFile)) fs.writeFileSync(tokenFile, randomBytes(32).toString("hex"), { mode: 0o600 });
+      config.openhands.workspaceDir = path.resolve(flags.workspace || config.openhands.workspaceDir);
+      const runtime = await startBotRuntime({ dataDir, token: fs.readFileSync(tokenFile, "utf8").trim(), port: Number(flags.port || 3850), oh: config.openhands });
+      console.log(`Bot runtime ${runtime.baseUrl}; service token file: ${tokenFile}`);
+      const stop = async () => { await runtime.close(); process.exit(0); };
+      process.on("SIGINT", stop); process.on("SIGTERM", stop);
+      break;
+    }
     case "init":
       await cmdInit(flags);
       break;

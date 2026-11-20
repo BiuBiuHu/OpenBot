@@ -1,0 +1,168 @@
+{
+  "taskId": "0882d32a-94ea-4b7f-8b75-3ad5a9c644ac",
+  "tools": {
+    "browser_navigate": 1,
+    "browser_get_state": 7,
+    "browser_get_content": 5,
+    "browser_click": 5,
+    "browser_type": 1
+  },
+  "actions": [
+    {
+      "tool": "browser_navigate",
+      "action": {
+        "url": "http://127.0.0.1:3861/",
+        "new_tab": false,
+        "kind": "BrowserNavigateAction"
+      }
+    },
+    {
+      "tool": "browser_get_state",
+      "action": {
+        "include_screenshot": false,
+        "kind": "BrowserGetStateAction"
+      }
+    },
+    {
+      "tool": "browser_get_content",
+      "action": {
+        "extract_links": false,
+        "start_from_char": 0,
+        "kind": "BrowserGetContentAction"
+      }
+    },
+    {
+      "tool": "browser_click",
+      "action": {
+        "index": 10,
+        "new_tab": false,
+        "kind": "BrowserClickAction"
+      }
+    },
+    {
+      "tool": "browser_get_state",
+      "action": {
+        "include_screenshot": false,
+        "kind": "BrowserGetStateAction"
+      }
+    },
+    {
+      "tool": "browser_get_content",
+      "action": {
+        "extract_links": false,
+        "start_from_char": 0,
+        "kind": "BrowserGetContentAction"
+      }
+    },
+    {
+      "tool": "browser_click",
+      "action": {
+        "index": 26,
+        "new_tab": false,
+        "kind": "BrowserClickAction"
+      }
+    },
+    {
+      "tool": "browser_get_state",
+      "action": {
+        "include_screenshot": false,
+        "kind": "BrowserGetStateAction"
+      }
+    },
+    {
+      "tool": "browser_get_content",
+      "action": {
+        "extract_links": false,
+        "start_from_char": 0,
+        "kind": "BrowserGetContentAction"
+      }
+    },
+    {
+      "tool": "browser_get_state",
+      "action": {
+        "include_screenshot": true,
+        "kind": "BrowserGetStateAction"
+      }
+    },
+    {
+      "tool": "browser_click",
+      "action": {
+        "index": 31,
+        "new_tab": false,
+        "kind": "BrowserClickAction"
+      }
+    },
+    {
+      "tool": "browser_get_state",
+      "action": {
+        "include_screenshot": false,
+        "kind": "BrowserGetStateAction"
+      }
+    },
+    {
+      "tool": "browser_type",
+      "action": {
+        "index": 29,
+        "text": "2",
+        "kind": "BrowserTypeAction"
+      }
+    },
+    {
+      "tool": "browser_get_state",
+      "action": {
+        "include_screenshot": false,
+        "kind": "BrowserGetStateAction"
+      }
+    },
+    {
+      "tool": "browser_click",
+      "action": {
+        "index": 60,
+        "new_tab": false,
+        "kind": "BrowserClickAction"
+      }
+    },
+    {
+      "tool": "browser_get_content",
+      "action": {
+        "extract_links": false,
+        "start_from_char": 0,
+        "kind": "BrowserGetContentAction"
+      }
+    },
+    {
+      "tool": "browser_click",
+      "action": {
+        "index": 47,
+        "new_tab": false,
+        "kind": "BrowserClickAction"
+      }
+    },
+    {
+      "tool": "browser_get_state",
+      "action": {
+        "include_screenshot": false,
+        "kind": "BrowserGetStateAction"
+      }
+    },
+    {
+      "tool": "browser_get_content",
+      "action": {
+        "extract_links": false,
+        "start_from_char": 0,
+        "kind": "BrowserGetContentAction"
+      }
+    }
+  ],
+  "observationErrors": 0,
+  "receipt": {
+    "id": "DEMO-OPENBOT-001",
+    "product": "蓝色笔记本",
+    "quantity": 2,
+    "status": "completed",
+    "simulated": true,
+    "charge": 0,
+    "at": "2026-11-20T04:37:21.291Z"
+  },
+  "nextPageId": null
+}

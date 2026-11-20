@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <meta name="bot-session" content="__BOT_SESSION__">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OpenBot — your machine</title>
@@ -23,8 +24,10 @@
       body {
         font-family: var(--sans);
         display: grid;
-        grid-template-rows: auto 1fr auto;
-        min-height: 100dvh;
+        grid-template-rows: auto minmax(0, 1fr);
+        height: 100dvh;
+        max-height: 100dvh;
+        overflow: hidden;
       }
       header {
         display: flex;
@@ -96,16 +99,33 @@
       main {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 36rem;
-        align-items: start;
+        grid-template-rows: auto minmax(0, 1fr);
+        align-items: stretch;
         min-height: 0;
+        min-width: 0;
+        overflow: hidden;
       }
       @media (max-width: 840px) {
-        main { grid-template-columns: 1fr; }
+        main { grid-template-columns: minmax(0, 1fr); }
         aside { display: none; }
       }
+      .chat-col {
+        grid-column: 1;
+        grid-row: 2;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        height: 100%;
+        overflow: hidden;
+      }
       #log {
-        overflow: auto;
-        padding: 1.1rem 1.4rem 2rem;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 1.1rem 1.4rem 1rem;
         display: flex;
         flex-direction: column;
         align-items: stretch;
@@ -258,12 +278,15 @@
       .approval button.yes { border-color: var(--phosphor); color: var(--phosphor); }
       .approval button.no { border-color: var(--danger); color: var(--danger); }
       aside {
-        align-self: start;
+        grid-column: 2;
+        grid-row: 2;
+        align-self: stretch;
         position: relative;
-        top: auto;
-        width: 36rem;
+        min-width: 0;
+        min-height: 0;
+        width: auto;
         padding: 0.7rem 1.1rem 1rem 0.35rem;
-        overflow: visible;
+        overflow: auto;
         background: transparent;
         border: none;
       }
@@ -400,6 +423,8 @@
       }
       #banner {
         display: none;
+        grid-column: 1 / -1;
+        grid-row: 1;
         margin: 0 1.4rem;
         padding: 0.55rem 0.7rem;
         border: 1px solid #3a3420;
@@ -408,6 +433,7 @@
       }
       #banner.show { display: block; }
       footer {
+        flex: 0 0 auto;
         border-top: 1px solid var(--line);
         padding: 0.8rem 1.2rem 1rem;
         display: grid;
@@ -428,9 +454,49 @@
       }
       footer textarea:focus { outline: 1px solid var(--phosphor); }
       .err { color: var(--danger); }
+      .composer-tools { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:12px 20px; border-top:1px solid var(--line); background:#141b13; font:13px/1.5 system-ui,-apple-system,sans-serif; }
+      .composer-autonomy { display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:#d7e6c9; }
+      .composer-autonomy-dot { width:7px; height:7px; flex:none; border-radius:50%; background:var(--phosphor); box-shadow:0 0 0 4px #b6e36a12; margin:0 3px; }
+      .composer-autonomy strong { font-size:12px; font-weight:550; }
+      .composer-autonomy-note { color:#a6b398; font-size:12px; padding-left:8px; border-left:1px solid #394632; }
+      .composer-options { display:flex; align-items:center; gap:10px; min-width:0; }
+      .composer-mode { display:flex; align-items:center; gap:9px; min-width:0; color:#aab69f; font-size:12px; }
+      .composer-select { position:relative; display:block; min-width:0; }
+      .composer-select::after { content:""; position:absolute; right:14px; top:18px; width:6px; height:6px; border-right:1.5px solid #b8c9a5; border-bottom:1.5px solid #b8c9a5; transform:rotate(45deg); pointer-events:none; }
+      #execution-profile { appearance:none; -webkit-appearance:none; width:100%; min-width:136px; height:44px; margin:0; padding:0 35px 0 13px; border:1px solid #3c4934; border-radius:9px; background:#1a2417; color:#e5eedb; font:13px system-ui; cursor:pointer; color-scheme:dark; }
+      #execution-profile:hover { border-color:#718a56; }
+      #mail-test { display:inline-flex; align-items:center; justify-content:center; gap:7px; flex:none; min-height:44px; padding:0 13px; margin:0; border:1px solid #415333; border-radius:9px; background:#202d1a; color:#c8e7a5; font:500 13px system-ui; cursor:pointer; white-space:nowrap; }
+      #mail-test svg { width:16px; height:16px; flex:none; }
+      #mail-test:hover { background:#2a3a20; border-color:#88a65f; }
+      #mail-test:active { background:#344927; }
+      #execution-profile:focus-visible, #mail-test:focus-visible { outline:2px solid var(--phosphor); outline-offset:3px; }
+      #mail-test:disabled { opacity:.55; cursor:wait; }
+      @media(max-width:600px) {
+        .composer-tools { padding:12px 16px; gap:11px; }
+        .composer-options { width:100%; gap:8px; }
+        .composer-mode, .composer-select { flex:1; }
+        .composer-mode-label { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+        #execution-profile { min-width:0; }
+        #mail-test { padding:0 11px; }
+      }
+
+      #bot-connect, #home-files { font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.6; }
+      #bot-connect details, #home-files { margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--panel); }
+      #bot-connect summary, #home-files summary { cursor: pointer; color: var(--phosphor); }
+      #bot-connect button, #home-files button, [data-task-id] button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; cursor: pointer; font: inherit; }
+      #bot-connect button:hover, #home-files button:hover, [data-task-id] button:hover { border-color: var(--phosphor); }
+      #bot-connect input, #home-files input { min-width: 0; width: 100%; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 8px; margin: 5px 0; }
+      #home-browse { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+      #home-browse button { white-space: nowrap; }
+      #home-file-list button { width: 100%; text-align: left; margin: 4px 0; }
+      #home-file-preview { overflow-wrap: anywhere; }
+      [data-task-id] [role="status"] { color: var(--phosphor); font-size: 13px; }
+      [data-task-id] button:disabled { opacity: .5; cursor: wait; }
+      @media (max-width: 840px) { header { display: block; padding: 12px; } header .actions { display: flex; justify-content: space-between; margin-top: 8px; } header .meta { max-width: none; text-align: right; } main { grid-template-rows: auto minmax(180px, 1fr) auto; } aside { display: block; grid-column: 1; grid-row: 3; max-height: 32vh; overflow: auto; border-top: 1px solid var(--line); } }
     </style>
   </head>
   <body>
+    <a href="/bot" style="position:fixed;right:20px;bottom:12px;z-index:50;font-size:13px">Bot 独立测试入口 ↗</a>
     <header>
       <div class="brand">
         <h1><span id="lamp" class="lamp"></span><span id="face" class="avatar" title="OpenBot"><span class="eyes"></span></span>OpenBot</h1>
@@ -441,22 +507,37 @@
         <div class="meta" id="meta">connecting…</div>
       </div>
     </header>
-    <div id="banner"></div>
     <main>
-      <section id="log"></section>
+      <div id="banner"></div>
+      <section class="chat-col">
+        <section id="log"></section>
+        <div class="composer-tools" role="group" aria-label="任务选项">
+          <div class="composer-autonomy"><span class="composer-autonomy-dot" aria-hidden="true"></span><strong>Agent 自主执行</strong><span class="composer-autonomy-note">可随时暂停</span></div>
+          <div class="composer-options">
+            <label class="composer-mode" for="execution-profile"><span class="composer-mode-label">任务方式</span><span class="composer-select"><select id="execution-profile"><option value="computer">电脑任务</option><option value="private_browser">私密网页任务</option></select></span></label>
+            <button id="mail-test" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg><span>测试邮箱摘要</span></button>
+          </div>
+        </div>
+        <footer>
+          <textarea id="box" rows="2" placeholder="直接开始对话。"></textarea>
+          <button id="send" type="button">发送</button>
+        </footer>
+      </section>
       <aside>
+        <div id="bot-connect" style="margin-bottom:12px">
+          <button id="bot-reconnect" type="button">恢复连接</button>
+          <span id="bot-status" role="status">正在连接远端电脑…</span>
+          <details><summary>执行服务连接设置</summary><label>服务令牌<input id="home-token" type="password" autocomplete="off" placeholder="已保存可留空"></label><label>远端端口<input id="home-port" type="number" value="3850" min="1" max="65535"></label><button id="home-connect-save" type="button">保存并连接</button></details>
+        </div>
         <h2>电脑 <button type="button" id="desk-max-btn" aria-pressed="false">放大</button></h2>
         <div class="desk-wrap" id="desk-wrap">
           <button type="button" id="desk-close" class="desk-close" hidden>收起</button>
           <div id="desk-missing" class="desk-missing">Desktop not reachable yet.</div>
           <iframe id="desk" class="desk" hidden title="Remote desktop" tabindex="0" allow="pointer-lock; fullscreen; clipboard-read; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups"></iframe>
         </div>
+        <details id="home-files"><summary>工作区文件</summary><form id="home-browse"><input id="home-directory" placeholder="相对目录，留空查看工作区"><button>查看文件</button></form><div id="home-file-list"></div><pre id="home-file-preview" style="white-space:pre-wrap;overflow:auto;max-height:260px"></pre></details>
       </aside>
     </main>
-    <footer>
-      <textarea id="box" rows="2" placeholder="发给这台电脑，直接开始对话。"></textarea>
-      <button id="send" type="button">Send</button>
-    </footer>
     <div id="settings" class="sheet">
       <form id="settings-form">
         <h2>Connect your machine</h2>
@@ -487,6 +568,7 @@
       </form>
     </div>
     <script type="module">
+      import { createHomeBot } from "/home-bot.js";
       import { createComposeGuard, renderMarkdown, shouldSendOnEnter } from "/chat-ui.js";
 
       const logEl = document.getElementById("log");
@@ -549,35 +631,7 @@
         return el;
       }
 
-      async function refreshStatus() {
-        try {
-          const s = await (await fetch("/api/status")).json();
-          const ohOk = !!(s.openhands && s.openhands.ok);
-          lamp.classList.toggle("ok", ohOk && !!s.ready);
-          const host = s.host || {};
-          const hostLine = host.hostname ? host.user + "@" + host.hostname : "no host yet — open Settings";
-          meta.innerHTML =
-            escapeHtml(hostLine) +
-            (s.openhands
-              ? "<br>OH " +
-                (ohOk ? "ok" : "down") +
-                " " +
-                escapeHtml(s.openhands.baseUrl || "") +
-                (s.openhands.hasSessionKey ? "" : " · set session key")
-              : "<br>OH not configured") +
-            (s.nextStep && !s.ready ? "<br class='err'>" + escapeHtml(s.nextStep) : "");
-          if (s.nextStep && !s.ready) {
-            banner.textContent = s.nextStep;
-            banner.classList.add("show");
-          } else {
-            banner.textContent = "";
-            banner.classList.remove("show");
-          }
-        } catch (err) {
-          lamp.classList.remove("ok");
-          meta.textContent = String(err);
-        }
-      }
+      async function refreshStatus() { await homeBot.reconnect(); }
 
       function deskSrc(desktop) {
         const q = new URLSearchParams({
@@ -678,51 +732,7 @@
         no.onclick = () => decide(false);
       }
 
-      async function send() {
-        const text = box.value.trim();
-        if (!text) return;
-        box.value = "";
-        add("user", "", text);
-        const out = add("bot", "", "");
-        const bodyEl = out.querySelector(".md, pre");
-        const av = out.querySelector(".avatar.assistant");
-        let quiet = out.querySelector(".quiet");
-        if (!quiet) {
-          quiet = document.createElement("div");
-          quiet.className = "quiet";
-          out.querySelector(".bubble").appendChild(quiet);
-        }
-        sendBtn.disabled = true;
-        face.classList.add("waiting");
-        if (av) av.classList.add("waiting");
-        try {
-          await consumeSse("/api/chat", { message: text, handoff: true }, (ev) => {
-            if (ev.type === "token") {
-              bodyEl.innerHTML = renderMarkdown(ev.text || "");
-              quiet.textContent = "";
-              face.classList.remove("waiting");
-              if (av) av.classList.remove("waiting");
-              logEl.scrollTop = logEl.scrollHeight;
-            } else if (ev.type === "status") {
-              if (!bodyEl.textContent) quiet.textContent = ev.text === "thinking" ? "" : ev.text;
-            } else if (ev.type === "error") {
-              if (!bodyEl.innerHTML) bodyEl.innerHTML = renderMarkdown(ev.message || "");
-            } else if (ev.type === "done") {
-              quiet.textContent = "";
-              face.classList.remove("waiting");
-              if (av) av.classList.remove("waiting");
-              refreshDesktop();
-            }
-          });
-        } catch (err) {
-          bodyEl.innerHTML = renderMarkdown("这台电脑这轮没做成。你换一句再试。");
-        } finally {
-          face.classList.remove("waiting");
-          if (av) av.classList.remove("waiting");
-          sendBtn.disabled = false;
-          box.focus();
-        }
-      }
+      async function send() { await homeBot.send(); }
 
       async function loadSettingsForm() {
         const s = await (await fetch("/api/settings")).json();
@@ -808,14 +818,14 @@
         e.preventDefault();
         send();
       });
-      refreshStatus();
+      const homeBot = createHomeBot({ add, renderMarkdown, refreshDesktop });
+      homeBot.start();
       refreshDesktop();
-      setInterval(refreshStatus, 8000);
       setInterval(refreshDesktop, 5000);
       add(
         "sys",
         "",
-        "发给这台电脑就会直接对话。先在 Settings 里填你自己的主机和本机私钥路径；密钥只留在 ~/.openbot，不会进 git。",
+        "直接告诉我想在远端电脑上做什么。任务保存在 ECS，刷新或断线后可以恢复；Agent 自主执行，需要你参与时会在这里说明。",
       );
     </script>
   </body>
