@@ -26,7 +26,7 @@ test('SSH installer sends hash lock over stdin and deduplicates simultaneous req
     assert.equal(command, 'ssh');
     assert.ok(!args.join(' ').includes('TEST_MODEL_KEY'));
     assert.equal(JSON.parse(opts.input).model.apiKey,'TEST_MODEL_KEY');
-    assert.match(args.at(-1)!, /^sudo -n \/usr\/bin\/python3 -c /);
+    assert.match(args.at(-1)!, /sudo -n \/usr\/bin\/python3 -c /);
     assert.match(JSON.parse(opts.input).lock, /openhands-agent-server==1.49.2/);
     assert.match(JSON.parse(opts.input).lock, /--hash=sha256:/);
     await new Promise(resolve => setTimeout(resolve, 10));

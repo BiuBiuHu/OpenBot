@@ -54,9 +54,11 @@ export function installManagedEngine(config: OpenBotConfig, runner: InstallerRun
     const model = setupModel(config);
     if (!model.name || !model.apiKey) throw new Error('请先填写远端模型名称和 API Key，再初始化电脑。');
     const lock = fs.readFileSync(path.join(root, 'requirements.lock'), 'utf8');
-    const command = `sudo -n /usr/bin/python3 -c ${shellQuote(script)}`;
+    const elevate = config.host.user === 'root' ? '' : 'sudo -n ';
+    const bootstrap = `if [ ! -x /usr/bin/python3 ]; then . /etc/os-release; [ \"$ID:$VERSION_ID\" = ubuntu:24.04 ] || exit 1; ${elevate}apt-get update >&2 && ${elevate}apt-get install -y python3 >&2 || exit 1; fi; `;
+    const command = bootstrap + `${elevate}/usr/bin/python3 -c ${shellQuote(script)}`;
     // Passwords are neither command arguments nor returned to the browser.
-    const result = await runner('ssh', [...sshBaseArgs(config), sshTarget(config), config.host.user === 'root' ? command.replace(/^sudo -n /, '') : command], { input: JSON.stringify({ lock, assets, runtime, model, browserProbe: fs.readFileSync(path.join(repoRoot(), 'runtime/desktop/browser-smoke.mjs'), 'utf8') }), timeoutMs: 30 * 60_000 });
+    const result = await runner('ssh', [...sshBaseArgs(config), sshTarget(config), command], { input: JSON.stringify({ lock, assets, runtime, model, browserProbe: fs.readFileSync(path.join(repoRoot(), 'runtime/desktop/browser-smoke.mjs'), 'utf8') }), timeoutMs: 30 * 60_000 });
     const installed = parseEngineResult(result);
     if (installed.lockSha256 !== createHash('sha256').update(lock).digest('hex')) throw new Error('远端依赖锁与当前客户端不一致；连接配置未更改。');
     const stack = installed.stack;

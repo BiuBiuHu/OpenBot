@@ -80,6 +80,7 @@ Environment=XAUTHORITY={STATE}/.Xauthority
 ExecStart={command}
 Restart=on-failure
 RestartSec=3
+LimitCORE=0
 UMask=0077
 [Install]
 WantedBy=multi-user.target
@@ -163,7 +164,15 @@ def install_stack_locked(payload, engine):
     old_env = env_path.read_text() if env_path.exists() else None
     changed = [name for name in units if previous[name] != definitions[name]]
     if old_env != env and 'openbot-runtime' not in changed: changed.append('openbot-runtime')
+    policy = Path('/etc/apparmor.d/openbot-chromium')
+    old_policy = policy.read_text() if policy.exists() else None
+    restricted = Path('/proc/sys/kernel/apparmor_restrict_unprivileged_userns')
+    needs_policy = restricted.exists() and restricted.read_text().strip() == '1'
     try:
+        if needs_policy:
+            if not shutil.which('apparmor_parser'): run('apt-get','install','-y','apparmor')
+            policy.write_text(f'abi <abi/4.0>,\ninclude <tunables/global>\nprofile openbot-chromium {chrome} flags=(unconfined) {{\n  userns,\n}}\n')
+            run('apparmor_parser','-r',str(policy))
         fd=os.open(env_path,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
         with os.fdopen(fd,'w') as file:file.write(env)
         for name in units: (UNITS/(name+'.service')).write_text(definitions[name])
@@ -185,6 +194,11 @@ def install_stack_locked(payload, engine):
             if previous[name] is None:
                 run('systemctl','disable',name);target.unlink(missing_ok=True)
             else:target.write_text(previous[name])
+        if needs_policy:
+            if old_policy is None:
+                run('apparmor_parser','-R',str(policy));policy.unlink(missing_ok=True)
+            else:
+                policy.write_text(old_policy);run('apparmor_parser','-r',str(policy))
         if old_env is None: env_path.unlink(missing_ok=True)
         else:env_path.write_text(old_env)
         run('systemctl','daemon-reload')
