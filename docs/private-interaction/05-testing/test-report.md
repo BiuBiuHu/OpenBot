@@ -52,3 +52,9 @@
 - sealPrivateInput 的三项加密/防篡改测试通过；JS 语法和 diff 检查通过。未改加密协议、未读取真实凭据，也没有触发真实邮箱任务。
 
 截图：evidence/input-polish-desktop.png、evidence/input-polish-mobile.png。测试使用同一页面模块的隔离假表单，未伪装为新的真实登录记录。
+
+## 任务选项操作栏
+
+统一自主执行状态、任务方式选择器、邮箱测试入口的样式：深色控件、44px 点击高度、清晰焦点和状态/操作分组。仅修改 HTML/CSS，保留既有 id、选项值与按钮事件，不触发真实邮箱测试。
+
+实机页面检查通过：选择私密网页任务正确更新值；Tab 从选择器移至邮箱按钮；两项控件高度均为 44px；390px 下自动换行且无操作栏横向溢出，控件均在视口内。已恢复原任务方式选择，保留用户未提交的其它修改。截图为 composer-toolbar-desktop.png 与 composer-toolbar-mobile.png。
