@@ -103,6 +103,7 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
     if (task.observationPolicy !== 'autonomous' && task.status === 'waiting_approval' && !approvalSent) { button('允许本次动作', 'approval', true); button('拒绝本次动作', 'approval', false); }
     if (task.observationPolicy !== 'autonomous' && ['running', 'waiting_approval', 'paused'].includes(task.status)) button('切换为自主执行', 'autonomy');
     if (task.status === 'queued' || task.status === 'waiting_approval') button('取消待执行任务', 'cancel');
+    if (['waiting_user', 'paused'].includes(task.status)) button('结束此任务', 'cancel');
     if (task.status === 'running' || (task.status === 'waiting_approval' && task.observationPolicy === 'autonomous')) button('暂停任务', 'pause');
     if (task.status === 'paused' && !task.error) button('继续任务', 'resume');
     if (!['succeeded', 'failed', 'interrupted'].includes(task.status) && (task.error || task.status === 'paused' || approvalSent)) button('核对远端状态', 'refresh');

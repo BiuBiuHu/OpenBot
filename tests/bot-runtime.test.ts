@@ -87,3 +87,12 @@ it('configured browser is passed to remote tool initialization with visible CDP 
   const engine=new TaskEngine(store,client,config);
   try{store.create({requestId:'browser',threadId:'t',goal:'Use the remote browser'});await engine.tick();assert.deepEqual(input.tools.find((t:any)=>t.name==='browser_tool_set'),{name:'browser_tool_set',params:{cdp_url:'http://127.0.0.1:9322',headless:false}});assert.equal(input.confirmationPolicy,'AlwaysConfirm')}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
 });
+
+it('a failed task waiting for user help can be ended before reinitializing the computer',async()=>{
+  const {TaskEngine}=await import('../src/bot/engine.js');
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot-cancel-help-'));const store=new TaskStore(root);let closed=false;
+  const client:any={getConversation:async()=>({status:'failed'}),pauseConversation:async()=>{throw Error('failed conversation must not be resumed or paused')}};
+  const broker:any={closeTask:async()=>{closed=true}};
+  const engine=new TaskEngine(store,client,defaultConfig().openhands,1000,broker);
+  try{const task=store.create({requestId:'help',threadId:'t',goal:'test'});const waiting=store.save({...task,status:'waiting_user',interaction:{id:'i',kind:'takeover',state:'waiting',reason:'failed',createdAt:''}});const result=await engine.action(task.id,'cancel',waiting.revision);assert.equal(result.status,'interrupted');assert.equal(result.interaction,undefined);assert.equal(closed,true);}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
+});

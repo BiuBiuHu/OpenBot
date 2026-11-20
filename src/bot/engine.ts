@@ -110,6 +110,13 @@ export class TaskEngine {
       if (task.revision !== revision) throw new BotError('Task changed; refresh before acting', 409);
       if (action === 'autonomy' && !TERMINAL.has(task.status)) return this.store.save({ ...task, observationPolicy: 'autonomous' });
       if (action === 'cancel' && task.status === 'waiting_approval') { await this.client.pauseConversation(task.conversationId); return this.store.save({ ...task, status: 'interrupted', pendingActions: undefined, error: 'Task cancelled while waiting; remote conversation paused.' }); }
+      if (action === 'cancel' && ['waiting_user', 'paused'].includes(task.status)) {
+        const conv = await this.client.getConversation(task.conversationId);
+        if (!['failed', 'cancelled', 'timeout', 'succeeded'].includes(conv.status)) await this.client.pauseConversation(task.conversationId);
+        const cancelled = this.store.save({ ...task, status: 'interrupted', interaction: undefined, pendingActions: undefined, error: 'Task cancelled by user; remote conversation stopped.' });
+        await this.privateBrowsers?.closeTask(id);
+        return cancelled;
+      }
       if (action === 'cancel' && task.status === 'queued') return this.store.save({ ...task, status: 'interrupted', error: 'Queued task cancelled before execution.' });
       if (action === 'approval') {
         if (task.status !== 'waiting_approval' || !task.pendingActions?.length || typeof accept !== 'boolean') throw new BotError('No matching approval', 409);

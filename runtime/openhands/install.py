@@ -80,7 +80,8 @@ def apply_usage_compatibility(release):
     if original.count(before) != 1:
         raise RuntimeError('OpenHands 用量统计兼容补丁与当前版本不匹配，拒绝继续。')
     updated = original.replace(before, after)
-    source.write_text(updated)
+    temporary = source.with_suffix('.openbot-tmp')
+    temporary.write_text(updated); temporary.replace(source)
     (release / 'openbot-compat.json').write_text(json.dumps({'patch':'sdk-1.49.2-optional-cache-creation-v1',
         'beforeSha256':hashlib.sha256(original.encode()).hexdigest(), 'afterSha256':hashlib.sha256(updated.encode()).hexdigest(),
         'upstream':'https://github.com/OpenHands/software-agent-sdk/issues/5326'}))
@@ -137,6 +138,8 @@ def install_locked(lock):
     run(str(release / 'bin/python'), '-c', "from importlib.metadata import version; assert all(version(p)=='1.49.2' for p in ['openhands-agent-server','openhands-sdk','openhands-tools','openhands-workspace'])")
     if (release / 'ready').read_text() != digest:
         raise RuntimeError('依赖锁校验失败，未启动服务。')
+    compat_source = release / 'lib/python3.12/site-packages/openhands/sdk/llm/utils/telemetry.py'
+    compat_original = compat_source.read_text() if compat_source.exists() else None
     compat_changed = apply_usage_compatibility(release)
     unit = f'''[Unit]
 Description=OpenBot managed OpenHands {VERSION}
@@ -176,6 +179,9 @@ WantedBy=multi-user.target
     except Exception:
         if changed:
             run('systemctl', 'stop', 'openbot-engine')
+            if compat_changed and compat_original is not None:
+                compat_source.write_text(compat_original)
+                (release / 'openbot-compat.json').unlink(missing_ok=True)
             current.unlink(missing_ok=True)
             if old:
                 current.symlink_to(old)

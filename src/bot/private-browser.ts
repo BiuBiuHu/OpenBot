@@ -96,6 +96,7 @@ export class PrivateBrowsers {
    await this.session(taskId).browser.endManualCapture();
    this.session(taskId).lastProgress=Date.now();this.store.save({...task,interaction:{...i,state:'completed'}});
  }
+ async closeTask(taskId:string) { const session=this.sessions.get(taskId);this.sessions.delete(taskId);await session?.browser.close(); }
  async close() {this.envelopes.clear();await Promise.allSettled([...this.sessions.values()].map(s=>s.browser.close()));this.sessions.clear();}
 }
 function text(value:unknown,max:number):string {if(typeof value!=='string'||!value.trim()||value.length>max)throw new BotError('Invalid browser input');return value;}
