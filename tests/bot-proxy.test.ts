@@ -21,6 +21,7 @@ it('plugin UI uses a session boundary; foreign origins cannot invoke the remote 
     assert.equal((await fetch(url+'/api/bot/engine-setup',{method:'POST',headers:{'X-OpenBot-Session':session,Origin:'https://untrusted.example'}})).status,403);
     const setup=await fetch(url+'/api/bot/engine-setup',{headers:{'X-OpenBot-Session':session}});
     const state=await setup.json() as any;assert.equal(state.status,'idle');assert.ok(!JSON.stringify(state).includes('sessionApiKey'));
+    const missing=await fetch(url+'/api/bot/engine-setup',{method:'POST',headers:{'X-OpenBot-Session':session}});assert.equal(missing.status,400);assert.match((await missing.json() as any).error,/请先保存/);
     const connection=await fetch(url+'/api/bot/connection',{headers:{'X-OpenBot-Session':session}});assert.equal((await connection.json() as any).configured,false);
     assert.equal((await fetch(url+'/api/bot/tasks',{headers:{'X-OpenBot-Session':session}})).status,503);
   }finally{await plane.close();if(previous===undefined)delete process.env.OPENBOT_HOME;else process.env.OPENBOT_HOME=previous;fs.rmSync(home,{recursive:true,force:true})}

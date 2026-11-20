@@ -1,5 +1,6 @@
 import { BotError } from './bot/contracts.js';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { repoRoot } from './paths.js';
 import { runCommand, shellQuote, sshBaseArgs, sshTarget, type RunResult } from './ssh.js';
@@ -32,7 +33,9 @@ export function installManagedEngine(config: OpenBotConfig, runner: InstallerRun
     const command = `sudo -n /usr/bin/python3 -c ${shellQuote(script)}`;
     // Passwords are neither command arguments nor returned to the browser.
     const result = await runner('ssh', [...sshBaseArgs(config), sshTarget(config), config.host.user === 'root' ? command.replace(/^sudo -n /, '') : command], { input: JSON.stringify({ lock }), timeoutMs: 20 * 60_000 });
-    return parseEngineResult(result);
+    const installed = parseEngineResult(result);
+    if (installed.lockSha256 !== createHash('sha256').update(lock).digest('hex')) throw new Error('远端依赖锁与当前客户端不一致；连接配置未更改。');
+    return installed;
   })().finally(() => pending.delete(host));
   pending.set(host, installation);
   return installation;
