@@ -55,6 +55,7 @@ export interface OhEventPage {
 
 export interface CreateConversationInput {
   goal: string;
+  confirmationPolicy?: "AlwaysConfirm" | "NeverConfirm";
   conversationId?: string;
   workspaceDir?: string;
   model?: string;
@@ -211,6 +212,7 @@ export class OpenHandsClient {
     try {
       res = await fetch(url, {
         method,
+        signal: AbortSignal.timeout(30_000),
         headers: this.headers(body !== undefined),
         body: body === undefined ? undefined : JSON.stringify(body),
       });
@@ -280,7 +282,7 @@ export class OpenHandsClient {
         run,
       },
       max_iterations: input.maxIterations ?? 20,
-      confirmation_policy: { kind: "NeverConfirm" },
+      confirmation_policy: { kind: input.confirmationPolicy ?? "NeverConfirm" },
     };
     if (input.conversationId) payload.conversation_id = input.conversationId;
     const raw = await this.request<unknown>("POST", "/api/conversations", payload);
@@ -328,6 +330,14 @@ export class OpenHandsClient {
     );
     const rec = isRecord(raw) ? raw : {};
     return { success: rec.success !== false, raw };
+  }
+
+  async respondToConfirmation(id: string, accept: boolean): Promise<void> {
+    await this.request("POST", `/api/conversations/${encodeURIComponent(id)}/events/respond_to_confirmation`, { accept, reason: accept ? "User approved in OpenBot" : "User rejected in OpenBot" });
+  }
+
+  async pauseConversation(id: string): Promise<void> {
+    await this.request("POST", `/api/conversations/${encodeURIComponent(id)}/pause`);
   }
 
   async searchEvents(

@@ -1,3 +1,4 @@
+import { createBotProxy } from "./bot/proxy.js";
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -117,7 +118,9 @@ export async function startControlPlane(
   const trialFile = path.join(repoRoot(), "src/ui/oh-test.html");
   const deskViewFile = path.join(repoRoot(), "src/ui/desktop-view.html");
 
+  const bot = createBotProxy(() => liveConfig);
   const server = http.createServer(async (req, res) => {
+    if (await bot.handle(req, res)) return;
     const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
     try {
       if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
@@ -477,6 +480,7 @@ export async function startControlPlane(
     worker,
     tunnel,
     close: async () => {
+      await bot.close();
       for (const session of piSessions.values()) session.dispose();
       piSessions.clear();
       await new Promise<void>((resolve) => server.close(() => resolve()));

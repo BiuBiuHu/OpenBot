@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import fs from "node:fs";
+import { randomBytes } from "node:crypto";
+import { startBotRuntime } from "./bot/runtime.js";
 import path from "node:path";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
@@ -31,6 +34,7 @@ Usage:
   npx openbot oh conversations  List OH conversations
   npx openbot oh run <goal>     Confirmed handoff: create OH conversation + poll
   npx openbot eval              Replay the chat-layer eval set (writes ~/.openbot/evals)
+  npx openbot bot-runtime [--port 3850] [--data DIR] [--workspace DIR]  Run on ECS
   npx openbot help
 
 OpenHands is reached at OH_BASE_URL (default http://127.0.0.1:8000).
@@ -305,6 +309,19 @@ async function cmdChat(rest: string[], flags: Record<string, string>): Promise<v
 async function main(): Promise<void> {
   const { cmd, flags, rest } = parseArgs(process.argv.slice(2));
   switch (cmd) {
+    case "bot-runtime": {
+      const config = loadConfig();
+      const dataDir = flags.data || path.join(openbotHome(), "bot-runtime");
+      fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+      const tokenFile = path.join(dataDir, "service-token");
+      if (!fs.existsSync(tokenFile)) fs.writeFileSync(tokenFile, randomBytes(32).toString("hex"), { mode: 0o600 });
+      config.openhands.workspaceDir = path.resolve(flags.workspace || config.openhands.workspaceDir);
+      const runtime = await startBotRuntime({ dataDir, token: fs.readFileSync(tokenFile, "utf8").trim(), port: Number(flags.port || 3850), oh: config.openhands });
+      console.log(`Bot runtime ${runtime.baseUrl}; service token file: ${tokenFile}`);
+      const stop = async () => { await runtime.close(); process.exit(0); };
+      process.on("SIGINT", stop); process.on("SIGTERM", stop);
+      break;
+    }
     case "init":
       await cmdInit(flags);
       break;
