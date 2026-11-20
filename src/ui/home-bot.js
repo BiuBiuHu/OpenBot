@@ -9,7 +9,7 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
   if (!threadId) { threadId = crypto.randomUUID(); localStorage.setItem('openbot-home-thread', threadId); }
   let pending;
   try { pending = JSON.parse(localStorage.getItem('openbot-home-pending') || 'null'); } catch { pending = null; }
-  if (pending) $('box').value = pending.goal;
+  if (pending) { $('box').value = pending.goal; $('auto-observe').checked = pending.observationPolicy === 'auto_browser_reads'; }
   const cards = new Map();
   const deciding = new Set();
   function notice(text, ok = false) {
@@ -71,7 +71,7 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
     if (card.revision === task.revision) return;
     card.revision = task.revision;
     const approvalSent = task.status === 'waiting_approval' && task.pendingActions?.length && task.pendingActions.every(a => task.decidedActionIds?.includes(a.id));
-    card.state.textContent = `${approvalSent ? '确认已提交 · 等待远端响应' : labels[task.status] || task.status} · ${task.id.slice(0,8)}`;
+    card.state.textContent = `${approvalSent ? '确认已提交 · 等待远端响应' : labels[task.status] || task.status} · ${task.id.slice(0,8)}${task.observationPolicy === 'auto_browser_reads' ? ' · 自动观察 ' + (task.autoApprovedActionIds?.length || 0) + ' 次' : ''}`;
     card.body.innerHTML = renderMarkdown(task.result || task.error || (task.status === 'running' ? '远端正在执行，完成后结果会保留在这里。' : ''));
     card.actions.replaceChildren();
     const button = (label, action, accept) => {
@@ -125,11 +125,12 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
     if (sending) return;
     const goal = $('box').value.trim(); if (!goal) return;
     if (!connected) { await reconnect(); if (!connected) return; }
-    if (pending && pending.goal !== goal) {
-      $('box').value = pending.goal;
+    const observationPolicy = $('auto-observe').checked ? 'auto_browser_reads' : 'confirm_all';
+    if (pending && (pending.goal !== goal || (pending.observationPolicy || 'confirm_all') !== observationPolicy)) {
+      $('box').value = pending.goal; $('auto-observe').checked = pending.observationPolicy === 'auto_browser_reads';
       notice('上一条请求尚未确认，保留原请求重试可避免重复执行。'); return;
     }
-    pending ||= { requestId: crypto.randomUUID(), threadId, goal, source: { kind: 'openbot-home' } };
+    pending ||= { requestId: crypto.randomUUID(), threadId, goal, observationPolicy, source: { kind: 'openbot-home' } };
     localStorage.setItem('openbot-home-pending', JSON.stringify(pending));
     sending = true; $('send').disabled = true;
     try {

@@ -36,6 +36,12 @@ export class TaskEngine {
     }
     if (task.status === 'paused') return;
     await this.observe(task);
+    const current = this.store.get(task.id);
+    if (!this.actions.has(task.id) && canAutoObserve(current)) {
+      this.actions.add(task.id);
+      try { await this.approve(current, true, true); }
+      finally { this.actions.delete(task.id); }
+    }
   }
   private async observe(task: BotTask) {
     try {
@@ -66,6 +72,18 @@ export class TaskEngine {
       this.store.save({ ...task, status: missing ? 'interrupted' : task.status, error: missing ? 'Runtime conversation missing. Inspect remote side effects before creating a new task.' : 'Cannot reach execution service; task outcome is not yet known.' });
     }
   }
+  private async approve(task: BotTask, accept: boolean, automatic = false) {
+    const actionIds = task.pendingActions!.map(a => String((a as { id?: string }).id || ''));
+    if (actionIds.some(id => !id || task.decidedActionIds?.includes(id))) throw new BotError('This action already has a recorded decision; reconcile remote state', 409);
+    // Persist the decision before delivery. Unknown delivery stays paused, including
+    // after restart; never replay an approval merely because observation was automatic.
+    const next = this.store.save({ ...task, status: 'paused',
+      decidedActionIds: [...(task.decidedActionIds || []), ...actionIds],
+      ...(automatic ? { autoApprovedActionIds: [...(task.autoApprovedActionIds || []), ...actionIds] } : {}),
+      error: 'Approval delivery pending; refresh to reconcile before retrying.' });
+    await this.client.respondToConfirmation(task.conversationId, accept);
+    return this.store.save({ ...next, status: accept ? 'running' : 'paused', pendingActions: undefined, error: undefined });
+  }
   async action(id: string, action: string, revision: number, accept?: boolean) {
     if (this.actions.has(id)) throw new BotError('Action already in progress', 409);
     this.actions.add(id);
@@ -75,12 +93,7 @@ export class TaskEngine {
       if (task.revision !== revision) throw new BotError('Task changed; refresh before acting', 409);
       if (action === 'approval') {
         if (task.status !== 'waiting_approval' || !task.pendingActions?.length || typeof accept !== 'boolean') throw new BotError('No matching approval', 409);
-        const actionIds = task.pendingActions.map(a => String((a as { id?: string }).id || ''));
-        if (actionIds.some(id => !id || task.decidedActionIds?.includes(id))) throw new BotError('This action already has a recorded decision; reconcile remote state', 409);
-        // Persist before sending: a lost response must never regrant this approval.
-        const next = this.store.save({ ...task, status: 'paused', decidedActionIds: [...(task.decidedActionIds || []), ...actionIds], error: 'Approval delivery pending; refresh to reconcile before retrying.' });
-        await this.client.respondToConfirmation(task.conversationId, accept);
-        return this.store.save({ ...next, status: accept ? 'running' : 'paused', pendingActions: undefined, error: undefined });
+        return await this.approve(task, accept);
       }
       if (action === 'refresh') { await this.observe(task); return this.store.get(id); }
       if (action === 'pause' && task.status === 'running') {
@@ -94,4 +107,23 @@ export class TaskEngine {
       throw new BotError('Action not allowed for this task', 409);
     } finally { this.actions.delete(id); }
   }
+}
+
+/** Narrow capability allowlist, not a model-provided risk label. Mixed batches fail closed. */
+export function canAutoObserve(task: BotTask): boolean {
+  if (task.observationPolicy !== 'auto_browser_reads' || task.status !== 'waiting_approval' || task.error || !task.pendingActions?.length) return false;
+  const schemas: Record<string, { kind: string; fields: string[] }> = {
+    browser_get_state: { kind: 'BrowserGetStateAction', fields: ['include_screenshot'] },
+    browser_get_content: { kind: 'BrowserGetContentAction', fields: ['extract_links', 'start_from_char'] },
+    browser_list_tabs: { kind: 'BrowserListTabsAction', fields: [] },
+  };
+  return task.pendingActions.every(raw => {
+    const p = raw as { id?: string; tool?: string; action?: Record<string, unknown> };
+    const schema = schemas[p.tool || ''];
+    if (!p.id || task.decidedActionIds?.includes(p.id) || !schema || !p.action || p.action.kind !== schema.kind) return false;
+    if (Object.keys(p.action).some(k => k !== 'kind' && !schema.fields.includes(k))) return false;
+    for (const key of ['include_screenshot', 'extract_links']) if (p.action[key] !== undefined && typeof p.action[key] !== 'boolean') return false;
+    const offset = p.action.start_from_char;
+    return offset === undefined || (Number.isSafeInteger(offset) && Number(offset) >= 0);
+  });
 }

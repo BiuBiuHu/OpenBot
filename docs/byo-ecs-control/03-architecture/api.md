@@ -26,3 +26,9 @@ source 可用 {kind:"openbot"} 或未来 {kind:"anpai",referenceId:"日程 ID"}�
 
 ## 3. 未解决问题
 多租户、跨设备授权、产物下载、调度、事件订阅未纳入当前 v1 功能集合。不要根据预留 source 推断已经接入安派。
+
+### Optional browser observation policy
+
+`POST /tasks` accepts `observationPolicy: "confirm_all" | "auto_browser_reads"` (default `confirm_all`). The homepage exposes an unchecked per-task opt-in. Only exact `browser_get_state`, `browser_get_content`, and `browser_list_tabs` action schemas qualify; mixed batches and unknown parameters require confirmation. Navigation, clicks, typing, scripts, storage and terminal commands remain manual. This is permission to observe the connected browser, not unrestricted task authorization.
+
+The policy is immutable under an existing `requestId`. Returned tasks retain `observationPolicy` and `autoApprovedActionIds` across restarts. Decisions are persisted before delivery; an uncertain delivery pauses and cannot be automatically replayed. The homepage displays the count of automatically authorized observations.
