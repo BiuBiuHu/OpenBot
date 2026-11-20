@@ -69,6 +69,23 @@ def install(lock):
             raise RuntimeError('此主机已有安装正在进行，请稍后重试。')
         return install_locked(lock)
 
+def apply_usage_compatibility(release):
+    # Upstream issue #5326 / #5168: optional LiteLLM field can be set-but-deleted.
+    # Keep the locked SDK; apply this small, version-scoped, reproducible compatibility fix.
+    source = release / 'lib/python3.12/site-packages/openhands/sdk/llm/utils/telemetry.py'
+    original = source.read_text()
+    before = 'details.cache_creation_tokens\n'
+    after = 'getattr(details, "cache_creation_tokens", 0)\n'
+    if after in original and before not in original: return False
+    if original.count(before) != 1:
+        raise RuntimeError('OpenHands 用量统计兼容补丁与当前版本不匹配，拒绝继续。')
+    updated = original.replace(before, after)
+    source.write_text(updated)
+    (release / 'openbot-compat.json').write_text(json.dumps({'patch':'sdk-1.49.2-optional-cache-creation-v1',
+        'beforeSha256':hashlib.sha256(original.encode()).hexdigest(), 'afterSha256':hashlib.sha256(updated.encode()).hexdigest(),
+        'upstream':'https://github.com/OpenHands/software-agent-sdk/issues/5326'}))
+    return True
+
 def install_locked(lock):
     digest = hashlib.sha256(lock.encode()).hexdigest()
     release = ROOT / ('release-' + digest[:16])
@@ -120,6 +137,7 @@ def install_locked(lock):
     run(str(release / 'bin/python'), '-c', "from importlib.metadata import version; assert all(version(p)=='1.49.2' for p in ['openhands-agent-server','openhands-sdk','openhands-tools','openhands-workspace'])")
     if (release / 'ready').read_text() != digest:
         raise RuntimeError('依赖锁校验失败，未启动服务。')
+    compat_changed = apply_usage_compatibility(release)
     unit = f'''[Unit]
 Description=OpenBot managed OpenHands {VERSION}
 After=network-online.target
@@ -140,7 +158,7 @@ UMask=0077
 WantedBy=multi-user.target
 '''
     old_unit = UNIT.read_text() if UNIT.exists() else None
-    changed = old != str(release) or old_unit != unit
+    changed = old != str(release) or old_unit != unit or compat_changed
     try:
         if changed:
             staging = ROOT / 'current.next'

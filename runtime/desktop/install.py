@@ -87,6 +87,9 @@ WantedBy=multi-user.target
 '''
 
 def install_stack(payload):
+    for task in (STATE / 'runtime').glob('*.json'):
+        if json.loads(task.read_text()).get('status') not in ['succeeded','failed','interrupted']:
+            raise RuntimeError('远端仍有未结束任务，请先完成或取消任务。')
     engine = install(payload['lock'])
     with (ROOT / 'install.lock').open('w') as guard:
         try: fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
