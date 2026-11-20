@@ -66,6 +66,11 @@ export function runCommand(
       clearTimeout(timer);
       resolve({ code: code ?? 1, stdout, stderr });
     });
+    // SSH/sudo may reject before consuming a large installer payload. The exit
+    // result carries that failure; a closed pipe must not crash the UI server.
+    child.stdin.on("error", (error: NodeJS.ErrnoException) => {
+      if (error.code !== "EPIPE") { clearTimeout(timer); child.kill("SIGKILL"); reject(error); }
+    });
     if (opts.input) {
       child.stdin.write(opts.input);
     }

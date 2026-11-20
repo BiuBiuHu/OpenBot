@@ -1,3 +1,4 @@
+import { runCommand } from '../src/ssh.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fs from 'node:fs';
@@ -55,4 +56,9 @@ test('setup preserves configuration on failure/host switch, retries and exposes 
     if (before === undefined) delete process.env.OPENBOT_HOME; else process.env.OPENBOT_HOME = before;
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('an early SSH/sudo-style rejection with a large payload does not crash the process', async () => {
+  const result = await runCommand(process.execPath, ['-e', 'process.exit(1)'], { input: 'x'.repeat(1024 * 1024) });
+  assert.equal(result.code, 1);
 });
