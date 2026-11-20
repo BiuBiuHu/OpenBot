@@ -76,9 +76,9 @@ def install_locked(lock):
                 raise RuntimeError('端口 18000 已被其他服务使用；未停止或覆盖它，请先解决端口冲突。')
     if shutil.disk_usage(ROOT).free < 2 * 1024**3:
         raise RuntimeError('安装需要至少 2 GiB 可用磁盘空间。')
-    if not Path('/usr/bin/python3.12').exists() or not Path('/usr/lib/python3.12/ensurepip').exists():
+    if not Path('/usr/bin/python3.12').exists() or not Path('/usr/lib/python3.12/ensurepip').exists() or not all(shutil.which(binary) for binary in ['tmux', 'git', 'curl']):
         run('apt-get', 'update')
-        run('apt-get', 'install', '-y', 'python3.12', 'python3.12-venv', 'ca-certificates')
+        run('apt-get', 'install', '-y', 'python3.12', 'python3.12-venv', 'ca-certificates', 'tmux', 'git', 'curl')
     if subprocess.run(['id', '-u', USER], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
         run('useradd', '--system', '--create-home', '--home-dir', '/var/lib/openbot-engine', '--shell', '/bin/bash', USER)
     run('install', '-d', '-o', USER, '-g', USER, '-m', '700', '/var/lib/openbot-engine/workspace')
