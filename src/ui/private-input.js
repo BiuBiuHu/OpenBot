@@ -19,6 +19,7 @@ export function renderInteraction({task,container,api,refresh}) {
   panel.append(heading,reason);container.append(panel);
   document.title='需要你协助 · OpenBot';
   const route=`tasks/${task.id}/interactions/${i.id}`;
+  if(i.kind==='private_input'){const manual=document.createElement('button');manual.type='button';manual.textContent='改为手动接管';manual.onclick=async()=>{manual.disabled=true;for(const input of panel.querySelectorAll('input'))input.value='';try{await api(route+'/takeover','POST',{});await refresh();}catch{status.textContent='接管请求未完成，请检查连接。';}finally{manual.disabled=false;}};panel.append(manual);}
   if(i.state==='applying') {status.textContent='输入已送达，结果尚不确定。请检查远端页面，勿重复填写。';panel.append(status);return;}
   const button=document.createElement('button');button.type='button';
   if(i.kind==='private_input') {

@@ -27,7 +27,7 @@ export class TaskEngine {
     if (task.status === 'queued') {
       const pending = this.store.save({ ...task, status: 'starting', error: undefined });
       try {
-        const conv = await this.client.createConversation({ goal: task.executionProfile === 'private_browser' ? PRIVATE_BROWSER_INSTRUCTIONS + '\n\nUser task: ' + task.goal : task.goal, conversationId: task.id, workspaceDir: this.config.workspaceDir, confirmationPolicy: 'AlwaysConfirm', ...(task.executionProfile === 'private_browser' ? { tools: [], mcpConfig: this.privateBrowsers!.prepare(task) } : this.config.browser ? { tools: [{ name: 'terminal' }, { name: 'file_editor' }, { name: 'task_tracker' }, { name: 'browser_tool_set', params: { cdp_url: this.config.browser.cdpUrl, headless: false } }] } : {}) }, this.config);
+        const conv = await this.client.createConversation({ goal: task.executionProfile === 'private_browser' ? PRIVATE_BROWSER_INSTRUCTIONS + '\n\nUser task: ' + task.goal : task.goal, conversationId: task.id, workspaceDir: this.config.workspaceDir, confirmationPolicy: 'AlwaysConfirm', ...(this.privateBrowsers ? { mcpConfig: this.privateBrowsers.prepare(task) } : {}), ...(task.executionProfile === 'private_browser' ? { tools: [] } : this.config.browser ? { tools: [{ name: 'terminal' }, { name: 'file_editor' }, { name: 'task_tracker' }, { name: 'browser_tool_set', params: { cdp_url: this.config.browser.cdpUrl, headless: false } }] } : {}) }, this.config);
         this.store.save({ ...pending, conversationId: conv.id, status: 'running' });
       } catch {
         // Creation may have succeeded despite a lost response. Never POST again.
@@ -67,6 +67,7 @@ export class TaskEngine {
         // Only show actual action records, never fabricate a command from the goal.
         pendingActions = status === 'waiting_approval' ? events.filter(e => e.kind === 'ActionEvent' && !observed.has(e.id)).slice(-10).map(e => ({ id: e.id, toolCallId: e.tool_call_id, tool: e.tool_name, action: e.action, summary: e.summary })) : undefined;
       }
+      if (this.privateBrowsers?.hasSession(task.id) && (status === 'failed' || (task.executionProfile === 'private_browser' && status === 'running' && Date.now()-Date.parse(task.updatedAt)>120000))) await this.privateBrowsers.call(task.id,'request_user_takeover',{reason:'执行遇到障碍或长时间没有进展，请检查远端页面并协助后继续。'});
       const latest = this.store.get(task.id);
       if (latest.interaction && latest.interaction.state !== 'completed') status = 'waiting_user';
       if (status !== latest.status || result !== latest.result || latest.error || JSON.stringify(pendingActions) !== JSON.stringify(latest.pendingActions)) this.store.save({ ...latest, status, result, pendingActions, error: undefined });

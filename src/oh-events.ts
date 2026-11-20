@@ -200,7 +200,7 @@ export function agentReplyText(items: unknown[]): string {
     const ev = normalizeOhEvent(item, 0);
     const kind = ev.kind.toLowerCase();
     const source = ev.source.toLowerCase();
-    if (source === "user" || source === "human") continue;
+    if (source === "user" || source === "human") { replies.length = 0; continue; }
     if (isStateKind(kind) || kind.includes("systemprompt") || kind.includes("condensation")) continue;
     if (kind.includes("observation") && isRecord(ev.raw.observation) && ev.raw.observation.kind === "FinishObservation") {
       const parts: string[] = []; collectContentParts(ev.raw.observation.content, parts);

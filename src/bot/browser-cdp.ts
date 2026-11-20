@@ -10,6 +10,9 @@ export class BrowserCDP {
   private context?: string;
   private elements = new Map<string, { session: string; context: number; index: number; origin: string }>();
   private secrets = new Set<string>();
+  private captureManual = false;
+  beginManualCapture() { this.captureManual = true; }
+  async endManualCapture() { if (this.session) await this.evaluate('void 0'); this.captureManual = false; }
   constructor(private endpoint: string) {}
   private async connect() {
     if (this.socket?.readyState === WebSocket.OPEN) return;
@@ -24,6 +27,10 @@ export class BrowserCDP {
     });
     socket.addEventListener('message', event => {
       const message = JSON.parse(String(event.data));
+      if (message.method === 'Runtime.bindingCalled' && message.params?.name === '__openbotPrivateInput') {
+        try { const value = JSON.parse(message.params.payload); if (this.captureManual && typeof value === 'string' && value.length && value.length <= 4096) this.secrets.add(value); } catch {}
+        return;
+      }
       const waiter = this.pending.get(message.id); if (!waiter) return;
       clearTimeout(waiter.timer); this.pending.delete(message.id);
       if (message.error) waiter.reject(new Error('Browser action failed')); else waiter.resolve(message.result);
@@ -43,6 +50,16 @@ export class BrowserCDP {
     this.target = (await this.call('Target.createTarget', { url: 'about:blank', browserContextId: this.context })).targetId;
     this.session = (await this.call('Target.attachToTarget', { targetId: this.target, flatten: true })).sessionId;
     await this.call('Page.enable', {}, this.session);
+    await this.protectManualInput(this.session!);
+  }
+  private async protectManualInput(session: string) {
+    await this.call('Runtime.enable', {}, session);
+    await this.call('Runtime.addBinding', { name: '__openbotPrivateInput', executionContextName: 'openbot-private' }, session);
+    await this.call('Page.addScriptToEvaluateOnNewDocument', { worldName: 'openbot-private', runImmediately: true, source: `(() => {
+      if(globalThis.__openbotInputProtected)return;globalThis.__openbotInputProtected=true;
+      const capture=e=>{const t=e.target;if(t&&(t.tagName==='TEXTAREA'||(t.tagName==='INPUT'&&!['checkbox','radio','button','submit','hidden'].includes(t.type)))){try{globalThis.__openbotPrivateInput(JSON.stringify(t.value));}catch{}}};
+      for(const event of ['input','change','focusout'])document.addEventListener(event,capture,true);
+    })()` }, session);
   }
   private async evaluate(expression: string, session = this.session!, contextId?: number): Promise<any> {
     const result = await this.call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true, ...(contextId ? { contextId } : {}) }, session);
@@ -63,7 +80,7 @@ export class BrowserCDP {
       let session = this.session!;
       try { const world = await this.call('Page.createIsolatedWorld', { frameId: node.frame.id, worldName: 'openbot-private' }, session); out.push({ session, context: world.executionContextId }); }
       catch {
-        try { session = (await this.call('Target.attachToTarget', { targetId: node.frame.id, flatten: true })).sessionId; const world = await this.call('Page.createIsolatedWorld', { frameId: node.frame.id, worldName: 'openbot-private' }, session); out.push({ session, context: world.executionContextId }); } catch { /* inaccessible frames are reported by missing elements, never guessed */ }
+        try { session = (await this.call('Target.attachToTarget', { targetId: node.frame.id, flatten: true })).sessionId; await this.protectManualInput(session); const world = await this.call('Page.createIsolatedWorld', { frameId: node.frame.id, worldName: 'openbot-private' }, session); out.push({ session, context: world.executionContextId }); } catch { /* inaccessible frames are reported by missing elements, never guessed */ }
       }
       for (const child of node.childFrames || []) await visit(child);
     };

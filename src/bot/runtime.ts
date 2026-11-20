@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { OpenHandsClient } from '../oh-client.js';
 import type { OpenHandsConfig } from '../types.js';
 import { TaskStore } from './store.js';
-import { PrivateBrowsers, PRIVATE_BROWSER_TOOLS } from './private-browser.js';
+import { PrivateBrowsers } from './private-browser.js';
 import { TaskEngine } from './engine.js';
 import { WorkspaceFiles } from './files.js';
 import { BotError } from './contracts.js';
@@ -29,7 +29,7 @@ export async function startBotRuntime(opts: { dataDir: string; token: string; po
         let result: unknown;
         if (b.method === 'initialize') result = { protocolVersion: '2025-03-26', capabilities: { tools: {} }, serverInfo: { name: 'openbot-private-browser', version: '1.0.0' } };
         else if (b.method === 'ping') result = {};
-        else if (b.method === 'tools/list') result = { tools: PRIVATE_BROWSER_TOOLS };
+        else if (b.method === 'tools/list') result = { tools: privateBrowsers.toolsFor(taskId) };
         else if (b.method === 'tools/call') result = { content: [{ type: 'text', text: JSON.stringify(await privateBrowsers.call(taskId,b.params?.name,b.params?.arguments || {})) }] };
         else { json(res,200,{jsonrpc:'2.0',id:b.id,error:{code:-32601,message:'Method not found'}});return; }
         json(res,200,{jsonrpc:'2.0',id:b.id,result});return;
@@ -50,12 +50,13 @@ export async function startBotRuntime(opts: { dataDir: string; token: string; po
         if (!Number.isSafeInteger(offset) || offset < 0) throw new BotError('Invalid offset');
         json(res, 200, { tasks: items.slice(offset, offset + 100), nextOffset: offset + 100 < items.length ? offset + 100 : null }); return;
       }
-      const interaction = url.pathname.match(/^\/v1\/tasks\/([a-f0-9-]+)\/interactions\/([a-f0-9-]+)\/(challenge|fill|complete|continue)$/);
+      const interaction = url.pathname.match(/^\/v1\/tasks\/([a-f0-9-]+)\/interactions\/([a-f0-9-]+)\/(challenge|fill|complete|continue|takeover)$/);
       if (interaction && req.method === 'POST') {
         const [,taskId,requestId,action] = interaction; const b = await body(req);
         if(action==='challenge')json(res,200,{challenge:privateBrowsers.challenge(taskId,requestId)});
         else if(action==='fill'){await privateBrowsers.fill(taskId,requestId,b.envelope);json(res,200,{task:await engine.continueInteraction(taskId,requestId)});}
-        else if(action==='complete'){privateBrowsers.completeTakeover(taskId,requestId);json(res,200,{task:await engine.continueInteraction(taskId,requestId)});}
+        else if(action==='takeover'){privateBrowsers.manualTakeover(taskId,requestId);json(res,200,{task:store.get(taskId)});}
+        else if(action==='complete'){await privateBrowsers.completeTakeover(taskId,requestId);json(res,200,{task:await engine.continueInteraction(taskId,requestId)});}
         else json(res,200,{task:await engine.continueInteraction(taskId,requestId)});
         return;
       }
