@@ -80,6 +80,7 @@ it('approval transition race: observer keeps following waiting state until remot
 });
 
 it('configured browser is passed to remote tool initialization with visible CDP session',async()=>{
+  const {TaskEngine}=await import('../src/bot/engine.js');
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot-browser-'));const store=new TaskStore(root);let input:any;
   const client:any={createConversation:async(value:any)=>{input=value;return{id:value.conversationId}}};
   const config:any={workspaceDir:root,browser:{cdpUrl:'http://127.0.0.1:9322'}};

@@ -400,7 +400,7 @@ describe("web → OpenHands (no worker)", () => {
     const port = plane.config.controlPlane.port;
     const html = await (await fetch(`http://127.0.0.1:${port}/`)).text();
     assert.match(html, /Settings/);
-    assert.match(html, /\/api\/chat/);
+    assert.match(html, /\/home-bot\.js/);
     assert.match(html, /\/api\/settings/);
     assert.match(html, /\/api\/desktop/);
     assert.match(html, /直接开始对话/);
