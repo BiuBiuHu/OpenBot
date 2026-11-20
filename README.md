@@ -7,7 +7,7 @@ OpenBot 是一个独立、自托管的个人 Agent 执行组件。你在聊天�
 保留独立 Web 测试入口，通过 API 为日历等应用提供执行能力。未来计划接入安派（Anpai）；代码和运行时始终独立，不需要把整个项目放进日历仓库。
 
 > **Alpha · MIT · 自带 Linux ECS 和模型服务**
-> 当前完整功能位于 `codex/byo-ecs-control` 分支。面向单用户、可信环境；尚未提供一键安装、多租户隔离或正式 npm 发布。
+> 面向单用户、可信环境。提供锁定版本的 OpenHands 自动安装；完整电脑环境的一键部署、多租户隔离与正式 npm 发布尚未提供。
 
 ## 看看它如何工作
 
@@ -56,26 +56,36 @@ OpenBot 是一个独立、自托管的个人 Agent 执行组件。你在聊天�
 ### 1. 准备环境
 
 - 本机：Node.js **22.19.0 或更高版本**、npm、Git、SSH。
-- ECS：可通过 SSH 连接的 Linux、Node.js，以及可用的 OpenHands Agent Server。现有联调使用 Ubuntu 24.04 / OpenHands Agent Server 1.49.2。
+- ECS：可通过 SSH 连接的 Linux、Node.js。执行引擎自动安装首版支持 Ubuntu 24.04 x86_64，需要 root 或免密 sudo、systemd 和至少 2 GiB 可用磁盘；安装后的服务以专用非 root 账户运行。
 - 模型：供远端 OpenHands 使用的模型配置与 API Key。
 - 网页任务：ECS 上的 Chromium 与仅监听回环地址的 CDP；查看和手动操作桌面另需 Xvnc / noVNC。
 
-本地启动不会自动安装远端 OpenHands、浏览器或桌面。当前需要手动部署这些依赖。
+OpenHands 可由 OpenBot 自动安装；Chromium、桌面和 Bot Runtime 目前仍需按后文单独准备。执行引擎就绪不代表所有电脑能力已经就绪。
 
 ### 2. 启动本地入口
 
 ```bash
-git clone --branch codex/byo-ecs-control https://github.com/BiuBiuHu/OpenBot.git
+git clone https://github.com/BiuBiuHu/OpenBot.git
 cd OpenBot
 npm ci
 npm run build
 
 # 替换为自己的主机、用户和私钥路径
 npm run openbot -- init --host YOUR_ECS_HOST --user ubuntu --port 22 --identity ~/.ssh/id_ed25519
+npm run openbot -- setup
 npm run dev -- --port 3857
 ```
 
 打开 [http://127.0.0.1:3857](http://127.0.0.1:3857)。主页面是任务入口，`/bot` 是诊断入口。SSH 配置保存在本机 `~/.openbot/`，不要提交到仓库。
+
+也可以在设置页保存 ECS 连接信息后，点击“安装 / 检查执行引擎”。安装器会自动：
+
+- 将 Agent Server、SDK、Tools 和 Workspace 固定为 **1.49.2**，使用完整版本及 SHA-256 依赖锁；不会跟随最新版升级。
+- 安装到 `/opt/openbot-engine`，创建 `openbot-engine` 非 root 服务账户，通过 systemd 启动并设置开机自启，只监听 `127.0.0.1:18000`。
+- 生成并保留会话凭据，安全保存本机连接配置；用户无需复制 OpenHands 密钥。
+- 检查重复安装；版本未变且服务正常时不重启、不重置凭据。升级启动失败会恢复上一版本。
+
+已有 OpenHands 不会被覆盖。如果端口冲突、系统不支持或下载失败，会报告失败，保留原连接配置。安装日志位于 ECS 的 `/opt/openbot-engine/install.log`，仅管理员可读。安装命令不会自动迁移或重启已有 Bot Runtime。
 
 ### 3. 部署远端执行服务
 
@@ -91,9 +101,9 @@ node scripts/build-bot.mjs HEAD
 
 ```bash
 export BOT_DATA_DIR="$HOME/.openbot-runtime"
-export BOT_WORKSPACE="$HOME/openbot-workspace"
+export BOT_WORKSPACE=/var/lib/openbot-engine/workspace
 export BOT_PORT=3850
-export OH_BASE_URL=http://127.0.0.1:8000
+export OH_BASE_URL=http://127.0.0.1:18000
 # 通过权限为 600 的环境文件设置以下值，不要写入仓库：
 # OH_SESSION_API_KEY、OH_LLM_MODEL、OH_LLM_API_KEY
 # 按模型服务需要设置 OH_LLM_BASE_URL
@@ -102,9 +112,11 @@ export OH_BASE_URL=http://127.0.0.1:8000
 node /path/to/unpacked-runtime/bot/main.js
 ```
 
-长期使用时，以 systemd 等服务管理器托管 OpenBot、OpenHands 和浏览器；前台启动仅用于调试，不能保证退出 SSH 后仍运行。首次启动会在 `BOT_DATA_DIR/service-token` 生成连接凭证。在本地页面的“执行服务连接设置”中配置远端端口和凭证，通过 SSH 隧道连接。
+托管 OpenHands 的凭据在 `/opt/openbot-engine/engine.env`（0600）。为 Bot Runtime 的 systemd 单元添加 `EnvironmentFile=/opt/openbot-engine/engine.env`，它会读取其中的 `OH_SESSION_API_KEYS_0`；另外配置远端模型。Bot Runtime 与 OpenHands 应使用可共同访问的工作区，例如上面的专用工作区，并以合适的服务账户运行。不要把凭据复制到聊天中。
 
-OpenHands 安装细节可参考[试装记录](docs/openbot-mvp/06-ops/openhands-agent-server-trial.md)。这份历史记录包含早期产品决策；当前任务入口与执行方式以本 README 和[当前架构](docs/byo-ecs-control/03-architecture/architecture.md)为准。
+长期使用时，以 systemd 等服务管理器托管 OpenBot 和浏览器；自动安装的 OpenHands 已由 systemd 管理。前台启动仅用于调试，不能保证退出 SSH 后仍运行。首次启动会在 `BOT_DATA_DIR/service-token` 生成连接凭证。在本地页面的“执行服务连接设置”中配置远端端口和凭证，通过 SSH 隧道连接。
+
+需要自行维护其他安装方式时，可参考[历史试装记录](docs/openbot-mvp/06-ops/openhands-agent-server-trial.md)。这份历史记录包含早期产品决策；当前任务入口与执行方式以本 README 和[当前架构](docs/byo-ecs-control/03-architecture/architecture.md)为准。
 
 ### 4. 交给它第一个任务
 
@@ -147,7 +159,8 @@ OpenHands 安装细节可参考[试装记录](docs/openbot-mvp/06-ops/openhands-
 ```bash
 npm ci
 npm run build
-npx tsx --test tests/private*.test.ts tests/bot*.test.ts tests/a2a-adapter*.test.ts tests/pi-kernel.test.ts
+npx tsx --test tests/private*.test.ts tests/bot*.test.ts tests/a2a-adapter*.test.ts tests/pi-kernel.test.ts tests/managed-openhands.test.ts
+python3 tests/managed_installer_test.py
 ```
 
 上述测试覆盖任务运行时、私密交互与相关适配层。真实 ECS、网站登录和远端桌面仍需要单独联调，单元测试不能替代。`npm test` 可运行仓库完整测试集，部分环境相关测试需具备相应依赖。

@@ -81,6 +81,7 @@ def install_locked(lock):
         run('apt-get', 'install', '-y', 'python3.12', 'python3.12-venv', 'ca-certificates')
     if subprocess.run(['id', '-u', USER], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
         run('useradd', '--system', '--create-home', '--home-dir', '/var/lib/openbot-engine', '--shell', '/bin/bash', USER)
+    run('install', '-d', '-o', USER, '-g', USER, '-m', '700', '/var/lib/openbot-engine/workspace')
     if not env_file.exists():
         fd = os.open(env_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, 'w') as f:
@@ -98,6 +99,7 @@ def install_locked(lock):
         run(str(release / 'bin/pip'), 'check')
         run(str(release / 'bin/python'), '-c', "from importlib.metadata import version; assert all(version(p)=='1.49.2' for p in ['openhands-agent-server','openhands-sdk','openhands-tools','openhands-workspace']); import openhands.agent_server")
         (release / 'ready').write_text(digest)
+    run(str(release / 'bin/python'), '-c', "from importlib.metadata import version; assert all(version(p)=='1.49.2' for p in ['openhands-agent-server','openhands-sdk','openhands-tools','openhands-workspace'])")
     if (release / 'ready').read_text() != digest:
         raise RuntimeError('依赖锁校验失败，未启动服务。')
     unit = f'''[Unit]
