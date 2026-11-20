@@ -104,7 +104,7 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
     if (task.status === 'queued' || task.status === 'waiting_approval') button('取消待执行任务', 'cancel');
     if (task.status === 'running' || (task.status === 'waiting_approval' && task.observationPolicy === 'autonomous')) button('暂停任务', 'pause');
     if (task.status === 'paused' && !task.error) button('继续任务', 'resume');
-    if (task.error || task.status === 'paused' || approvalSent) button('核对远端状态', 'refresh');
+    if (!['succeeded', 'failed', 'interrupted'].includes(task.status) && (task.error || task.status === 'paused' || approvalSent)) button('核对远端状态', 'refresh');
     if (task.status === 'succeeded') refreshDesktop();
   }
   async function refresh() {

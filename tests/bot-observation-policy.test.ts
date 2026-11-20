@@ -42,3 +42,7 @@ it('queue order survives filesystem reload even when UUID order differs',async()
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot-order-'));let store=new TaskStore(root);let creates=0;
  try{const base=task();store.save({...base,id:'ffffffff-ffff',requestId:'old',status:'paused',createdAt:'2026-01-01'});store.save({...base,id:'aaaaaaaa-aaaa',requestId:'new',status:'queued',createdAt:'2026-01-02'});store.close();store=new TaskStore(root);const engine=new TaskEngine(store,{createConversation:async()=>{creates++;return{id:'new'}}} as any,defaultConfig().openhands);await engine.tick();assert.equal(creates,0);}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
 });
+it('refresh cannot revive a cancelled task and block the queue again',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot-cancel-refresh-'));const store=new TaskStore(root);
+ try{let pauses=0;const t=store.create({requestId:'cancel-waiting',threadId:'t',goal:'read'});const waiting=store.save({...t,status:'waiting_approval'});const engine=new TaskEngine(store,{pauseConversation:async()=>{pauses++}} as any,defaultConfig().openhands);const cancelled=await engine.action(t.id,'cancel',waiting.revision);assert.equal(pauses,1);assert.equal((await engine.action(t.id,'refresh',cancelled.revision)).status,'interrupted');}finally{store.close();fs.rmSync(root,{recursive:true,force:true})}
+});

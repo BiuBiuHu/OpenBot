@@ -98,7 +98,7 @@ export class TaskEngine {
         if (task.status !== 'waiting_approval' || !task.pendingActions?.length || typeof accept !== 'boolean') throw new BotError('No matching approval', 409);
         return await this.approve(task, accept);
       }
-      if (action === 'refresh') { await this.observe(task); return this.store.get(id); }
+      if (action === 'refresh') { if (TERMINAL.has(task.status)) return task; await this.observe(task); return this.store.get(id); }
       if (action === 'pause' && ['running', 'waiting_approval'].includes(task.status)) {
         await this.client.pauseConversation(task.conversationId);
         await this.observe(task); return this.store.get(id);
