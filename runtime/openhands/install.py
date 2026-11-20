@@ -95,7 +95,15 @@ def install_locked(lock):
             shutil.rmtree(release)
         run('/usr/bin/python3.12', '-m', 'venv', str(release))
         (release / 'requirements.lock').write_text(lock)
-        run(str(release / 'bin/pip'), '--isolated', 'install', '--index-url', 'https://pypi.org/simple', '--retries', '2', '--timeout', '30', '--require-hashes', '-r', str(release / 'requirements.lock'))
+        # Both sources must satisfy the same version and SHA-256 lock. Never use host pip config.
+        for index in ['https://mirrors.aliyun.com/pypi/simple/', 'https://pypi.org/simple']:
+            try:
+                run(str(release / 'bin/pip'), '--isolated', 'install', '--index-url', index, '--retries', '1', '--timeout', '15', '--require-hashes', '-r', str(release / 'requirements.lock'))
+                break
+            except subprocess.CalledProcessError:
+                if index == 'https://pypi.org/simple':
+                    raise
+
         run(str(release / 'bin/pip'), 'check')
         run(str(release / 'bin/python'), '-c', "from importlib.metadata import version; assert all(version(p)=='1.49.2' for p in ['openhands-agent-server','openhands-sdk','openhands-tools','openhands-workspace']); import openhands.agent_server")
         (release / 'ready').write_text(digest)
