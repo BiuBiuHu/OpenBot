@@ -1,15 +1,16 @@
+import { renderInteraction } from './private-input.js';
 // The homepage is a client of the same versioned runtime as future host apps.
 // Never retry a mutation automatically; a submitted request keeps its id until acknowledged.
 export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
   const $ = id => document.getElementById(id);
-  const labels = { queued: '已接收 · 排队中', starting: '正在启动', running: '执行中', waiting_approval: '等待确认', paused: '已暂停', succeeded: '已完成', failed: '执行失败', interrupted: '需核对远端状态' };
+  const labels = { queued: '已接收 · 排队中', starting: '正在启动', running: '执行中', waiting_approval: '等待确认', paused: '已暂停', waiting_user: '需要你协助', succeeded: '已完成', failed: '执行失败', interrupted: '需核对远端状态' };
   let session = document.querySelector('meta[name="bot-session"]').content;
   let connected = false, connecting, polling = false, sending = false, nextReconnect = 0;
   let threadId = localStorage.getItem('openbot-home-thread');
   if (!threadId) { threadId = crypto.randomUUID(); localStorage.setItem('openbot-home-thread', threadId); }
   let pending;
   try { pending = JSON.parse(localStorage.getItem('openbot-home-pending') || 'null'); } catch { pending = null; }
-  if (pending) { $('box').value = pending.goal; }
+  if (pending) { $('box').value = pending.goal; $('execution-profile').value=pending.executionProfile||'computer'; }
   const cards = new Map();
   const deciding = new Set();
   function notice(text, ok = false) {
@@ -105,6 +106,7 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
     if (task.status === 'running' || (task.status === 'waiting_approval' && task.observationPolicy === 'autonomous')) button('暂停任务', 'pause');
     if (task.status === 'paused' && !task.error) button('继续任务', 'resume');
     if (!['succeeded', 'failed', 'interrupted'].includes(task.status) && (task.error || task.status === 'paused' || approvalSent)) button('核对远端状态', 'refresh');
+    if (task.status === 'waiting_user') renderInteraction({task,container:card.actions,api,refresh});
     if (task.status === 'succeeded') refreshDesktop();
   }
   async function refresh() {
@@ -117,6 +119,7 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
         all.push(...page.tasks); offset = page.nextOffset;
       } while (offset !== null && offset !== undefined);
       for (const task of all.reverse()) render(task);
+      if (!all.some(t=>t.status==='waiting_user')) document.title='OpenBot — your machine';
       if (pending && all.some(t => t.requestId === pending.requestId)) {
         if ($('box').value === pending.goal) $('box').value = '';
         pending = null; localStorage.removeItem('openbot-home-pending');
@@ -132,7 +135,7 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
       $('box').value = pending.goal;
       notice('上一条请求尚未确认，保留原请求重试可避免重复执行。'); return;
     }
-    pending ||= { requestId: crypto.randomUUID(), threadId, goal, observationPolicy, source: { kind: 'openbot-home' } };
+    pending ||= { requestId: crypto.randomUUID(), threadId, goal, observationPolicy, executionProfile: $('execution-profile').value, source: { kind: 'openbot-home' } };
     localStorage.setItem('openbot-home-pending', JSON.stringify(pending));
     sending = true; $('send').disabled = true;
     try {
@@ -142,6 +145,7 @@ export function createHomeBot({ add, renderMarkdown, refreshDesktop }) {
       $('log').scrollTop = $('log').scrollHeight;
     } catch (error) { disconnected(error); } finally { sending = false; $('send').disabled = false; }
   }
+  $('mail-test').onclick=()=>{ $('execution-profile').value='private_browser'; $('box').value='打开 https://mail.163.com/，通过私密输入工具请我填写账号和密码，登录后总结任务开始前最近 24 小时的收件箱邮件。请用 Asia/Shanghai 时间说明统计范围、已读取数量、主要内容与待办，明确任何未读取范围。只读邮件，不发送、删除或移动邮件。遇到验证码、扫码或无法继续时，立即请求我接管。任务开始时间：'+new Date().toISOString(); send(); };
   $('bot-reconnect').onclick = () => reconnect();
   $('home-connect-save').onclick = () => reconnect($('home-token').value.trim() ? { token: $('home-token').value.trim(), remotePort: Number($('home-port').value) } : undefined);
   $('home-browse').onsubmit = async e => {

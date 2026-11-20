@@ -2,6 +2,7 @@ import { OpenHandsClient, OpenHandsError } from '../oh-client.js';
 import { agentReplyText } from '../oh-events.js';
 import type { OpenHandsConfig } from '../types.js';
 import { BotError, TERMINAL, type BotTask } from './contracts.js';
+import { PrivateBrowsers, PRIVATE_BROWSER_INSTRUCTIONS } from './private-browser.js';
 import { TaskStore } from './store.js';
 
 /** Observer runs on ECS. Disconnecting a client never cancels the model loop. */
@@ -10,7 +11,7 @@ export class TaskEngine {
   private stopped = false;
   private ticking?: Promise<void>;
   private actions = new Set<string>();
-  constructor(readonly store: TaskStore, readonly client: OpenHandsClient, readonly config: OpenHandsConfig, readonly pollMs = 1000) {}
+  constructor(readonly store: TaskStore, readonly client: OpenHandsClient, readonly config: OpenHandsConfig, readonly pollMs = 1000, readonly privateBrowsers?: PrivateBrowsers) {}
   start() { this.schedule(0); }
   private schedule(delay: number) {
     if (this.stopped) return;
@@ -26,7 +27,7 @@ export class TaskEngine {
     if (task.status === 'queued') {
       const pending = this.store.save({ ...task, status: 'starting', error: undefined });
       try {
-        const conv = await this.client.createConversation({ goal: task.goal, conversationId: task.id, workspaceDir: this.config.workspaceDir, confirmationPolicy: 'AlwaysConfirm', ...(this.config.browser ? { tools: [{ name: 'terminal' }, { name: 'file_editor' }, { name: 'task_tracker' }, { name: 'browser_tool_set', params: { cdp_url: this.config.browser.cdpUrl, headless: false } }] } : {}) }, this.config);
+        const conv = await this.client.createConversation({ goal: task.executionProfile === 'private_browser' ? PRIVATE_BROWSER_INSTRUCTIONS + '\n\nUser task: ' + task.goal : task.goal, conversationId: task.id, workspaceDir: this.config.workspaceDir, confirmationPolicy: 'AlwaysConfirm', ...(task.executionProfile === 'private_browser' ? { tools: [], mcpConfig: this.privateBrowsers!.prepare(task) } : this.config.browser ? { tools: [{ name: 'terminal' }, { name: 'file_editor' }, { name: 'task_tracker' }, { name: 'browser_tool_set', params: { cdp_url: this.config.browser.cdpUrl, headless: false } }] } : {}) }, this.config);
         this.store.save({ ...pending, conversationId: conv.id, status: 'running' });
       } catch {
         // Creation may have succeeded despite a lost response. Never POST again.
@@ -34,7 +35,7 @@ export class TaskEngine {
       }
       return;
     }
-    if (task.status === 'paused') return;
+    if (task.status === 'paused' || task.status === 'waiting_user') return;
     await this.observe(task);
     const current = this.store.get(task.id);
     if (!this.actions.has(task.id) && canAutoObserve(current)) {
@@ -66,10 +67,13 @@ export class TaskEngine {
         // Only show actual action records, never fabricate a command from the goal.
         pendingActions = status === 'waiting_approval' ? events.filter(e => e.kind === 'ActionEvent' && !observed.has(e.id)).slice(-10).map(e => ({ id: e.id, toolCallId: e.tool_call_id, tool: e.tool_name, action: e.action, summary: e.summary })) : undefined;
       }
-      if (status !== task.status || result !== task.result || task.error || JSON.stringify(pendingActions) !== JSON.stringify(task.pendingActions)) this.store.save({ ...task, status, result, pendingActions, error: undefined });
+      const latest = this.store.get(task.id);
+      if (latest.interaction && latest.interaction.state !== 'completed') status = 'waiting_user';
+      if (status !== latest.status || result !== latest.result || latest.error || JSON.stringify(pendingActions) !== JSON.stringify(latest.pendingActions)) this.store.save({ ...latest, status, result, pendingActions, error: undefined });
     } catch (e) {
       const missing = e instanceof OpenHandsError && e.status === 404;
-      this.store.save({ ...task, status: missing ? 'interrupted' : task.status, error: missing ? 'Runtime conversation missing. Inspect remote side effects before creating a new task.' : 'Cannot reach execution service; task outcome is not yet known.' });
+      const latest = this.store.get(task.id);
+      this.store.save({ ...latest, status: missing ? 'interrupted' : latest.status, error: missing ? 'Runtime conversation missing. Inspect remote side effects before creating a new task.' : 'Cannot reach execution service; task outcome is not yet known.' });
     }
   }
   private async approve(task: BotTask, accept: boolean, automatic = false) {
@@ -77,12 +81,24 @@ export class TaskEngine {
     if (actionIds.some(id => !id || task.decidedActionIds?.includes(id))) throw new BotError('This action already has a recorded decision; reconcile remote state', 409);
     // Persist the decision before delivery. Unknown delivery stays paused, including
     // after restart; never replay an approval merely because observation was automatic.
-    const next = this.store.save({ ...task, status: 'paused',
+    this.store.save({ ...task, status: 'paused',
       decidedActionIds: [...(task.decidedActionIds || []), ...actionIds],
       ...(automatic ? { autoApprovedActionIds: [...(task.autoApprovedActionIds || []), ...actionIds] } : {}),
       error: 'Approval delivery pending; refresh to reconcile before retrying.' });
     await this.client.respondToConfirmation(task.conversationId, accept);
-    return this.store.save({ ...next, status: accept ? 'running' : 'paused', pendingActions: undefined, error: undefined });
+    const latest = this.store.get(task.id);
+    return this.store.save({ ...latest, status: latest.interaction && latest.interaction.state !== 'completed' ? 'waiting_user' : accept ? 'running' : 'paused', pendingActions: undefined, error: undefined });
+  }
+  async continueInteraction(id: string, requestId: string) {
+    if (this.actions.has(id)) throw new BotError('Task transition in progress', 409);
+    this.actions.add(id);
+    try {
+      await this.ticking; const task = this.store.get(id);
+      if (task.interaction?.id !== requestId || task.interaction.state !== 'completed' || task.status !== 'waiting_user') throw new BotError('Interaction is not ready', 409);
+      this.store.save({ ...task, status: 'paused', error: 'Continuation delivery pending; inspect before retrying.' });
+      await this.client.sendMessage(task.conversationId, 'The user completed the requested private input or takeover. No private values are provided. Observe the current page and continue the original task.', true);
+      return this.store.save({ ...this.store.get(id), status: 'running', error: undefined });
+    } finally { this.actions.delete(id); }
   }
   async action(id: string, action: string, revision: number, accept?: boolean) {
     if (this.actions.has(id)) throw new BotError('Action already in progress', 409);

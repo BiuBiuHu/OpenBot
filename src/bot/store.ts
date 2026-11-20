@@ -54,13 +54,14 @@ export class TaskStore {
       if (typeof input[key] !== 'string' || !input[key].trim() || input[key].length > (key === 'goal' ? 20000 : 128)) throw new BotError(`Invalid ${key}`);
     }
     if (input.source && (typeof input.source.kind !== 'string' || input.source.kind.length > 64 || (input.source.referenceId !== undefined && (typeof input.source.referenceId !== 'string' || input.source.referenceId.length > 256)))) throw new BotError('Invalid source');
+    if (input.executionProfile !== undefined && !['computer', 'private_browser'].includes(input.executionProfile)) throw new BotError('Invalid executionProfile');
     if (input.observationPolicy !== undefined && !['confirm_all', 'auto_browser_reads', 'autonomous'].includes(input.observationPolicy)) throw new BotError('Invalid observationPolicy');
     const prior = [...this.tasks.values()].find(t => t.requestId === input.requestId);
     if (prior) {
-      if ((prior.observationPolicy || 'confirm_all') !== (input.observationPolicy || 'autonomous') || prior.goal !== input.goal || prior.threadId !== input.threadId || JSON.stringify(prior.source) !== JSON.stringify(input.source)) throw new BotError('requestId already belongs to a different task', 409);
+      if ((prior.executionProfile || 'computer') !== (input.executionProfile || 'computer') || (prior.observationPolicy || 'confirm_all') !== (input.observationPolicy || 'autonomous') || prior.goal !== input.goal || prior.threadId !== input.threadId || JSON.stringify(prior.source) !== JSON.stringify(input.source)) throw new BotError('requestId already belongs to a different task', 409);
       return prior;
     }
     const id = randomUUID(), now = new Date().toISOString();
-    return this.save({ id, observationPolicy: input.observationPolicy || 'autonomous', requestId: input.requestId, threadId: input.threadId, goal: input.goal, source: input.source, status: 'queued', conversationId: id, revision: 0, createdAt: now, updatedAt: now });
+    return this.save({ id, executionProfile: input.executionProfile || 'computer', observationPolicy: input.observationPolicy || 'autonomous', requestId: input.requestId, threadId: input.threadId, goal: input.goal, source: input.source, status: 'queued', conversationId: id, revision: 0, createdAt: now, updatedAt: now });
   }
 }

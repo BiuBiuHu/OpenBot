@@ -128,9 +128,9 @@ export async function startControlPlane(
         res.end(fs.readFileSync(uiFile));
         return;
       }
-      if (req.method === "GET" && url.pathname === "/home-bot.js") {
+      if (req.method === "GET" && ["/home-bot.js", "/private-input.js"].includes(url.pathname)) {
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store" });
-        res.end(fs.readFileSync(path.join(repoRoot(), "src/ui/home-bot.js")));
+        res.end(fs.readFileSync(path.join(repoRoot(), "src/ui", url.pathname.slice(1))));
         return;
       }
       if (req.method === "GET" && url.pathname === "/chat-ui.js") {

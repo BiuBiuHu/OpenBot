@@ -485,7 +485,10 @@
       <div id="banner"></div>
       <section class="chat-col">
         <section id="log"></section>
-        <div style="padding:8px 20px;font:12px system-ui;color:var(--muted)">Agent 自主执行 · 可随时暂停</div>
+        <div style="padding:8px 20px;font:12px system-ui;color:var(--muted)">Agent 自主执行 · 可随时暂停
+          <label>任务方式 <select id="execution-profile"><option value="computer">电脑任务</option><option value="private_browser">私密网页任务</option></select></label>
+          <button id="mail-test" type="button">测试邮箱摘要</button>
+        </div>
         <footer>
           <textarea id="box" rows="2" placeholder="发给这台电脑，直接开始对话。"></textarea>
           <button id="send" type="button">发送</button>

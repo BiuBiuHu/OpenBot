@@ -55,6 +55,7 @@ export interface OhEventPage {
 
 export interface CreateConversationInput {
   goal: string;
+  mcpConfig?: Record<string, unknown>;
   confirmationPolicy?: "AlwaysConfirm" | "NeverConfirm";
   conversationId?: string;
   workspaceDir?: string;
@@ -281,6 +282,7 @@ export class OpenHandsClient {
         kind: "Agent",
         llm: buildAgentLlm(input, cfg),
         tools: input.tools || DEFAULT_TOOLS,
+        ...(input.mcpConfig ? { mcp_config: input.mcpConfig } : {}),
       },
       workspace: {
         kind: "LocalWorkspace",
