@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OpenBot — 本机试连远端</title>
+    <title data-i18n="OpenBot — 本机试连远端">OpenBot — 本机试连远端</title>
     <style>
       :root {
         --bg: #10140f;
@@ -82,41 +82,45 @@
       #log { min-height: 4rem; }
     </style>
   </head>
-  <body>
-    <h1><span id="lamp" class="lamp"></span>本机试连远端</h1>
+  <body><label class="ui-language"><span data-i18n="界面语言">Language</span> <select data-language-picker aria-label="Interface language" data-i18n-aria-label="界面语言"><option value="auto" data-i18n="跟随浏览器" data-i18n="Browser default">Browser default</option><option value="en">English</option><option value="zh-CN">简体中文</option></select></label>
+    <h1><span id="lamp" class="lamp"></span><span data-i18n="本机试连远端">本机试连远端</span></h1>
     <p class="sub">
-      在你的笔记本上测 OpenHands 隧道。密钥只放 <code>~/.openbot/.env</code>，本页不回显。
-      <a href="/">回会话台</a>
+      <span data-i18n="在你的笔记本上测 OpenHands 隧道。密钥只放">在你的笔记本上测 OpenHands 隧道。密钥只放</span> <code>~/.openbot/.env</code><span data-i18n="，本页不回显。">，本页不回显。</span>
+      <a href="/" data-i18n="回会话台">回会话台</a>
     </p>
 
     <section class="step">
-      <h2>1. 笔记本上先开隧道</h2>
-      <p>Agent Server 只听主机 <code>127.0.0.1:8000</code>。另开一个终端：</p>
+      <h2 data-i18n="1. 笔记本上先开隧道">1. 笔记本上先开隧道</h2>
+      <p><span data-i18n="Agent Server 只听主机">Agent Server 只听主机</span> <code>127.0.0.1:8000</code><span data-i18n="。另开一个终端：">。另开一个终端：</span></p>
       <pre>ssh -L 127.0.0.1:8000:127.0.0.1:8000 user@host</pre>
-      <p>然后本机应能 <code>curl -sS http://127.0.0.1:8000/health</code> 看到 <code>{"status":"ok"}</code>。</p>
-      <p><code>~/.openbot/.env</code> 至少：</p>
+      <p><span data-i18n="然后本机应能">然后本机应能</span> <code>curl -sS http://127.0.0.1:8000/health</code> <span data-i18n="看到">看到</span> <code>{"status":"ok"}</code><span data-i18n="。">。</span></p>
+      <p><code>~/.openbot/.env</code> <span data-i18n="至少：">至少：</span></p>
       <pre>OH_BASE_URL=http://127.0.0.1:8000
 OH_SESSION_API_KEY=&lt;session-key-from-host-env&gt;</pre>
-      <p>也可写入 gitignore 的 <code>.env</code> / <code>~/.openbot/.env</code>。远端模型用主机已配的 BYOK；不要把本机 <code>OPENAI_MODEL</code> 当远端。不要把 PEM 或 key 贴进聊天。</p>
+      <p><span data-i18n="也可写入 gitignore 的">也可写入 gitignore 的</span> <code>.env</code> / <code>~/.openbot/.env</code><span data-i18n="。远端模型用主机已配的 BYOK；不要把本机">。远端模型用主机已配的 BYOK；不要把本机</span> <code>OPENAI_MODEL</code> <span data-i18n="当远端。不要把 PEM 或 key 贴进聊天。">当远端。不要把 PEM 或 key 贴进聊天。</span></p>
     </section>
 
     <section class="step">
-      <h2>2. 探活（经本机壳，避免浏览器直打 8000 的 CORS）</h2>
-      <p id="probeLine">还没探。</p>
-      <button id="probe" type="button" class="yes">探活 OpenHands</button>
+      <h2 data-i18n="2. 探活（经本机壳，避免浏览器直打 8000 的 CORS）">2. 探活（经本机壳，避免浏览器直打 8000 的 CORS）</h2>
+      <p id="probeLine" data-i18n="还没探。">还没探。</p>
+      <button id="probe" type="button" class="yes" data-i18n="探活 OpenHands">探活 OpenHands</button>
       <pre id="probeJson">{}</pre>
     </section>
 
     <section class="step">
-      <h2>3. 确认后发一条测试 goal</h2>
-      <label for="goal">发给这台电脑（确认后才创建 OH conversation）</label>
-      <textarea id="goal" rows="3">在工作区写一份 uname 记录，用一两句话说明内核。</textarea>
-      <button id="send" type="button" class="yes">我确认，发给远端</button>
+      <h2 data-i18n="3. 确认后发一条测试 goal">3. 确认后发一条测试 goal</h2>
+      <label for="goal" data-i18n="发给这台电脑（确认后才创建 OH conversation）">发给这台电脑（确认后才创建 OH conversation）</label>
+      <textarea id="goal" rows="3" data-default-goal="在工作区写一份 uname 记录，用一两句话说明内核。">在工作区写一份 uname 记录，用一两句话说明内核。</textarea>
+      <button id="send" type="button" class="yes" data-i18n="我确认，发给远端">我确认，发给远端</button>
       <p id="sendLine"></p>
       <pre id="log"></pre>
     </section>
 
-    <script>
+    <script type="module">
+import { t, setText, uiText, initI18n } from '/i18n.js';
+initI18n();
+const initialGoal = document.querySelector('[data-default-goal]'); if (initialGoal) initialGoal.value = t(initialGoal.dataset.defaultGoal);
+
       const lamp = document.getElementById("lamp");
       const probeLine = document.getElementById("probeLine");
       const probeJson = document.getElementById("probeJson");
@@ -128,25 +132,20 @@ OH_SESSION_API_KEY=&lt;session-key-from-host-env&gt;</pre>
       }
 
       async function probe() {
-        probeLine.textContent = "探活中…";
+        setText(probeLine, () => t("探活中…"));
         try {
           const res = await fetch("/api/oh/health");
           const data = await res.json();
           show(probeJson, data);
           lamp.classList.toggle("ok", !!data.ok);
-          if (data.ok) {
-            probeLine.innerHTML =
-              '<span class="ok">通了</span> ' +
-              escapeHtml(data.baseUrl || "") +
-              (data.hasSessionKey ? " · session key 已配置" : " · 还没配 OH_SESSION_API_KEY");
-          } else {
-            probeLine.innerHTML =
-              '<span class="err">不通</span> ' +
-              escapeHtml(data.hint || data.error || "隧道或 key 有问题");
-          }
+          probeLine.className = data.ok ? 'ok' : 'err';
+          setText(probeLine, () => data.ok
+            ? t('通了') + ' ' + (data.baseUrl || '') + (data.hasSessionKey ? t(' · session key 已配置') : t(' · 还没配 OH_SESSION_API_KEY'))
+            : t('不通') + ' ' + t(data.hint || data.error || '隧道或 key 有问题'));
         } catch (err) {
           lamp.classList.remove("ok");
-          probeLine.innerHTML = '<span class="err">' + escapeHtml(String(err)) + "</span>";
+          probeLine.className = 'err';
+          uiText(probeLine, String(err));
           show(probeJson, { error: String(err) });
         }
       }
@@ -154,10 +153,10 @@ OH_SESSION_API_KEY=&lt;session-key-from-host-env&gt;</pre>
       async function send() {
         const goal = document.getElementById("goal").value.trim();
         if (!goal) {
-          sendLine.innerHTML = '<span class="err">先写 goal</span>';
+          uiText(sendLine, '先写 goal');
           return;
         }
-        sendLine.textContent = "已确认，正在创建 conversation…";
+        setText(sendLine, () => t("已确认，正在创建 conversation…"));
         show(logEl, "");
         try {
           const created = await (
@@ -168,12 +167,12 @@ OH_SESSION_API_KEY=&lt;session-key-from-host-env&gt;</pre>
             })
           ).json();
           if (!created.ok) {
-            sendLine.innerHTML = '<span class="err">' + escapeHtml(created.error || "handoff failed") + "</span>";
+            uiText(sendLine, created.error || 'handoff failed');
             show(logEl, created);
             return;
           }
           const id = created.conversation && created.conversation.id;
-          sendLine.textContent = "conversation " + (id || "?") + " · 轮询中";
+          setText(sendLine, () => "conversation " + (id || "?") + t(" · 轮询中"));
           show(logEl, created);
           if (!id) return;
           const deadline = Date.now() + 60_000;
@@ -183,15 +182,15 @@ OH_SESSION_API_KEY=&lt;session-key-from-host-env&gt;</pre>
             last = snap;
             show(logEl, snap);
             const st = (snap.conversation && (snap.conversation.execution_status || snap.conversation.status)) || "";
-            sendLine.textContent = "conversation " + id + " · " + st;
+            setText(sendLine, () => "conversation " + id + " · " + st);
             if (/finished|succeeded|error|failed|stuck|cancelled/.test(String(st))) break;
             await new Promise((r) => setTimeout(r, 400));
           }
           if (last && last.snippet) {
-            sendLine.textContent += " · 有 snippet";
+            const currentStatus = sendLine.textContent; setText(sendLine, () => currentStatus + t(" · 有 snippet"));
           }
         } catch (err) {
-          sendLine.innerHTML = '<span class="err">' + escapeHtml(String(err)) + "</span>";
+          uiText(sendLine, String(err));
         }
       }
 

@@ -1,3 +1,4 @@
+import { t, clearBindings, setText, uiText, textNode, setAttr } from './i18n.js';
 // This module never puts values in chat, localStorage, URLs or tool messages.
 export async function sealPrivateInput(challenge, values, publicValues) {
   if(publicValues && !Object.keys(publicValues).length)publicValues=undefined;
@@ -22,7 +23,7 @@ function icon(name) {
   const node=document.createElement('span');node.className='hi-icon';node.setAttribute('aria-hidden','true');
   node.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${icons[name]}</svg>`;return node;
 }
-function element(tag,className,text) {const node=document.createElement(tag);node.className=className;if(text!==undefined)node.textContent=text;return node;}
+function element(tag,className,text) {const node=document.createElement(tag);node.className=className;if(text!==undefined){if(className==='hi-reason'||className==='hi-origin'||tag==='label')node.textContent=text;else uiText(node,text);}return node;}
 function interactionStyles() {
   if(document.getElementById('private-interaction-styles'))return;
   const style=document.createElement('style');style.id='private-interaction-styles';style.textContent=`
@@ -56,37 +57,37 @@ export function renderInteraction({task,container,api,refresh}) {
   const i=task.interaction;if(!i||i.state==='completed')return;
   interactionStyles();
   const privateInput=i.kind==='private_input';
-  const panel=element('section','human-interaction');panel.setAttribute('role','region');panel.setAttribute('aria-label',privateInput?'填写登录与私密信息':'需要你接管');
+  const panel=element('section','human-interaction');panel.setAttribute('role','region');setAttr(panel,'aria-label',()=>privateInput?t('填写登录与私密信息'):t('需要你接管'));
   const header=element('div','hi-header'),emblem=element('span','hi-emblem');emblem.append(icon(privateInput?'lock':'hand'));
-  const titles=element('div','hi-titles');titles.append(element('p','hi-eyebrow','等待你的协助'),element('h3','hi-title',privateInput?'填写信息，继续任务':'请接管远端页面'));header.append(emblem,titles);
+  const titles=element('div','hi-titles');titles.append(element('p','hi-eyebrow',t('等待你的协助')),element('h3','hi-title',privateInput?t('填写信息，继续任务'):t('请接管远端页面')));header.append(emblem,titles);
   panel.append(header,element('p','hi-reason',i.reason));container.append(panel);
-  document.title='需要你协助 · OpenBot';
+  uiText(document.querySelector('title'), '需要你协助 · OpenBot');
   const route=`tasks/${task.id}/interactions/${i.id}`;
   const status=element('p','hi-status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.hidden=true;
-  const message=(text,tone='info')=>{status.hidden=!text;status.textContent=text;status.dataset.tone=tone;};
+  const message=(text,tone='info')=>{status.hidden=!text;uiText(status,text);status.dataset.tone=tone;};
   let busy=false,uncertain=false,finished=false;
   const setBusy=(value)=>{busy=value;panel.setAttribute('aria-busy',String(value));for(const control of panel.querySelectorAll('input,button'))control.disabled=value;};
   const primary=element('button','hi-primary');primary.type='button';
-  const progress=(text)=>{primary.replaceChildren();const spinner=element('span','hi-spinner');spinner.setAttribute('aria-hidden','true');primary.append(spinner,document.createTextNode(text));};
-  const check=element('button','hi-secondary','核对任务状态');check.type='button';check.hidden=true;
-  check.onclick=async()=>{if(busy)return;setBusy(true);try{await refresh();message('请查看远端页面与任务状态；确认结果前不要重复填写。','warning');}catch{message('暂时无法连接，请稍后核对任务状态。','warning');}finally{setBusy(false);if(uncertain)primary.disabled=true;}};
+  const progress=(text)=>{clearBindings(primary);primary.replaceChildren();const spinner=element('span','hi-spinner');spinner.setAttribute('aria-hidden','true');primary.append(spinner,textNode(text));};
+  const check=element('button','hi-secondary',t('核对任务状态'));check.type='button';check.hidden=true;
+  check.onclick=async()=>{if(busy)return;setBusy(true);try{await refresh();message(t('请查看远端页面与任务状态；确认结果前不要重复填写。'),'warning');}catch{message(t('暂时无法连接，请稍后核对任务状态。'),'warning');}finally{setBusy(false);if(uncertain)primary.disabled=true;}};
   const footer=element('div','hi-footer');
-  const manual=element('button','hi-secondary','手动接管');manual.type='button';
+  const manual=element('button','hi-secondary',t('手动接管'));manual.type='button';
   let clearSecrets=()=>{};
   manual.onclick=async()=>{
-    if(busy||finished)return;clearSecrets();setBusy(true);message('正在切换为手动接管…');
-    try{await api(route+'/takeover','POST',{});message('已交给你操作，请在远端页面完成后继续。');await refresh();}
-    catch{message('接管状态尚未确认，请先核对任务状态。','warning');check.hidden=false;}
+    if(busy||finished)return;clearSecrets();setBusy(true);message(t('正在切换为手动接管…'));
+    try{await api(route+'/takeover','POST',{});message(t('已交给你操作，请在远端页面完成后继续。'));await refresh();}
+    catch{message(t('接管状态尚未确认，请先核对任务状态。'),'warning');check.hidden=false;}
     finally{setBusy(false);if(uncertain)primary.disabled=true;}
   };
-  if(privateInput && i.origin){const target=element('div','hi-site');target.append(element('span','hi-site-label','填写到此网站'),element('span','hi-origin',i.origin));panel.append(target);}
+  if(privateInput && i.origin){const target=element('div','hi-site');target.append(element('span','hi-site-label',t('填写到此网站')),element('span','hi-origin',i.origin));panel.append(target);}
   if(i.state==='applying'){
-    uncertain=true;message('信息已送达，填写结果尚未确认。请检查远端页面，避免重复提交。','warning');check.hidden=false;footer.append(check,manual);panel.append(status,footer);return;
+    uncertain=true;message(t('信息已送达，填写结果尚未确认。请检查远端页面，避免重复提交。'),'warning');check.hidden=false;footer.append(check,manual);panel.append(status,footer);return;
   }
   if(!privateInput){
-    panel.append(element('p','hi-takeover-hint','请在远端电脑中完成所需操作。你操作期间，Agent 会等待，不会抢回控制。'));
-    primary.textContent='我已完成，继续任务';
-    primary.onclick=async()=>{if(busy||uncertain||finished)return;setBusy(true);progress('正在恢复任务…');message('正在通知 Agent 继续。');try{await api(route+'/complete','POST',{});finished=true;busy=false;panel.setAttribute('aria-busy','false');primary.textContent='已继续';message('Agent 已恢复执行。');try{await refresh();}catch{message('任务已继续，状态暂时无法刷新。');}}catch{uncertain=true;primary.textContent='等待核对';check.hidden=false;message('恢复结果尚未确认，请先核对任务状态。','warning');setBusy(false);primary.disabled=true;}};
+    panel.append(element('p','hi-takeover-hint',t('请在远端电脑中完成所需操作。你操作期间，Agent 会等待，不会抢回控制。')));
+    setText(primary, () => t('我已完成，继续任务'));
+    primary.onclick=async()=>{if(busy||uncertain||finished)return;setBusy(true);progress(t('正在恢复任务…'));message(t('正在通知 Agent 继续。'));try{await api(route+'/complete','POST',{});finished=true;busy=false;panel.setAttribute('aria-busy','false');setText(primary, () => t('已继续'));message(t('Agent 已恢复执行。'));try{await refresh();}catch{message(t('任务已继续，状态暂时无法刷新。'));}}catch{uncertain=true;setText(primary, () => t('等待核对'));check.hidden=false;message(t('恢复结果尚未确认，请先核对任务状态。'),'warning');setBusy(false);primary.disabled=true;}};
     panel.append(primary,status,check);return;
   }
   const form=element('form','hi-form');form.autocomplete='off';form.noValidate=true;
@@ -95,37 +96,37 @@ export function renderInteraction({task,container,api,refresh}) {
     const secret=field.sensitive!==false,group=element('div','hi-field'),row=element('div','hi-label-row');
     const input=element('input',secret?'hi-secret':'hi-public');input.id=`private-${i.id}-${field.id}`;input.type=secret?'password':'text';input.autocomplete='off';input.required=true;input.maxLength=4096;input.spellcheck=false;input.setAttribute('autocapitalize','none');input.setAttribute('aria-label',field.label);input.dataset.privateInput=String(secret);
     const label=element('label','',field.label);label.htmlFor=input.id;row.append(label);
-    if(secret){const badge=element('span','hi-badge');badge.append(icon('lock'),document.createTextNode('加密提交'));row.append(badge);}
+    if(secret){const badge=element('span','hi-badge');badge.append(icon('lock'),textNode(t('加密提交')));row.append(badge);}
     const wrap=element('div','hi-input-wrap');wrap.append(input);
-    const error=element('p','hi-field-error','请填写'+field.label);error.id=input.id+'-error';error.hidden=true;input.setAttribute('aria-describedby',error.id);
+    const error=element('p','hi-field-error',t('请填写')+field.label);setText(error,()=>t('请填写')+field.label);error.id=input.id+'-error';error.hidden=true;input.setAttribute('aria-describedby',error.id);
     const setInvalid=value=>{input.setAttribute('aria-invalid',String(value));error.hidden=!value;};input.oninput=()=>{if(input.value.length)setInvalid(false);};
     let hide=()=>{};
     if(secret){const toggle=element('button','hi-toggle');toggle.type='button';toggle.setAttribute('aria-controls',input.id);
-      const show=value=>{input.type=value?'text':'password';toggle.replaceChildren(icon(value?'hidden':'eye'),document.createTextNode(value?'隐藏':'显示'));toggle.setAttribute('aria-label',(value?'隐藏':'显示')+field.label);toggle.setAttribute('aria-pressed',String(value));};hide=()=>show(false);hide();toggle.onclick=()=>show(input.type==='password');wrap.append(toggle);
+      const show=value=>{input.type=value?'text':'password';toggle.replaceChildren(icon(value?'hidden':'eye'),textNode(value?t('隐藏'):t('显示')));setAttr(toggle,'aria-label',()=>(value?t('隐藏'):t('显示'))+field.label);toggle.setAttribute('aria-pressed',String(value));};hide=()=>show(false);hide();toggle.onclick=()=>show(input.type==='password');wrap.append(toggle);
     }
     group.append(row,wrap,error);form.append(group);fields.push({field,input,secret,hide,setInvalid});
   }
   clearSecrets=()=>{for(const f of fields)if(f.secret){f.input.value='';f.hide();}};
   const clearAll=()=>{for(const f of fields){f.input.value='';f.hide();}};
-  const note=element('p','hi-note');note.append(icon('lock'),document.createTextNode('密码仅用于远端填写，不会发送给模型。账号以普通信息提交。'));
-  primary.type='submit';primary.textContent='填写并继续';form.append(note,primary,status);
-  footer.append(element('span','','想自己操作？'),manual,check);form.append(footer);panel.append(form);
+  const note=element('p','hi-note');note.append(icon('lock'),textNode(t('密码仅用于远端填写，不会发送给模型。账号以普通信息提交。')));
+  primary.type='submit';setText(primary, () => t('填写并继续'));form.append(note,primary,status);
+  footer.append(element('span','',t('想自己操作？')),manual,check);form.append(footer);panel.append(form);
   form.onsubmit=async event=>{
     event.preventDefault();if(busy||uncertain||finished)return;
     const invalid=fields.filter(f=>!f.input.value.length);for(const f of fields)f.setInvalid(!f.input.value.length);
     if(invalid.length){invalid[0].input.focus();return;}
     const values=Object.fromEntries(fields.map(f=>[f.field.id,f.input.value]));let dispatched=false;
-    setBusy(true);message('正在保护密码并准备填写。');progress('正在加密…');
+    setBusy(true);message(t('正在保护密码并准备填写。'));progress(t('正在加密…'));
     try{
       const {challenge}=await api(route+'/challenge','POST',{});const publicValues={},secrets={};
       for(const f of fields)(f.secret?secrets:publicValues)[f.field.id]=values[f.field.id];
       const envelope=await sealPrivateInput(challenge,secrets,publicValues);for(const key of Object.keys(secrets))secrets[key]='';clearSecrets();
-      progress('正在填写…');message('正在将信息填写到远端页面，请稍候。');dispatched=true;
-      await api(route+'/fill','POST',{envelope});clearAll();finished=true;busy=false;panel.setAttribute('aria-busy','false');primary.textContent='已填写，正在继续';message('信息已填写，Agent 正在继续任务。');try{await refresh();}catch{message('信息已填写，任务状态暂时无法刷新。');}
+      progress(t('正在填写…'));message(t('正在将信息填写到远端页面，请稍候。'));dispatched=true;
+      await api(route+'/fill','POST',{envelope});clearAll();finished=true;busy=false;panel.setAttribute('aria-busy','false');setText(primary, () => t('已填写，正在继续'));message(t('信息已填写，Agent 正在继续任务。'));try{await refresh();}catch{message(t('信息已填写，任务状态暂时无法刷新。'));}
     }catch(error){
       clearSecrets();setBusy(false);
-      if(dispatched||error.status===409){uncertain=true;primary.textContent='等待核对填写结果';primary.disabled=true;check.hidden=false;message('填写结果尚未确认。请检查远端页面，避免重复提交。','warning');}
-      else{primary.textContent='重新填写并继续';message('暂未提交成功。账号已保留，请重新填写密码后重试。','error');const first=fields.find(f=>f.secret);first?.input.focus();}
+      if(dispatched||error.status===409){uncertain=true;setText(primary, () => t('等待核对填写结果'));primary.disabled=true;check.hidden=false;message(t('填写结果尚未确认。请检查远端页面，避免重复提交。'),'warning');}
+      else{setText(primary, () => t('重新填写并继续'));message(t('暂未提交成功。账号已保留，请重新填写密码后重试。'),'error');const first=fields.find(f=>f.secret);first?.input.focus();}
       // Observe only: an unknown fill outcome must never trigger an automatic retry.
       try{await refresh();}catch{}
     }finally{for(const key of Object.keys(values))values[key]='';}
