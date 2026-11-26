@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="OpenBot">
+  <rect width="32" height="32" rx="8" fill="#10140f"/>
+  <circle cx="16" cy="16" r="11" fill="#b6e36a"/>
+  <circle cx="12.2" cy="14.2" r="1.8" fill="#10140f"/>
+  <circle cx="19.8" cy="14.2" r="1.8" fill="#10140f"/>
+</svg>
