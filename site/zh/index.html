@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenBot — 让你自己的 ECS，成为 Personal Agent 的手和脚</title>
+  <meta name="description" content="OpenBot 是 Alpha、MIT 许可的自托管 Agent 运行时。用一句话交代任务，让 Agent 在你自己的 Linux ECS 上操作浏览器、读写文件并带回结果。">
+  <link rel="canonical" href="https://biubiuhu.github.io/OpenBot/zh/">
+  <link rel="alternate" hreflang="en" href="https://biubiuhu.github.io/OpenBot/">
+  <link rel="alternate" hreflang="zh-Hans" href="https://biubiuhu.github.io/OpenBot/zh/">
+  <link rel="alternate" hreflang="x-default" href="https://biubiuhu.github.io/OpenBot/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="OpenBot">
+  <meta property="og:description" content="让你自己的 ECS，成为 Personal Agent 的手和脚。Alpha · MIT · 自托管。">
+  <meta property="og:url" content="https://biubiuhu.github.io/OpenBot/zh/">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta name="theme-color" content="#10140f">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">跳到正文</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="wordmark" href="./">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8" fill="#10140f"/>
+          <circle cx="16" cy="16" r="11" fill="#b6e36a"/>
+          <circle cx="12.2" cy="14.2" r="1.8" fill="#10140f"/>
+          <circle cx="19.8" cy="14.2" r="1.8" fill="#10140f"/>
+        </svg>
+        OpenBot
+      </a>
+      <nav class="site-nav" aria-label="页面章节">
+        <a href="#today">当前能力</a>
+        <a href="#help">需要协助时</a>
+        <a href="#start">开始安装</a>
+        <a href="#limits">边界</a>
+      </nav>
+      <nav class="lang-switch" aria-label="语言">
+        <a href="../" lang="en">English</a>
+        <a href="./" lang="zh-Hans" aria-current="page">中文</a>
+      </nav>
+      <a class="header-github" href="https://github.com/BiuBiuHu/OpenBot">GitHub</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap hero-grid">
+        <div>
+          <p class="kicker">Personal Agent 运行时</p>
+          <h1 id="hero-title">让你自己的 ECS，成为 Personal Agent 的<span class="nowrap">手和脚。</span></h1>
+          <p class="lede">用一句话交代任务，让 Agent 在你自己的 Linux ECS 上操作浏览器、读写文件并带回结果。你可以看到远端电脑，也可以随时<span class="nowrap">接管。</span></p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#start">开始安装</a>
+            <a class="btn btn-ghost" href="https://github.com/BiuBiuHu/OpenBot">打开 GitHub</a>
+          </div>
+          <div class="hero-meta">
+            <span class="chip">Alpha</span>
+            <span class="chip">MIT</span>
+            <span class="chip">自托管</span>
+          </div>
+        </div>
+        <aside class="honesty" aria-label="Alpha 说明">
+          <h2>Alpha，跑在你自己的机器上</h2>
+          <ul>
+            <li><strong>自带服务器</strong><span>自带 Linux ECS 和模型服务。OpenBot 不是<span class="nowrap">托管云端 Agent</span>。</span></li>
+            <li><strong>单用户</strong><span>当前面向单用户、可信环境。</span></li>
+            <li><strong>只走回环</strong><span>内部端口只监听 ECS 回环地址，通过 SSH 隧道访问。不要把这些端口开放到公网。</span></li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <section class="evidence" aria-labelledby="evidence-title">
+      <div class="wrap">
+        <figure class="shot">
+          <img src="../assets/screenshots/computer-use-completed.png" alt="OpenBot 实际界面：左侧聊天返回执行结果，右侧远端浏览器显示已完成的测试订单">
+          <figcaption>
+            <strong id="evidence-title">上图是实际联调画面</strong>
+            Agent 读取模拟邮件 → 打开模拟商店 → 选择两本笔记本 → 提交测试订单 → 返回订单结果。全程使用演示数据，没有真实购买或扣费。
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="today" id="today" aria-labelledby="today-title">
+      <div class="wrap">
+        <div class="section-head">
+          <h2 id="today-title">当前能做什么</h2>
+          <p>以下均来自仓库 README 中已交付的能力。计划中的事项单独列出。</p>
+        </div>
+        <div class="cards four">
+          <article class="card">
+            <h3>连接自己的 ECS</h3>
+            <p>SSH 连接与隧道，本地 Web 控制入口。</p>
+          </article>
+          <article class="card">
+            <h3>命令与文件</h3>
+            <p>Agent 执行命令、读写文件；界面浏览工作区文件。</p>
+          </article>
+          <article class="card">
+            <h3>异步任务</h3>
+            <p>远端保存任务、事件和结果；关闭本地页面后普通任务仍可执行。</p>
+          </article>
+          <article class="card">
+            <h3>断线恢复</h3>
+            <p>重连同一远端实例，恢复任务状态和事件；避免重复提交。</p>
+          </article>
+          <article class="card">
+            <h3>浏览器操作</h3>
+            <p>基于 OpenHands 与 Chromium 的网页操作；可配置远端桌面供用户查看和接管。</p>
+          </article>
+          <article class="card">
+            <h3>私密填写</h3>
+            <p>账号可公开传递，密码加密直达执行端。</p>
+          </article>
+          <article class="card">
+            <h3>人工协助</h3>
+            <p>登录验证、页面停滞或无法继续时请求接管，协助后继续原任务。</p>
+          </article>
+          <article class="card">
+            <h3>自主执行</h3>
+            <p>默认不逐步审批；用户可以暂停任务。</p>
+          </article>
+        </div>
+        <div class="limit-note">
+          <p>网页操作主要使用页面元素与 CDP，并非覆盖所有 Linux 桌面应用的像素级 computer-use。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="help" id="help" aria-labelledby="help-title">
+      <div class="wrap">
+        <div class="section-head">
+          <h2 id="help-title">需要你时，再请你帮忙</h2>
+          <p>任务在远端异步执行。遇到登录、验证码或无法继续的步骤，Agent 会请求协助；你可以填写信息或接管电脑，然后继续任务。</p>
+        </div>
+        <div class="shot-grid">
+          <figure class="shot">
+            <img src="../assets/screenshots/input-polish-desktop.png" alt="桌面端私密填写卡片：账号、密码显示隐藏、加密提交和手动接管">
+            <figcaption>
+              <strong>私密填写：密码直达执行端</strong>
+              账号正常传递；密码先加密，再由远端解密填入网页，不进入聊天或模型工具参数。
+            </figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="../assets/screenshots/input-polish-mobile.png" alt="手机端私密填写界面">
+            <figcaption>
+              <strong>手机端：也能协助任务</strong>
+              无需回到电脑前，在手机上填写信息或进入接管流程。
+            </figcaption>
+          </figure>
+        </div>
+        <p class="caption-note">以上为空白演示表单，不含真实账号或密码。</p>
+        <figure class="shot shot-follow">
+          <img src="../assets/screenshots/full-stack-completed.png" alt="完整 ECS 环境实测：文件任务完成，远端浏览器打开 Example Domain">
+          <figcaption>
+            <strong>新初始化的 ECS：文件读写与网页任务</strong>
+            下面是独立测试环境的真实记录，包含文件写入读回、网页读取和可视桌面。画面上方保留了首次失败任务的历史提示；修复后下方任务已完成。
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="start" id="start" aria-labelledby="start-title">
+      <div class="wrap">
+        <div class="section-head">
+          <h2 id="start-title">开始安装</h2>
+          <p>克隆仓库、在本机安装，再通过 SSH 连接并初始化远端电脑。完整步骤、排错和要求见 README。</p>
+        </div>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span>本机启动</span>
+            <button class="copy" type="button" data-copy="git clone https://github.com/BiuBiuHu/OpenBot.git
+cd OpenBot
+npm ci
+npm run build
+npm run dev -- --port 3857">复制</button>
+          </div>
+          <pre><code>git clone https://github.com/BiuBiuHu/OpenBot.git
+cd OpenBot
+npm ci
+npm run build
+npm run dev -- --port 3857</code></pre>
+        </div>
+        <div class="start-steps">
+          <article class="note">
+            <h3>然后在本地界面</h3>
+            <ol>
+              <li>打开 <code>http://127.0.0.1:3857</code>，进入设置（Settings）。</li>
+              <li>填写 Host、User、SSH Port 和本机私钥文件路径，保存并连接。私钥留在本机，不要粘贴私钥内容。</li>
+              <li>在“初始化远端电脑”中填写模型名称、模型服务地址和 API Key。</li>
+              <li>点击「初始化 / 检查远端电脑」，等待“电脑环境已就绪”。</li>
+            </ol>
+          </article>
+          <article class="note">
+            <h3>你需要准备</h3>
+            <dl class="reqs">
+              <dt>本机</dt>
+              <dd>Node.js ≥ 22.19.0、npm、Git、SSH；本地入口已在 macOS 验证。</dd>
+              <dt>ECS</dt>
+              <dd>Ubuntu 24.04、x86_64、systemd；其他系统暂不支持自动初始化。</dd>
+              <dt>权限</dt>
+              <dd>能用 SSH 私钥登录；连接账户为 root 或具有免密 sudo 权限。</dd>
+              <dt>模型</dt>
+              <dd>模型名称、API Key，以及需要时填写的服务地址。请自备密钥。</dd>
+            </dl>
+            <p><a href="https://github.com/BiuBiuHu/OpenBot/blob/main/README.zh-CN.md">完整安装、排错与要求见 README</a></p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="limits" id="limits" aria-labelledby="limits-title">
+      <div class="wrap">
+        <div class="section-head">
+          <h2 id="limits-title">需要说清的边界</h2>
+          <p>OpenBot 保留独立 Web 入口，也通过 API 为其他应用提供执行能力。下面这些不是当前已交付的能力，或是明确限制。</p>
+        </div>
+        <ul class="limits-list">
+          <li>
+            <strong>安派接入是计划中的</strong>
+            <span>未来计划接入安派（Anpai）；代码与运行时始终独立，不需要放进日历仓库。</span>
+          </li>
+          <li>
+            <strong>不是公网多用户服务</strong>
+            <span>当前不应把本地入口直接当作公网多用户服务部署。OpenBot、OpenHands、CDP 和 VNC 服务保持回环监听，通过 SSH 访问。</span>
+          </li>
+          <li>
+            <strong>不是恶意代码沙箱</strong>
+            <span>普通 Agent 的终端权限取决于运行账户。建议使用专用非 root 账户和独立工作区。</span>
+          </li>
+          <li>
+            <strong>后续方向</strong>
+            <span>日历集成、定时触发、长期记忆和多用户权限隔离仍是后续方向，不属于当前已交付能力。</span>
+          </li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <p>OpenBot 使用 MIT 许可证。Alpha，自托管。本页是产品介绍，不是文档门户。</p>
+      <div class="footer-meta">
+        <a href="https://github.com/BiuBiuHu/OpenBot">GitHub</a>
+        <span>MIT</span>
+        <nav class="lang-switch" aria-label="语言">
+          <a href="../" lang="en">English</a>
+          <a href="./" lang="zh-Hans" aria-current="page">中文</a>
+        </nav>
+      </div>
+    </div>
+  </footer>
+  <script src="../assets/site.js"></script>
+</body>
+</html>
