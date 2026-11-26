@@ -319,6 +319,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("main", text)
         self.assertIn("actions/deploy-pages", text)
         self.assertIn("actions/upload-pages-artifact", text)
+        self.assertIn("enablement: true", text)
 
     def test_language_guard_detects_mixed_copy(self):
         self.assertTrue(
