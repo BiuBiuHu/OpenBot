@@ -307,19 +307,18 @@ class SiteTests(unittest.TestCase):
         self.assertIn("/OpenBot", source)
         self.assertNotIn("/openbot", source)
 
-    def test_pages_workflow_is_not_armed(self):
+    def test_pages_workflow_deploys_site_from_main(self):
         example = SITE / "pages.workflow.yml.example"
         self.assertTrue(example.is_file())
-        example_text = example.read_text(encoding="utf-8")
-        self.assertIn("path: site", example_text)
-        self.assertIn("workflow_dispatch", example_text)
-        if WORKFLOWS.is_dir():
-            for path in WORKFLOWS.glob("*.yml"):
-                text = path.read_text(encoding="utf-8")
-                self.assertFalse(
-                    "actions/deploy-pages" in text and "push:" in text,
-                    f"{path} would publish GitHub Pages on push",
-                )
+        self.assertIn("path: site", example.read_text(encoding="utf-8"))
+        workflow = WORKFLOWS / "pages.yml"
+        self.assertTrue(workflow.is_file(), "pages.yml must exist to publish GitHub Pages")
+        text = workflow.read_text(encoding="utf-8")
+        self.assertIn("path: site", text)
+        self.assertIn("branches:", text)
+        self.assertIn("main", text)
+        self.assertIn("actions/deploy-pages", text)
+        self.assertIn("actions/upload-pages-artifact", text)
 
     def test_language_guard_detects_mixed_copy(self):
         self.assertTrue(
